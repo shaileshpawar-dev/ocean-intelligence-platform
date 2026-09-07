@@ -8,8 +8,27 @@
 [![Tests](https://img.shields.io/badge/tests-205%20passing-brightgreen)](#testing)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-> **Live demo:** http://oceanai-alb-746074560.ap-south-1.elb.amazonaws.com/app
-> Served over **HTTP, not HTTPS** — see [Live demo](#19-live-demo) and [Limitations](#limitations-read-this) before drawing conclusions from what it shows.
+## 🌊 Live Demo
+
+### ▶ **[Open the OceanAI dashboard](http://oceanai-alb-746074560.ap-south-1.elb.amazonaws.com/app)**
+
+| | |
+|---|---|
+| 🖥️ **Dashboard** | http://oceanai-alb-746074560.ap-south-1.elb.amazonaws.com/app |
+| ⚡ **API** | http://oceanai-alb-746074560.ap-south-1.elb.amazonaws.com/api/v1 |
+| 📘 **OpenAPI docs** | http://oceanai-alb-746074560.ap-south-1.elb.amazonaws.com/docs |
+| ❤️ **Health** | http://oceanai-alb-746074560.ap-south-1.elb.amazonaws.com/api/v1/health |
+
+Running on AWS ECS Fargate behind an Application Load Balancer in `ap-south-1`.
+
+> ⚠️ **HTTP, not HTTPS.** No TLS certificate is attached, because that requires a
+> domain the author owns — so your browser will show "Not secure" and traffic is
+> unencrypted. The endpoint is unauthenticated and carries only synthetic
+> demonstration data; send nothing sensitive to it.
+>
+> ⚠️ **Demo mode is on.** Every figure shown is `SIMULATED` and labelled as such
+> in the UI and the API. Read [Limitations](#limitations-read-this) before drawing
+> any conclusion from what the dashboard displays.
 
 ---
 
