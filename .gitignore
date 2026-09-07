@@ -1,0 +1,124 @@
+# =============================================================================
+# OceanAI - Ocean Intelligence Platform
+#
+# Rule of thumb: everything required to BUILD the project is committed;
+# everything produced by BUILDING or RUNNING it is not. Anything that could
+# carry a credential is excluded by shape, not by remembering to ignore it.
+# =============================================================================
+
+# -- Secrets and credentials --------------------------------------------------
+# Broad by design. The predecessor notebook leaked a live ngrok token and a GCP
+# service-account key, so these patterns are deliberately wider than the files
+# that exist today.
+.env
+.env.*
+!.env.example
+!frontend/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+id_rsa*
+id_ed25519*
+*service-account*.json
+*-key.json
+credentials
+credentials.json
+.aws/
+.gcloud/
+secrets/
+*.secret
+
+# -- Infrastructure state -----------------------------------------------------
+# tfstate can contain plaintext secrets; tfvars usually does.
+*.tfstate
+*.tfstate.*
+*.tfplan
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
+*.tfvars
+!*.tfvars.example
+
+# -- Python -------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+coverage/
+coverage.xml
+htmlcov/
+
+# -- Node / frontend ----------------------------------------------------------
+node_modules/
+dist/
+build/
+.vite/
+*.tsbuildinfo
+.eslintcache
+npm-debug.log*
+yarn-error.log*
+.vercel
+
+# Built SPA. Vite emits it into the backend's static dir, and the Docker build
+# regenerates it from source in a Node stage. Committing it would ship a stale
+# bundle whose asset hashes disagree with the source.
+backend/app/static/app/
+
+# -- Databases and runtime data -----------------------------------------------
+# The SQLite database holds generated detections, not source. It is recreated
+# by running the ingestion pipeline.
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+data/raw/*
+data/processed/*
+!data/**/.gitkeep
+
+# -- Model weights ------------------------------------------------------------
+# Binary checkpoints do not belong in Git. YOLO_MODEL_PATH points outside the
+# repository; see .env.example.
+*.pt
+*.pth
+*.onnx
+*.h5
+*.pkl
+*.joblib
+*.tflite
+mlruns/
+
+# -- Docker -------------------------------------------------------------------
+docker-compose.override.yml
+.docker/
+*.tar
+
+# -- Logs and temporary files -------------------------------------------------
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.bak
+*.orig
+*.swp
+
+# -- OS and editor ------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/

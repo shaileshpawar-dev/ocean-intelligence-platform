@@ -1,0 +1,24 @@
+# ── Core API ──────────────────────────────────────────────────────────────
+fastapi>=0.115,<0.120
+uvicorn[standard]>=0.32,<0.40
+pydantic>=2.9,<3.0
+pydantic-settings>=2.6,<3.0
+python-multipart>=0.0.12
+
+# ── Persistence ───────────────────────────────────────────────────────────
+SQLAlchemy>=2.0.36,<3.0
+# Postgres driver. SQLite (the default) needs no driver.
+psycopg[binary]>=3.2 ; sys_platform != "emscripten"
+
+# ── Optional: satellite ingestion ─────────────────────────────────────────
+# The app runs without these; satellite endpoints report unavailable.
+# earthengine-api>=1.4
+
+# ── Optional: vision ──────────────────────────────────────────────────────
+# Heavy (pulls torch). Install only when running the real YOLO detector.
+# ultralytics>=8.3
+
+# ── Optional: LLM providers (Phase 2 - RAG and agents) ────────────────────
+# google-generativeai>=0.8
+# openai>=1.55
+# anthropic>=0.40

@@ -1,0 +1,732 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ocean Intelligence Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ==========================================================
+   Sky-blue instrument palette.
+   Sky is the PRIMARY / structural hue. Severity escalates off
+   it (pale sky -> amber -> orange -> rose) so a rising threat
+   visibly leaves the base palette. Provenance uses a third
+   family (emerald / violet / cyan) so the two never collide.
+   ========================================================== */
+:root{
+  --void:#050b14; --deep:#0a1420; --panel:#0e1b2a; --raise:#14263a;
+  --rule:rgba(125,211,252,.10); --rule2:rgba(125,211,252,.21);
+  --ice:#e4f2ff; --mist:#93b7d2; --slate:#5c7d98;
+  --sky:#38bdf8; --skyl:#7dd3fc; --skyd:#0284c7;
+  --emerald:#34d399; --cyan:#22d3ee; --violet:#a78bfa;
+  --amber:#fbbf24; --orange:#fb923c; --rose:#f43f5e;
+  --rail:62px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+a{color:inherit;text-decoration:none}
+html,body{background:var(--void);color:var(--ice)}
+body{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12.5px;
+     line-height:1.5;padding-left:var(--rail);min-height:100vh}
+h1,.disp{font-family:'Space Grotesk',system-ui,sans-serif}
+::selection{background:var(--sky);color:var(--void)}
+button{font-family:inherit;font-size:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input{font-family:inherit;font-size:inherit}
+
+/* ---------- rail ---------- */
+#rail{position:fixed;left:0;top:0;bottom:0;width:var(--rail);background:var(--deep);
+  border-right:1px solid var(--rule);display:flex;flex-direction:column;align-items:center;
+  padding:14px 0;gap:16px;z-index:60}
+.mark{width:26px;height:26px;border-radius:3px;flex:none;position:relative;
+  background:conic-gradient(from 200deg,var(--sky),var(--cyan),var(--skyd),var(--sky));
+  box-shadow:0 0 16px rgba(56,189,248,.35)}
+.mark:after{content:"";position:absolute;inset:6px;border-radius:2px;background:var(--deep)}
+.vtitle{writing-mode:vertical-rl;transform:rotate(180deg);font-size:8.5px;
+  letter-spacing:.4em;color:var(--slate);flex:1;display:flex;align-items:center;text-transform:uppercase}
+#rail nav{display:flex;flex-direction:column;gap:10px;align-items:center}
+#rail nav a{width:7px;height:7px;border:1px solid var(--slate);border-radius:50%;display:block;transition:.18s}
+#rail nav a:hover{background:var(--sky);border-color:var(--sky);box-shadow:0 0 8px var(--sky)}
+.livedot{width:7px;height:7px;border-radius:50%;background:var(--emerald);
+  box-shadow:0 0 0 3px rgba(52,211,153,.16)}
+
+/* ---------- notice ---------- */
+#notice{display:none;gap:12px;align-items:flex-start;padding:10px 26px;
+  background:rgba(251,191,36,.09);border-bottom:1px solid rgba(251,191,36,.34);
+  color:var(--amber);font-size:11px}
+#notice.on{display:flex}
+#notice .tag{flex:none;font-weight:700;letter-spacing:.16em;font-size:9.5px;
+  border:1px solid var(--amber);padding:2px 6px;border-radius:2px;margin-top:1px}
+
+/* ---------- masthead ---------- */
+#top{display:grid;grid-template-columns:minmax(230px,1fr) auto;gap:28px;align-items:end;
+  padding:24px 26px 16px;border-bottom:1px solid var(--rule2)}
+#top h1{font-size:23px;font-weight:700;letter-spacing:-.01em;line-height:1.1}
+#top h1 em{font-style:normal;color:var(--sky)}
+#top .sub{font-size:9.5px;color:var(--slate);letter-spacing:.25em;margin-top:7px}
+.readout{display:flex;flex-wrap:wrap}
+.rd{padding:0 18px;border-left:1px solid var(--rule);text-align:right}
+.rd:first-child{border-left:none}
+.rd .k{font-size:8.5px;letter-spacing:.16em;color:var(--slate);margin-bottom:4px}
+.rd .v{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:24px;line-height:1}
+.rd .u{font-size:10px;color:var(--mist);margin-left:3px;font-family:'JetBrains Mono',monospace}
+.rd.wide{max-width:186px;text-align:left}
+.rd .note{font-size:8.5px;color:var(--slate);margin-top:6px;line-height:1.45;text-align:left}
+
+/* ---------- sections ---------- */
+.sec{border-bottom:1px solid var(--rule)}
+.sechead{display:flex;justify-content:space-between;align-items:center;gap:16px;
+  padding:13px 26px 11px;flex-wrap:wrap}
+.sechead .t{font-size:10px;letter-spacing:.23em;color:var(--mist)}
+.sechead .t b{color:var(--slate);font-weight:400;margin-right:9px}
+.sechead .m{font-size:9.5px;color:var(--slate)}
+.tools{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.tg{font-size:9px;letter-spacing:.09em;padding:3px 9px;border-radius:11px;
+  border:1px solid var(--rule2);color:var(--slate);transition:.14s}
+.tg:hover{border-color:var(--sky);color:var(--skyl)}
+.tg.on{background:rgba(56,189,248,.15);border-color:var(--sky);color:var(--skyl)}
+.srch{background:var(--panel);border:1px solid var(--rule2);border-radius:3px;
+  padding:4px 9px;color:var(--ice);font-size:10px;width:150px;outline:none}
+.srch:focus{border-color:var(--sky)}
+.btn{font-size:9px;letter-spacing:.11em;padding:4px 10px;border-radius:3px;
+  border:1px solid var(--rule2);color:var(--mist);transition:.14s}
+.btn:hover{border-color:var(--sky);color:var(--skyl);background:rgba(56,189,248,.08)}
+
+/* ---------- geographic index ---------- */
+#gridwrap{padding:0 26px 18px}
+svg#idx{width:100%;height:auto;max-height:42vh;display:block}
+.gr{stroke:rgba(125,211,252,.055);stroke-width:.3}
+.cell{cursor:pointer;transition:.14s}.cell:hover{fill-opacity:.6!important}
+.brk{fill:none;stroke-width:.55;pointer-events:none}
+.sub{cursor:pointer}
+.lbl{font-family:'JetBrains Mono',monospace;fill:var(--slate);pointer-events:none;letter-spacing:.08em}
+.key{display:flex;flex-wrap:wrap;gap:5px 20px;padding:11px 0 0;font-size:9.5px;
+  color:var(--mist);align-items:center}
+.key .sw{width:16px;height:8px;border-radius:1px;display:inline-block;margin-right:7px;vertical-align:-1px}
+.key .ramp{display:flex;align-items:center}.key .ramp i{width:22px;height:8px;display:block}
+
+/* ---------- temporal ---------- */
+#tempwrap{padding:0 26px 20px}
+svg#temporal{width:100%;height:230px;display:block;overflow:visible}
+.tax{stroke:var(--rule2);stroke-width:.8}
+.tgrid{stroke:rgba(125,211,252,.07);stroke-width:.8}
+.thist{fill:none;stroke:var(--sky);stroke-width:2;stroke-linejoin:round}
+.tband{fill:rgba(34,211,238,.14)}
+.tfc{fill:none;stroke:var(--cyan);stroke-width:2;stroke-dasharray:5 3.5;stroke-linejoin:round}
+.tnow{stroke:var(--ice);stroke-width:1;stroke-dasharray:2 3;opacity:.5}
+.tdot{fill:var(--sky)}
+.tlab{font-family:'JetBrains Mono',monospace;font-size:9px;fill:var(--slate)}
+.tlab.hi{fill:var(--mist)}
+.tzone{opacity:.055}
+.tlegend{display:flex;gap:22px;flex-wrap:wrap;font-size:9.5px;color:var(--mist);
+  align-items:center;padding-top:10px}
+.tlegend i{width:20px;height:0;border-top-width:2px;border-top-style:solid;display:inline-block;
+  margin-right:7px;vertical-align:3px}
+.fcnote{margin-top:12px;padding:10px 13px;border-radius:3px;font-size:9.5px;line-height:1.65;
+  border-left:2px solid var(--cyan);background:rgba(34,211,238,.07);color:var(--mist)}
+.fcnote b{color:var(--cyan);font-weight:500}
+.fcwarn{border-left-color:var(--amber);background:rgba(251,191,36,.07)}
+.fcwarn b{color:var(--amber)}
+
+/* ---------- ledger ---------- */
+#ledger{width:100%;border-collapse:collapse;font-size:11.5px}
+#ledger thead th{text-align:left;font-weight:400;font-size:8.5px;letter-spacing:.16em;
+  color:var(--slate);padding:0 13px 9px;border-bottom:1px solid var(--rule2)}
+#ledger thead th:first-child{padding-left:26px}
+#ledger thead th.num{text-align:right}
+#ledger tbody tr{border-bottom:1px solid var(--rule);cursor:pointer;transition:.12s}
+#ledger tbody tr:hover{background:var(--panel)}
+#ledger tbody tr.on{background:var(--raise);box-shadow:inset 3px 0 0 var(--sky)}
+#ledger td{padding:8px 13px;vertical-align:middle}
+#ledger td:first-child{padding-left:26px}
+#ledger td.num{text-align:right;font-variant-numeric:tabular-nums}
+.where{font-size:9.5px;color:var(--slate);margin-top:2px}
+.chip{font-size:8.5px;padding:2px 7px;border-radius:2px;letter-spacing:.11em;white-space:nowrap;font-weight:500}
+.stage{font-size:8px;color:var(--slate);border:1px solid var(--rule2);padding:1px 5px;
+  border-radius:2px;letter-spacing:.08em}
+.stage.r{color:var(--violet);border-color:rgba(167,139,250,.45)}
+svg.spark{width:64px;height:17px;display:block;overflow:visible}
+.spark path{fill:none;stroke-width:1.4}
+
+/* ---------- inspector ---------- */
+#insp{padding:0 26px 30px}
+.igrid{display:grid;grid-template-columns:1.05fr .95fr;gap:32px}
+@media(max-width:1000px){.igrid{grid-template-columns:1fr}}
+.blk{margin-bottom:24px}
+.blk>.h{font-size:9px;letter-spacing:.21em;color:var(--slate);margin-bottom:11px}
+.scorerow{display:flex;align-items:flex-end;gap:13px;margin-bottom:5px;flex-wrap:wrap}
+.scorerow .big{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:50px;line-height:.88}
+.scorerow .of{font-size:12px;color:var(--slate);padding-bottom:5px}
+.meta{font-size:9.5px;color:var(--slate);line-height:1.75;margin-bottom:16px}
+.meta b{color:var(--mist);font-weight:400}
+.stack{display:flex;height:25px;border-radius:2px;overflow:hidden;margin-bottom:9px}
+.stack i{display:block;height:100%}
+.stack i.gap{background:repeating-linear-gradient(45deg,var(--raise),var(--raise) 4px,var(--panel) 4px,var(--panel) 8px)}
+.stack i.excl{background:repeating-linear-gradient(45deg,rgba(251,191,36,.15),rgba(251,191,36,.15) 4px,transparent 4px,transparent 8px);border-left:1px dashed rgba(251,191,36,.55)}
+.sk{display:grid;grid-template-columns:10px 1fr auto;gap:10px;align-items:baseline;
+  padding:7px 0;border-bottom:1px solid var(--rule)}
+.sk .dot{width:10px;height:10px;border-radius:2px;margin-top:3px}
+.sk .n{font-size:10.5px}
+.sk .d{font-size:9px;color:var(--slate);line-height:1.55;margin-top:3px}
+.sk .p{font-size:10.5px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sk .p s{color:var(--slate);text-decoration:none;font-size:9px}
+.excluded{margin-top:13px;padding:10px 12px;border:1px dashed rgba(251,191,36,.45);
+  border-radius:2px;font-size:9.5px;color:var(--amber);line-height:1.65}
+svg.bs{width:100%;height:74px;display:block;overflow:visible}
+.bs .ax{stroke:var(--rule2);stroke-width:.7}
+.bs .box{fill:rgba(125,211,252,.14);stroke:var(--skyl);stroke-width:.7}
+.bs .whisk{stroke:var(--slate);stroke-width:.7}
+.bs .mean{stroke:var(--ice);stroke-width:1.6}
+.bs .thr{stroke:var(--rose);stroke-width:1;stroke-dasharray:3 2.5}
+.bs .dark{fill:rgba(244,63,94,.14)}
+.bs text{font-family:'JetBrains Mono',monospace;font-size:8px;fill:var(--slate)}
+.bs text.hi{fill:var(--mist)}
+.obs{font-size:10px;color:var(--mist);line-height:1.9}
+.obs .r{display:flex;justify-content:space-between;gap:14px;padding:4px 0;border-bottom:1px solid var(--rule)}
+.obs .r span:first-child{color:var(--slate)}
+.cav li{list-style:none;font-size:9.5px;color:var(--mist);line-height:1.65;
+  padding:8px 0 8px 15px;border-bottom:1px solid var(--rule);position:relative}
+.cav li:before{content:"\2014";position:absolute;left:0;color:var(--slate)}
+.badge{font-size:8px;padding:2px 6px;border-radius:2px;letter-spacing:.12em;font-weight:500}
+
+/* ---------- alerts ---------- */
+#alerts{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1px;
+  background:var(--rule);border-top:1px solid var(--rule)}
+.al{background:var(--void);padding:12px 16px;cursor:pointer;transition:.12s}
+.al:hover{background:var(--panel)}
+.al .top{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:5px}
+.al .msg{font-size:10px;color:var(--mist);line-height:1.55}
+.al .tm{font-size:8.5px;color:var(--slate);margin-top:5px}
+
+/* ---------- system ---------- */
+#system{display:grid;grid-template-columns:repeat(auto-fit,minmax(258px,1fr));gap:1px;
+  background:var(--rule);border-top:1px solid var(--rule)}
+.card{background:var(--void);padding:15px 18px 17px}
+.card .h{font-size:9px;letter-spacing:.2em;color:var(--slate);margin-bottom:11px}
+.card .row{display:flex;justify-content:space-between;gap:12px;font-size:10px;
+  padding:5px 0;border-bottom:1px solid var(--rule);color:var(--mist)}
+.card .row span:first-child{color:var(--slate)}
+.foot{font-size:8.5px;color:var(--slate);line-height:1.6;margin-top:8px}
+.nm{color:var(--slate);font-style:italic}
+.dstat{display:inline-block;font-size:8.5px;padding:2px 7px;border-radius:2px;letter-spacing:.1em}
+.empty{padding:40px 26px;color:var(--slate);font-size:10.5px;text-align:center;line-height:2}
+footer{padding:15px 26px 28px;font-size:9px;color:var(--slate);display:flex;flex-wrap:wrap;gap:7px 20px;align-items:center}
+footer .ev{display:flex;align-items:center;gap:7px}
+footer .ev i{width:8px;height:8px;border-radius:2px;display:block}
+kbd{border:1px solid var(--rule2);border-radius:2px;padding:0 4px;font-size:8.5px;color:var(--mist)}
+</style>
+</head>
+<body>
+
+<aside id="rail">
+  <div class="mark"></div>
+  <div class="vtitle">Ocean Intelligence Platform</div>
+  <nav>
+    <a href="#s-idx" title="Geographic index"></a>
+    <a href="#s-tmp" title="Temporal"></a>
+    <a href="#s-led" title="Ledger"></a>
+    <a href="#s-insp" title="Inspector"></a>
+    <a href="#s-alr" title="Alerts"></a>
+    <a href="#s-sys" title="System"></a>
+  </nav>
+  <div class="livedot" id="live"></div>
+</aside>
+
+<div id="notice"><span class="tag">SIMULATED</span><span id="noticeText"></span></div>
+
+<header id="top">
+  <div>
+    <h1>Ocean <em>Intelligence</em> Platform</h1>
+    <div class="sub">SENTINEL-1 C-BAND VV &middot; DARK-FORMATION SCREENING</div>
+  </div>
+  <div class="readout" id="readout"></div>
+</header>
+
+<section class="sec" id="s-idx">
+  <div class="sechead">
+    <div class="t"><b>01</b>GEOGRAPHIC INDEX</div>
+    <div class="m">outer frame = screening cell &middot; inner blocks = stage-2 refinement</div>
+  </div>
+  <div id="gridwrap">
+    <svg id="idx" viewBox="0 0 360 170" preserveAspectRatio="xMidYMid meet"></svg>
+    <div class="key">
+      <span><i class="sw" style="background:var(--raise)"></i>observed &middot; no anomaly</span>
+      <span class="ramp"><i style="background:#7dd3fc"></i><i style="background:#fbbf24"></i>
+        <i style="background:#fb923c"></i><i style="background:#f43f5e"></i>
+        <span style="margin-left:9px">low &rarr; critical</span></span>
+      <span><i class="sw" style="background:transparent;border:1px solid var(--violet)"></i>stage-2 sub-cell</span>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="s-tmp">
+  <div class="sechead">
+    <div class="t"><b>02</b>TEMPORAL &mdash; OBSERVED HISTORY &amp; FORECAST</div>
+    <div class="tools" id="fcTools"></div>
+  </div>
+  <div id="tempwrap">
+    <svg id="temporal" preserveAspectRatio="none"></svg>
+    <div class="tlegend">
+      <span><i style="border-color:var(--sky)"></i>observed daily mean risk</span>
+      <span><i style="border-color:var(--cyan);border-top-style:dashed"></i>forecast</span>
+      <span><span style="display:inline-block;width:20px;height:9px;background:rgba(34,211,238,.14);
+        margin-right:7px;vertical-align:-1px"></span>80% prediction interval</span>
+    </div>
+    <div id="fcNote"></div>
+  </div>
+</section>
+
+<section class="sec" id="s-led">
+  <div class="sechead">
+    <div class="t"><b>03</b>DETECTION LEDGER</div>
+    <div class="tools">
+      <input class="srch" id="q" placeholder="filter region..." />
+      <span id="fSig"></span><span id="fSev"></span>
+      <button class="btn" id="expCsv">&darr; CSV</button>
+      <button class="btn" id="expJson">&darr; JSON</button>
+    </div>
+  </div>
+  <div class="sechead" style="padding-top:0"><div class="m" id="ledCount"></div>
+    <div class="m"><kbd>J</kbd> <kbd>K</kbd> to step rows</div></div>
+  <table id="ledger">
+    <thead><tr>
+      <th>SIGNATURE / LOCATION</th><th>STAGE</th><th>30-DAY TREND</th>
+      <th class="num">CONF</th><th class="num">AREA km&sup2;</th><th class="num">RISK</th><th>BAND</th>
+    </tr></thead>
+    <tbody id="ledbody"></tbody>
+  </table>
+</section>
+
+<section class="sec" id="s-insp">
+  <div class="sechead"><div class="t"><b>04</b>INSPECTOR</div><div class="m" id="inspWho"></div></div>
+  <div id="insp"><div class="empty">Select a row from the ledger.</div></div>
+</section>
+
+<section class="sec" id="s-alr">
+  <div class="sechead">
+    <div class="t"><b>05</b>ALERTS</div>
+    <div class="tools" id="alrTools"></div>
+  </div>
+  <div id="alerts"></div>
+</section>
+
+<section id="s-sys">
+  <div class="sechead"><div class="t"><b>06</b>SYSTEM</div>
+    <div class="m">registry &middot; drift &middot; runtime</div></div>
+  <div id="system"></div>
+</section>
+
+<footer>
+  <span style="color:var(--mist);letter-spacing:.19em">EVIDENCE LADDER</span>
+  <span class="ev"><i style="background:var(--emerald)"></i>OBSERVED</span>
+  <span class="ev"><i style="background:var(--sky)"></i>DETECTED</span>
+  <span class="ev"><i style="background:var(--violet)"></i>INFERRED</span>
+  <span class="ev"><i style="background:var(--cyan)"></i>FORECAST</span>
+  <span class="ev"><i style="background:var(--amber)"></i>SIMULATED</span>
+</footer>
+
+<script>
+const API="/api/v1";
+const C={sky:"#38bdf8",skyl:"#7dd3fc",cyan:"#22d3ee",emerald:"#34d399",violet:"#a78bfa",
+         amber:"#fbbf24",orange:"#fb923c",rose:"#f43f5e",mist:"#93b7d2",slate:"#5c7d98",raise:"#14263a"};
+const SEV={LOW:C.skyl,MEDIUM:C.amber,HIGH:C.orange,CRITICAL:C.rose};
+const EV={OBSERVED:C.emerald,DETECTED:C.sky,INFERRED:C.violet,FORECAST:C.cyan,SIMULATED:C.amber};
+const FAC=[C.rose,C.orange,C.amber,C.sky,C.violet,C.emerald];
+
+let EVENTS=[],VIEW=[],TRENDS={},SEL=null,HORIZON=10,ALERT_MIN="HIGH";
+let F={sig:null,sev:null,q:""};
+
+const get=async p=>{const r=await fetch(API+p);
+  if(!r.ok){let d="";try{d=JSON.stringify(await r.json())}catch(e){}
+    throw new Error("GET "+p+" -> "+r.status+" "+d.slice(0,240));} return r.json();};
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const px=l=>l+180, py=l=>85-l, num=n=>Math.round(n).toLocaleString();
+
+async function boot(){
+  const r=await Promise.all([
+    get("/overview"),get("/pollution-zones?limit=1000"),
+    get("/pollution-events?limit=500"),get("/trends?days=60")]);
+  const ov=r[0],zn=r[1],ev=r[2],tr=r[3];
+
+  if(ov.contains_simulated_data){
+    document.getElementById("notice").classList.add("on");
+    document.getElementById("noticeText").textContent=
+      "Demo mode. All "+ov.total_events+" detections are synthetic, tagged SIMULATED by the API, "+
+      "and describe no real satellite acquisition.";
+  }
+  tr.items.forEach(t=>{TRENDS[t.region_code]=t;});
+  readout(ov); index(zn.items);
+  EVENTS=ev.items.slice().sort((a,b)=>(b.risk_score||0)-(a.risk_score||0));
+  buildFilters(); ledger();
+  if(VIEW.length) pick(VIEW[0].event_id);
+  loadAlerts(); loadSystem(); wire();
+}
+
+function readout(o){
+  document.getElementById("readout").innerHTML=
+   '<div class="rd"><div class="k">DETECTIONS</div><div class="v">'+o.total_events+'</div></div>'+
+   '<div class="rd"><div class="k">CRITICAL</div><div class="v" style="color:'+C.rose+'">'+o.critical_events+'</div></div>'+
+   '<div class="rd"><div class="k">HIGH</div><div class="v" style="color:'+C.orange+'">'+o.high_events+'</div></div>'+
+   '<div class="rd"><div class="k">OBSERVATIONS</div><div class="v" style="color:'+C.emerald+'">'+o.observations+'</div></div>'+
+   '<div class="rd wide"><div class="k">SLICK-SCALE EXTENT</div>'+
+     '<div class="v" style="color:'+C.sky+'">'+num(o.slick_scale_area_km2)+'<span class="u">km&sup2;</span></div>'+
+     '<div class="note">Slick-plausible signatures only. Total low-backscatter water is '+
+       num(o.dark_water_extent_km2)+' km&sup2; &mdash; that measures sea state, not pollution.</div></div>';
+}
+
+/* ---------- 01 index ---------- */
+function index(zones){
+  const svg=document.getElementById("idx");
+  const scr=zones.filter(z=>z.region_code.indexOf("__")<0);
+  const ref=zones.filter(z=>z.region_code.indexOf("__")>=0&&z.severity);
+  if(!scr.length){svg.innerHTML="";return;}
+  const pad=7;
+  const xs=[],ys=[];
+  scr.forEach(z=>{xs.push(px(z.bbox[0]),px(z.bbox[2]));ys.push(py(z.bbox[1]),py(z.bbox[3]));});
+  const x0=Math.min.apply(null,xs)-pad,x1=Math.max.apply(null,xs)+pad;
+  const y0=Math.min.apply(null,ys)-pad,y1=Math.max.apply(null,ys)+pad;
+  const vw=x1-x0; svg.setAttribute("viewBox",x0+" "+y0+" "+vw+" "+(y1-y0));
+  const fs=(vw/200).toFixed(2), tick=vw/95;
+  let o="";
+  for(let l=-180;l<=180;l+=15) if(px(l)>=x0&&px(l)<=x1)
+    o+='<line class="gr" x1="'+px(l)+'" y1="'+y0+'" x2="'+px(l)+'" y2="'+y1+'"/>';
+  for(let l=-80;l<=80;l+=10) if(py(l)>=y0&&py(l)<=y1)
+    o+='<line class="gr" x1="'+x0+'" y1="'+py(l)+'" x2="'+x1+'" y2="'+py(l)+'"/>';
+  scr.forEach(z=>{
+    const w=z.bbox[0],s=z.bbox[1],e=z.bbox[2],n=z.bbox[3];
+    const col=z.severity?SEV[z.severity]:C.raise;
+    const X=px(w),Y=py(n),W=e-w,H=n-s,t=Math.min(tick,W/3,H/3);
+    o+='<rect class="cell" data-id="'+esc(z.event_id||"")+'" x="'+X+'" y="'+Y+'" width="'+W+'" height="'+H+
+       '" fill="'+col+'" fill-opacity="'+(z.severity?.30:.13)+'"/>';
+    o+='<path class="brk" stroke="'+col+'" stroke-opacity="'+(z.severity?.9:.4)+'" d="'+
+       'M'+X+' '+(Y+t)+' L'+X+' '+Y+' L'+(X+t)+' '+Y+
+       ' M'+(X+W-t)+' '+Y+' L'+(X+W)+' '+Y+' L'+(X+W)+' '+(Y+t)+
+       ' M'+(X+W)+' '+(Y+H-t)+' L'+(X+W)+' '+(Y+H)+' L'+(X+W-t)+' '+(Y+H)+
+       ' M'+(X+t)+' '+(Y+H)+' L'+X+' '+(Y+H)+' L'+X+' '+(Y+H-t)+'"/>';});
+  ref.forEach(z=>{const w=z.bbox[0],s=z.bbox[1],e=z.bbox[2],n=z.bbox[3];
+    o+='<rect class="sub" data-id="'+esc(z.event_id||"")+'" x="'+px(w)+'" y="'+py(n)+
+       '" width="'+(e-w)+'" height="'+(n-s)+'" fill="'+SEV[z.severity]+
+       '" fill-opacity=".85" stroke="'+C.violet+'" stroke-width=".3"/>';});
+  const seas={};
+  scr.forEach(z=>{if(!seas[z.parent_region])seas[z.parent_region]={x:1e9,y:1e9};
+    const g=seas[z.parent_region];
+    g.x=Math.min(g.x,px(z.bbox[0]));g.y=Math.min(g.y,py(z.bbox[3]));});
+  Object.keys(seas).forEach(n=>{const g=seas[n];
+    o+='<text class="lbl" style="font-size:'+fs+'px" x="'+g.x+'" y="'+(g.y-1)+'">'+esc(n.toUpperCase())+'</text>';});
+  svg.innerHTML=o;
+  Array.prototype.forEach.call(svg.querySelectorAll("[data-id]"),el=>{
+    const id=el.getAttribute("data-id"); if(id) el.onclick=()=>pick(id);});
+}
+
+/* ---------- 02 temporal : real history + real forecast ----------
+   Replaces the original "time travel" slider, which multiplied the
+   current severity by hardcoded constants. Left of the divider is
+   OBSERVED; right is FORECAST with its 80% interval drawn. */
+async function temporal(rc){
+  const svg=document.getElementById("temporal");
+  const t=TRENDS[rc];
+  const hist=((t&&t.series)||[]).filter(p=>p.mean_risk!=null);
+  document.getElementById("fcTools").innerHTML=
+    '<span class="m" style="margin-right:6px">'+esc((t&&t.region_name)||rc)+'</span>'+
+    [7,10,14,21].map(h=>'<button class="tg '+(h===HORIZON?"on":"")+'" data-h="'+h+'">+'+h+'d</button>').join("");
+  Array.prototype.forEach.call(document.querySelectorAll("#fcTools [data-h]"),b=>{
+    b.onclick=()=>{HORIZON=+b.getAttribute("data-h");temporal(rc);};});
+
+  if(hist.length<2){
+    svg.innerHTML='<text class="tlab hi" x="12" y="30">Not enough observed history for '+esc(rc)+'.</text>';
+    document.getElementById("fcNote").innerHTML=""; return;
+  }
+  let fc=null;
+  try{fc=await get("/forecast/"+encodeURIComponent(rc)+"?horizon="+HORIZON+"&model=holt");}catch(e){}
+
+  const W=1000,H=230,L=40,R=14,T=14,B=30;
+  const pts=(fc&&fc.status==="ok")?fc.points:[];
+  const n=hist.length+pts.length;
+  const X=i=>L+(i/(n-1))*(W-L-R);
+  const all=hist.map(h=>h.mean_risk);
+  pts.forEach(p=>{all.push(p.lower,p.upper);});
+  const lo=Math.max(0,Math.min.apply(null,all)-8), hi=Math.min(100,Math.max.apply(null,all)+8);
+  const Y=v=>T+(1-(v-lo)/((hi-lo)||1))*(H-T-B);
+
+  let o="";
+  [[0,25,C.skyl],[25,50,C.amber],[50,75,C.orange],[75,100,C.rose]].forEach(z=>{
+    if(z[1]<lo||z[0]>hi)return;
+    const ya=Y(Math.min(hi,z[1])),yb=Y(Math.max(lo,z[0]));
+    o+='<rect class="tzone" x="'+L+'" y="'+ya+'" width="'+(W-L-R)+'" height="'+Math.max(0,yb-ya)+'" fill="'+z[2]+'"/>';});
+  for(let g=0;g<=4;g++){const v=lo+(hi-lo)*g/4;
+    o+='<line class="tgrid" x1="'+L+'" y1="'+Y(v)+'" x2="'+(W-R)+'" y2="'+Y(v)+'"/>';
+    o+='<text class="tlab" x="'+(L-7)+'" y="'+(Y(v)+3)+'" text-anchor="end">'+v.toFixed(0)+'</text>';}
+
+  const hp=hist.map((h,i)=>X(i)+","+Y(h.mean_risk)).join(" ");
+  if(pts.length){
+    const up=pts.map((p,i)=>X(hist.length+i)+","+Y(Math.min(hi,p.upper)));
+    const dn=pts.map((p,i)=>X(hist.length+i)+","+Y(Math.max(lo,p.lower))).reverse();
+    const j=X(hist.length-1)+","+Y(hist[hist.length-1].mean_risk);
+    o+='<polygon class="tband" points="'+j+' '+up.join(" ")+' '+dn.join(" ")+'"/>';
+    o+='<polyline class="tfc" points="'+j+' '+pts.map((p,i)=>X(hist.length+i)+","+Y(p.value)).join(" ")+'"/>';
+    o+='<line class="tnow" x1="'+X(hist.length-1)+'" y1="'+T+'" x2="'+X(hist.length-1)+'" y2="'+(H-B)+'"/>';
+    o+='<text class="tlab hi" x="'+(X(hist.length-1)+5)+'" y="'+(T+9)+'">FORECAST &rarr;</text>';
+    o+='<text class="tlab hi" x="'+(X(hist.length-1)-5)+'" y="'+(T+9)+'" text-anchor="end">&larr; OBSERVED</text>';
+  }
+  o+='<polyline class="thist" points="'+hp+'"/>';
+  const step=Math.ceil(hist.length/12);
+  hist.forEach((h,i)=>{if(i%step===0||i===hist.length-1)
+    o+='<circle class="tdot" cx="'+X(i)+'" cy="'+Y(h.mean_risk)+'" r="2.4"/>';});
+  o+='<line class="tax" x1="'+L+'" y1="'+(H-B)+'" x2="'+(W-R)+'" y2="'+(H-B)+'"/>';
+  o+='<text class="tlab" x="'+L+'" y="'+(H-B+15)+'">'+esc(hist[0].date)+'</text>';
+  o+='<text class="tlab" x="'+(W-R)+'" y="'+(H-B+15)+'" text-anchor="end">'+
+     esc(pts.length?pts[pts.length-1].target_date:hist[hist.length-1].date)+'</text>';
+  svg.setAttribute("viewBox","0 0 "+W+" "+H); svg.innerHTML=o;
+
+  const note=document.getElementById("fcNote");
+  if(!fc||fc.status!=="ok"){
+    note.className="fcnote fcwarn";
+    note.innerHTML="<b>No forecast.</b> "+esc((fc&&fc.message)||"Forecast unavailable for this region.");
+  }else{
+    const bad=fc.beats_naive===false;
+    note.className="fcnote"+(bad?" fcwarn":"");
+    note.innerHTML="<b>"+esc(fc.model_name)+"</b> &middot; fitted on "+fc.n_observations+
+      " observations &middot; backtest MAE "+fc.backtest_mae+" vs naive "+fc.naive_mae+" &rarr; <b>"+
+      (bad?"does NOT beat the naive baseline":"beats the naive baseline")+"</b>. "+
+      (bad?"Treat the trend direction as indicative and the point values as weakly supported. ":"")+
+      "Forecast kind is <b>"+esc(fc.forecast_kind)+"</b> &mdash; the trend in this platform's own "+
+      "detections, never the physical movement of a pollutant.";
+  }
+}
+
+/* ---------- 03 ledger ---------- */
+function buildFilters(){
+  const sigs=[];
+  EVENTS.forEach(e=>{if(sigs.indexOf(e.signature)<0)sigs.push(e.signature);});
+  document.getElementById("fSig").innerHTML=sigs.map(s=>
+    '<button class="tg" data-sig="'+esc(s)+'">'+esc(s.replace(/_/g," "))+'</button>').join("");
+  document.getElementById("fSev").innerHTML=["CRITICAL","HIGH","MEDIUM","LOW"].map(s=>
+    '<button class="tg" data-sev="'+s+'" style="border-color:'+SEV[s]+'44;color:'+SEV[s]+'">'+s+'</button>').join("");
+  Array.prototype.forEach.call(document.querySelectorAll("[data-sig]"),b=>{
+    b.onclick=()=>{const v=b.getAttribute("data-sig");F.sig=F.sig===v?null:v;syncF();ledger();};});
+  Array.prototype.forEach.call(document.querySelectorAll("[data-sev]"),b=>{
+    b.onclick=()=>{const v=b.getAttribute("data-sev");F.sev=F.sev===v?null:v;syncF();ledger();};});
+}
+function syncF(){
+  Array.prototype.forEach.call(document.querySelectorAll("[data-sig]"),b=>
+    b.classList.toggle("on",F.sig===b.getAttribute("data-sig")));
+  Array.prototype.forEach.call(document.querySelectorAll("[data-sev]"),b=>
+    b.classList.toggle("on",F.sev===b.getAttribute("data-sev")));
+}
+function spark(rc){
+  const t=TRENDS[rc]; const s=((t&&t.series)||[]).filter(p=>p.mean_risk!=null).slice(-30);
+  if(s.length<2) return '<span style="color:var(--slate);font-size:9px">&mdash;</span>';
+  const v=s.map(p=>p.mean_risk);
+  const lo=Math.min.apply(null,v), hi=Math.max.apply(null,v);
+  const d=v.map((y,i)=>((i/(v.length-1))*62+1)+","+(16-((y-lo)/((hi-lo)||1))*14)).join(" L");
+  const up=v[v.length-1]>=v[0];
+  return '<svg class="spark" viewBox="0 0 64 17"><path d="M'+d+'" stroke="'+(up?C.orange:C.emerald)+'"/></svg>';
+}
+function ledger(){
+  VIEW=EVENTS.filter(e=>
+    (!F.sig||e.signature===F.sig)&&(!F.sev||e.severity===F.sev)&&
+    (!F.q||(e.region_name||"").toLowerCase().indexOf(F.q)>=0));
+  document.getElementById("ledCount").textContent=
+    VIEW.length+" of "+EVENTS.length+" rows · ranked by risk";
+  const rows=VIEW.map(e=>{
+    const rf=(e.caveats||[]).some(c=>c.indexOf("Stage-2")>=0);
+    return '<tr data-id="'+esc(e.event_id)+'" class="'+(e.event_id===SEL?"on":"")+'">'+
+      '<td><div>'+esc(e.signature.replace(/_/g," "))+'</div><div class="where">'+esc(e.region_name)+'</div></td>'+
+      '<td><span class="stage '+(rf?"r":"")+'">'+(rf?"REFINED":"SCREEN")+'</span></td>'+
+      '<td>'+spark(e.region_code)+'</td>'+
+      '<td class="num">'+e.confidence.toFixed(2)+'</td>'+
+      '<td class="num">'+(e.estimated_area_km2?num(e.estimated_area_km2):"—")+'</td>'+
+      '<td class="num" style="color:'+SEV[e.severity]+'">'+(e.risk_score?e.risk_score.toFixed(1):"—")+'</td>'+
+      '<td><span class="chip" style="background:'+SEV[e.severity]+'1f;color:'+SEV[e.severity]+
+      ';border:1px solid '+SEV[e.severity]+'55">'+e.severity+'</span></td></tr>';}).join("");
+  document.getElementById("ledbody").innerHTML=rows||
+    '<tr><td colspan="7" class="empty">No rows match the current filter.</td></tr>';
+  Array.prototype.forEach.call(document.querySelectorAll("#ledbody tr[data-id]"),r=>{
+    r.onclick=()=>pick(r.getAttribute("data-id"));});
+}
+
+/* ---------- backscatter strip ---------- */
+function strip(o,thr){
+  if(o.p10_db==null||o.p90_db==null) return "";
+  const mn=o.min_db==null?o.p10_db:o.min_db, mx=o.max_db==null?o.p90_db:o.max_db;
+  const lo=Math.min(mn,o.p10_db,thr)-2, hi=Math.max(mx,o.p90_db,thr)+2;
+  const W=100,X=v=>((v-lo)/(hi-lo))*W,y=30,h=17;
+  return '<svg class="bs" viewBox="0 0 '+W+' 74" preserveAspectRatio="none">'+
+    '<rect class="dark" x="0" y="'+(y-6)+'" width="'+Math.max(0,X(thr))+'" height="'+(h+12)+'"/>'+
+    '<line class="ax" x1="0" y1="'+(y+h+11)+'" x2="'+W+'" y2="'+(y+h+11)+'"/>'+
+    '<line class="whisk" x1="'+X(mn)+'" y1="'+(y+h/2)+'" x2="'+X(mx)+'" y2="'+(y+h/2)+'"/>'+
+    '<rect class="box" x="'+X(o.p10_db)+'" y="'+y+'" width="'+Math.max(.4,X(o.p90_db)-X(o.p10_db))+'" height="'+h+'"/>'+
+    '<line class="mean" x1="'+X(o.mean_db)+'" y1="'+(y-2)+'" x2="'+X(o.mean_db)+'" y2="'+(y+h+2)+'"/>'+
+    '<line class="thr" x1="'+X(thr)+'" y1="'+(y-9)+'" x2="'+X(thr)+'" y2="'+(y+h+9)+'"/>'+
+    '<text x="0" y="'+(y+h+21)+'">'+lo.toFixed(0)+' dB</text>'+
+    '<text x="'+W+'" y="'+(y+h+21)+'" text-anchor="end">'+hi.toFixed(0)+' dB</text>'+
+    '<text class="hi" x="'+X(thr)+'" y="'+(y-13)+'" text-anchor="middle">threshold '+thr+'</text>'+
+    '<text class="hi" x="'+X(o.p10_db)+'" y="'+(y-13)+'" text-anchor="middle">p10</text>'+
+    '<text class="hi" x="'+X(o.p90_db)+'" y="'+(y+h+21)+'" text-anchor="middle">p90</text></svg>';
+}
+
+/* ---------- 04 inspector ---------- */
+async function pick(id){
+  if(!id) return; SEL=id;
+  Array.prototype.forEach.call(document.querySelectorAll("#ledbody tr"),r=>
+    r.classList.toggle("on",r.getAttribute("data-id")===id));
+  const row=EVENTS.filter(e=>e.event_id===id)[0];
+  if(row){const rc=row.region_code.indexOf("__")>=0?row.region_code.split("__")[0]:row.region_code;
+    temporal(TRENDS[row.region_code]?row.region_code:rc);}
+  const d=await get("/pollution-events/"+id), r=d.risk_assessment;
+  document.getElementById("inspWho").textContent=d.event_id;
+  const box=document.getElementById("insp");
+  if(!r){box.innerHTML='<div class="empty">No stored risk assessment.</div>';return;}
+
+  const S=r.contributions.slice().sort((a,b)=>b.points-a.points);
+  let aw=0,av=0; S.forEach(c=>{aw+=c.points;av+=c.max_points;});
+  const ex=(r.missing_factors||[]).length*15, tot=av+ex;
+  let segs=S.map((c,i)=>'<i style="width:'+(c.points/tot*100)+'%;background:'+FAC[i%FAC.length]+'"></i>').join("");
+  segs+='<i class="gap" style="width:'+((av-aw)/tot*100)+'%"></i>';
+  if(ex) segs+='<i class="excl" style="width:'+(ex/tot*100)+'%"></i>';
+  const keys=S.map((c,i)=>'<div class="sk"><span class="dot" style="background:'+FAC[i%FAC.length]+'"></span>'+
+    '<span><span class="n">'+esc(c.factor.replace(/_/g," "))+'</span>'+
+    '<span class="d">'+esc(c.detail)+'</span></span>'+
+    '<span class="p">'+c.points.toFixed(1)+'<s> / '+c.max_points+'</s></span></div>').join("");
+  const o=d.observation, thr=-22;
+
+  box.innerHTML='<div class="igrid"><div><div class="blk">'+
+    '<div class="scorerow"><span class="big" style="color:'+SEV[r.severity]+'">'+r.score.toFixed(1)+'</span>'+
+    '<span class="of">/ 100</span>'+
+    '<span class="chip" style="background:'+SEV[r.severity]+'1f;color:'+SEV[r.severity]+
+      ';border:1px solid '+SEV[r.severity]+'55">'+r.severity+'</span>'+
+    '<span class="badge" style="background:'+EV[r.evidence_level]+'22;color:'+EV[r.evidence_level]+'">'+
+      r.evidence_level+'</span></div>'+
+    '<div class="meta"><b>'+esc(d.region_name)+'</b> &middot; '+esc(r.engine_version)+'<br/>'+
+      aw.toFixed(1)+' of '+av+' evaluable points &rarr; renormalised to '+r.score.toFixed(1)+'</div>'+
+    '<div class="stack">'+segs+'</div><div>'+keys+'</div>'+
+    ((r.missing_factors||[]).length?'<div class="excluded"><b>Excluded from the denominator:</b> '+
+      r.missing_factors.join(", ")+' &mdash; hatched above. The score is renormalised over what could be '+
+      'evaluated, so this is a <b>partial</b> assessment, not a low one.</div>':"")+
+    '</div></div><div>'+
+    (o?'<div class="blk"><div class="h">BACKSCATTER DISTRIBUTION &mdash; WHY IT FLAGGED</div>'+strip(o,thr)+
+      '<div class="obs" style="margin-top:12px">'+
+      '<div class="r"><span>contrast p90&minus;p10</span><span>'+(o.p90_db-o.p10_db).toFixed(1)+' dB</span></div>'+
+      '<div class="r"><span>mean</span><span>'+o.mean_db+' dB</span></div>'+
+      '<div class="r"><span>collection</span><span>'+esc(o.collection)+'</span></div>'+
+      '<div class="r"><span>evidence</span><span style="color:'+EV[o.evidence_level]+'">'+o.evidence_level+'</span></div>'+
+      '</div></div>':"")+
+    '<div class="blk"><div class="h">MEASURED / DERIVED</div><div class="obs">'+
+    '<div class="r"><span>confidence</span><span>'+d.confidence.toFixed(3)+' &middot; calibrated: '+
+      d.confidence_is_calibrated+'</span></div>'+
+    '<div class="r"><span>area</span><span>'+(d.estimated_area_km2?num(d.estimated_area_km2)+' km&sup2;':"not estimated")+'</span></div>'+
+    '<div class="r"><span>nearest protected</span><span style="text-align:right;max-width:220px">'+
+      esc(d.geographic_context.nearest_protected_area)+'</span></div></div></div>'+
+    '<div class="blk"><div class="h">CAVEATS ON THIS CLAIM</div><ul class="cav">'+
+      (d.caveats||[]).map(c=>'<li>'+esc(c)+'</li>').join("")+'</ul></div></div></div>';
+}
+
+/* ---------- 05 alerts ---------- */
+async function loadAlerts(){
+  document.getElementById("alrTools").innerHTML=["CRITICAL","HIGH","MEDIUM","LOW"].map(s=>
+    '<button class="tg '+(s===ALERT_MIN?"on":"")+'" data-am="'+s+'">&ge; '+s+'</button>').join("");
+  Array.prototype.forEach.call(document.querySelectorAll("[data-am]"),b=>{
+    b.onclick=()=>{ALERT_MIN=b.getAttribute("data-am");loadAlerts();};});
+  const a=await get("/alerts?min_severity="+ALERT_MIN);
+  const cards=a.items.slice(0,24).map(x=>
+    '<div class="al" data-id="'+esc(x.event_id)+'">'+
+    '<div class="top"><span class="chip" style="background:'+SEV[x.severity]+'1f;color:'+SEV[x.severity]+
+      ';border:1px solid '+SEV[x.severity]+'55">'+x.severity+' '+(x.risk_score?x.risk_score.toFixed(0):"")+'</span>'+
+    '<span style="font-size:9px;color:var(--slate)">conf '+x.confidence.toFixed(2)+'</span></div>'+
+    '<div class="msg">'+esc(x.message)+'</div>'+
+    '<div class="tm">'+esc((x.detected_at||"").slice(0,16).replace("T"," "))+
+      (x.is_simulated?' &middot; <span style="color:'+C.amber+'">SIMULATED</span>':"")+'</div></div>').join("");
+  document.getElementById("alerts").innerHTML=cards||
+    '<div class="empty">No alerts at or above '+ALERT_MIN+'.</div>';
+  Array.prototype.forEach.call(document.querySelectorAll(".al"),el=>{
+    el.onclick=()=>{pick(el.getAttribute("data-id"));
+      document.getElementById("s-insp").scrollIntoView({behavior:"smooth"});};});
+}
+
+/* ---------- 06 system ---------- */
+async function loadSystem(){
+  const r=await Promise.all([get("/models"),get("/models/detectors"),get("/drift"),get("/metrics")]);
+  const models=r[0],dets=r[1],drift=r[2],met=r[3];
+  const DS={ok:C.emerald,warning:C.amber,drift_detected:C.rose,insufficient_data:C.slate};
+  const nm=v=>v==null?'<span class="nm">not measured</span>':v;
+  const nd=v=>v==null?'<span class="nm">no data</span>':v;
+
+  document.getElementById("system").innerHTML=
+   '<div class="card"><div class="h">MODEL REGISTRY</div>'+
+     models.map(m=>'<div style="margin-bottom:11px">'+
+       '<div class="row"><span>'+esc(m.name)+'</span><span style="color:'+C.sky+'">'+esc(m.version)+'</span></div>'+
+       '<div class="row"><span>mAP@50</span><span>'+nm(m.map50)+'</span></div>'+
+       '<div class="row"><span>precision / recall</span><span>'+nm(m.precision)+' / '+nm(m.recall)+'</span></div>'+
+       '<div class="row"><span>status</span><span>'+esc(m.status)+'</span></div></div>').join("")+
+     '<div class="foot">Null means the model has not been evaluated. Metrics are written only by '+
+     'ml/evaluation/evaluate_detector.py &mdash; never back-filled with a plausible number.</div></div>'+
+
+   '<div class="card"><div class="h">RUNTIME DETECTORS</div>'+
+     dets.map(d=>'<div style="margin-bottom:11px">'+
+       '<div class="row"><span>'+esc(d.name)+'</span><span style="color:'+
+         (d.available?C.emerald:C.rose)+'">'+(d.available?"available":"unavailable")+'</span></div>'+
+       '<div class="row"><span>may claim</span><span style="text-align:right;max-width:150px;font-size:9px">'+
+         d.supported_signatures.map(s=>esc(s.replace(/_signature/,"").replace(/_/g," "))).join(", ")+
+       '</span></div>'+
+       (d.class_names?'<div class="row"><span>trained labels</span>'+
+         '<span style="text-align:right;max-width:150px;font-size:9px">'+
+         Object.keys(d.class_names).map(k=>k+" "+esc(d.class_names[k])).join(", ")+
+         '</span></div>':"")+
+       '</div>').join("")+
+     '<div class="foot">A detector raises if it emits a signature outside this set &mdash; which is why '+
+     'SAR cannot return "plastic waste".</div></div>'+
+
+   '<div class="card"><div class="h">DRIFT &mdash; PSI</div>'+
+     '<div class="row"><span>overall</span><span class="dstat" style="background:'+
+       DS[drift.overall_status]+'22;color:'+DS[drift.overall_status]+'">'+esc(drift.overall_status)+'</span></div>'+
+     drift.checks.map(c=>'<div class="row"><span>'+esc(c.metric.replace(/_/g," "))+'</span>'+
+       '<span style="color:'+DS[c.status]+'">'+(c.psi==null?"—":c.psi)+' &middot; '+esc(c.status)+'</span></div>').join("")+
+     '<div class="row"><span>thresholds</span><span>warn '+drift.thresholds.warning+
+       ' &middot; drift '+drift.thresholds.drift+'</span></div>'+
+     '<div class="foot">'+esc(drift.action)+'</div></div>'+
+
+   '<div class="card"><div class="h">INFERENCE METRICS</div>'+
+     '<div class="row"><span>requests ('+met.window_days+'d)</span><span>'+met.volume.total_requests+'</span></div>'+
+     '<div class="row"><span>success rate</span><span>'+nd(met.volume.success_rate)+'</span></div>'+
+     '<div class="row"><span>latency p50</span><span>'+nd(met.latency.p50_ms)+'</span></div>'+
+     '<div class="row"><span>latency p95</span><span>'+nd(met.latency.p95_ms)+'</span></div>'+
+     '<div class="foot">Measured from the prediction log. Zero traffic reports null, not zero &mdash; '+
+     'a 0 ms latency would read as instantaneous.</div></div>';
+}
+
+/* ---------- interactions ---------- */
+function wire(){
+  document.getElementById("q").oninput=e=>{F.q=e.target.value.toLowerCase().trim();ledger();};
+  document.getElementById("expJson").onclick=()=>dl("oip-detections.json",
+    JSON.stringify(VIEW,null,2),"application/json");
+  document.getElementById("expCsv").onclick=()=>{
+    const cols=["event_id","region_name","signature","severity","risk_score","confidence",
+                "estimated_area_km2","evidence_level","detected_at"];
+    const rows=[cols.join(",")];
+    VIEW.forEach(e=>rows.push(cols.map(c=>'"'+String(e[c]==null?"":e[c]).replace(/"/g,'""')+'"').join(",")));
+    dl("oip-detections.csv",rows.join("\n"),"text/csv");};
+  document.addEventListener("keydown",e=>{
+    if(/input/i.test(e.target.tagName))return;
+    const k=e.key.toLowerCase();
+    if(k!=="j"&&k!=="k")return;
+    let i=-1; VIEW.forEach((x,ix)=>{if(x.event_id===SEL)i=ix;});
+    const nx=k==="j"?Math.min(VIEW.length-1,i+1):Math.max(0,i-1);
+    if(VIEW[nx]){pick(VIEW[nx].event_id);
+      const el=document.querySelector('#ledbody tr[data-id="'+VIEW[nx].event_id+'"]');
+      if(el) el.scrollIntoView({block:"nearest"});}});
+}
+function dl(name,text,type){
+  const u=URL.createObjectURL(new Blob([text],{type}));
+  const a=document.createElement("a");a.href=u;a.download=name;a.click();URL.revokeObjectURL(u);
+}
+
+boot().catch(e=>{
+  document.getElementById("live").style.background=C.rose;
+  const m='<div class="empty" style="color:'+C.rose+'">'+esc(e.message)+'</div>';
+  document.getElementById("insp").innerHTML=m;
+  document.getElementById("ledbody").innerHTML='<tr><td colspan="7">'+m+'</td></tr>';
+  console.error(e);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,455 @@
+/**
+ * Shared UI primitives.
+ *
+ * The evidence and honesty components here are not decoration: they are how
+ * the platform's central distinction (observed vs detected vs inferred vs
+ * forecast vs retrieved) reaches the screen. `Unavailable` and `NotEvaluated`
+ * exist so a missing value has a designed appearance and can never be
+ * silently rendered as a zero.
+ */
+
+import type { ReactNode } from "react";
+import { AlertTriangle, Info, Inbox, RefreshCw, ServerCrash } from "lucide-react";
+import type { EvidenceLevel, Severity } from "@/lib/types";
+
+/* -------------------------------------------------------------------------
+   Evidence
+   ------------------------------------------------------------------------- */
+
+const EVIDENCE_META: Record<
+  string,
+  { label: string; hint: string; fg: string; bg: string; border: string }
+> = {
+  OBSERVED: {
+    label: "OBSERVED",
+    hint: "Directly measured from sensor data",
+    fg: "var(--ev-observed)",
+    bg: "var(--ev-observed-bg)",
+    border: "var(--ev-observed-border)",
+  },
+  DETECTED: {
+    label: "DETECTED",
+    hint: "Detector output, carries uncertainty",
+    fg: "var(--ev-detected)",
+    bg: "var(--ev-detected-bg)",
+    border: "var(--ev-detected-border)",
+  },
+  INFERRED: {
+    label: "INFERRED",
+    hint: "Derived by reasoning over detections and context",
+    fg: "var(--ev-inferred)",
+    bg: "var(--ev-inferred-bg)",
+    border: "var(--ev-inferred-border)",
+  },
+  FORECAST: {
+    label: "FORECAST",
+    hint: "A projection about the future, not an observation",
+    fg: "var(--ev-forecast)",
+    bg: "var(--ev-forecast-bg)",
+    border: "var(--ev-forecast-border)",
+  },
+  RETRIEVED: {
+    label: "RETRIEVED",
+    hint: "Text retrieved from the verified corpus",
+    fg: "var(--ev-retrieved)",
+    bg: "var(--ev-retrieved-bg)",
+    border: "var(--ev-retrieved-border)",
+  },
+  SIMULATED: {
+    label: "SIMULATED",
+    hint: "Synthetic demo data — describes no real acquisition",
+    fg: "var(--ev-simulated)",
+    bg: "var(--ev-simulated-bg)",
+    border: "var(--ev-simulated-border)",
+  },
+};
+
+export function EvidenceBadge({
+  level,
+  detail,
+  size = "sm",
+}: {
+  level: EvidenceLevel | string;
+  detail?: string;
+  size?: "sm" | "md";
+}) {
+  const meta = EVIDENCE_META[String(level).toUpperCase()] ?? {
+    label: String(level).toUpperCase(),
+    hint: "",
+    fg: "var(--neutral)",
+    bg: "var(--neutral-bg)",
+    border: "var(--neutral-border)",
+  };
+  return (
+    <span
+      className={`ev-badge ev-${size}`}
+      title={detail ? `${meta.hint} — ${detail}` : meta.hint}
+      style={{ color: meta.fg, background: meta.bg, borderColor: meta.border }}
+    >
+      <span className="ev-dot" style={{ background: meta.fg }} />
+      {meta.label}
+      {detail && <span className="ev-detail">{detail}</span>}
+    </span>
+  );
+}
+
+/** The five-level key, shown once per page where provenance matters. */
+export function EvidenceLegend() {
+  return (
+    <div className="ev-legend" role="list" aria-label="Evidence levels">
+      {(["OBSERVED", "DETECTED", "INFERRED", "FORECAST", "RETRIEVED"] as const).map(
+        (level) => (
+          <div className="ev-legend-item" role="listitem" key={level}>
+            <EvidenceBadge level={level} />
+            <span>{EVIDENCE_META[level].hint}</span>
+          </div>
+        ),
+      )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------
+   Severity and status
+   ------------------------------------------------------------------------- */
+
+const SEVERITY_COLOR: Record<Severity, { fg: string; bg: string }> = {
+  LOW: { fg: "var(--sev-low)", bg: "var(--sev-low-bg)" },
+  MEDIUM: { fg: "var(--sev-medium)", bg: "var(--sev-medium-bg)" },
+  HIGH: { fg: "var(--sev-high)", bg: "var(--sev-high-bg)" },
+  CRITICAL: { fg: "var(--sev-critical)", bg: "var(--sev-critical-bg)" },
+};
+
+export function severityColor(severity: Severity | null | undefined): string {
+  return severity ? SEVERITY_COLOR[severity].fg : "var(--neutral)";
+}
+
+export function RiskBadge({
+  severity,
+  score,
+}: {
+  severity: Severity | null;
+  score?: number | null;
+}) {
+  if (!severity) return <Unavailable />;
+  const { fg, bg } = SEVERITY_COLOR[severity];
+  return (
+    <span className="risk-badge" style={{ color: fg, background: bg, borderColor: fg }}>
+      {severity}
+      {score !== null && score !== undefined && (
+        <strong>{score.toFixed(1)}</strong>
+      )}
+    </span>
+  );
+}
+
+export type StatusTone = "ok" | "warn" | "error" | "neutral" | "info";
+
+export function StatusBadge({
+  tone,
+  label,
+  pulse = false,
+}: {
+  tone: StatusTone;
+  label: string;
+  pulse?: boolean;
+}) {
+  return (
+    <span className={`status-badge tone-${tone}`}>
+      <span className={`status-dot${pulse ? " pulse" : ""}`} />
+      {label}
+    </span>
+  );
+}
+
+/* -------------------------------------------------------------------------
+   Honest absence
+   ------------------------------------------------------------------------- */
+
+/** A value the backend did not provide. Never render 0 in its place. */
+export function Unavailable({ reason }: { reason?: string }) {
+  return (
+    <span className="unavailable" title={reason ?? "No value returned by the API"}>
+      Unavailable
+    </span>
+  );
+}
+
+/** A metric that exists but has never been measured. */
+export function NotEvaluated({ hint }: { hint?: string }) {
+  return (
+    <span
+      className="not-evaluated"
+      title={
+        hint ??
+        "This metric has not been measured. It is reported as null rather than filled with a plausible number."
+      }
+    >
+      Not evaluated
+    </span>
+  );
+}
+
+/** Render a nullable number, or the honest absence marker. */
+export function Value({
+  value,
+  suffix = "",
+  digits = 2,
+  fallback = "unavailable",
+}: {
+  value: number | null | undefined;
+  suffix?: string;
+  digits?: number;
+  fallback?: "unavailable" | "not-evaluated" | "dash";
+}) {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    if (fallback === "not-evaluated") return <NotEvaluated />;
+    if (fallback === "dash") return <span className="text-muted">—</span>;
+    return <Unavailable />;
+  }
+  return (
+    <>
+      {value.toLocaleString(undefined, { maximumFractionDigits: digits })}
+      {suffix && <span className="unit">{suffix}</span>}
+    </>
+  );
+}
+
+/* -------------------------------------------------------------------------
+   Layout blocks
+   ------------------------------------------------------------------------- */
+
+export function PageHeader({
+  title,
+  subtitle,
+  actions,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  actions?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <header className="page-header">
+      <div className="page-header-row">
+        <div>
+          <h1>{title}</h1>
+          {subtitle && <p className="page-subtitle">{subtitle}</p>}
+        </div>
+        {actions && <div className="page-actions">{actions}</div>}
+      </div>
+      {children}
+    </header>
+  );
+}
+
+export function SectionCard({
+  title,
+  description,
+  actions,
+  children,
+  padded = true,
+  className = "",
+}: {
+  title?: string;
+  description?: string;
+  actions?: ReactNode;
+  children: ReactNode;
+  padded?: boolean;
+  className?: string;
+}) {
+  return (
+    <section className={`card ${className}`}>
+      {(title || actions) && (
+        <div className="card-head">
+          <div>
+            {title && <h2 className="card-title">{title}</h2>}
+            {description && <p className="card-desc">{description}</p>}
+          </div>
+          {actions && <div className="card-actions">{actions}</div>}
+        </div>
+      )}
+      <div className={padded ? "card-body" : ""}>{children}</div>
+    </section>
+  );
+}
+
+export function MetricCard({
+  icon,
+  label,
+  value,
+  detail,
+  tone = "neutral",
+  evidence,
+  footer,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: ReactNode;
+  detail?: string;
+  tone?: StatusTone;
+  evidence?: EvidenceLevel | string;
+  footer?: ReactNode;
+}) {
+  return (
+    <div className={`metric-card tone-${tone}`}>
+      <div className="metric-top">
+        <span className="metric-icon">{icon}</span>
+        <span className="metric-label">{label}</span>
+        {evidence && <EvidenceBadge level={evidence} />}
+      </div>
+      <div className="metric-value">{value}</div>
+      {detail && <p className="metric-detail">{detail}</p>}
+      {footer && <div className="metric-footer">{footer}</div>}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------
+   Async states
+   ------------------------------------------------------------------------- */
+
+export function LoadingSkeleton({
+  rows = 3,
+  height = 56,
+}: {
+  rows?: number;
+  height?: number;
+}) {
+  return (
+    <div className="skeleton-stack" aria-busy="true" aria-live="polite">
+      <span className="sr-only">Loading</span>
+      {Array.from({ length: rows }).map((_, index) => (
+        <div key={index} className="skeleton" style={{ height }} />
+      ))}
+    </div>
+  );
+}
+
+export function EmptyState({
+  title,
+  message,
+  icon,
+  action,
+}: {
+  title: string;
+  message: string;
+  icon?: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="state-block">
+      <span className="state-icon neutral">{icon ?? <Inbox size={20} />}</span>
+      <h3>{title}</h3>
+      <p>{message}</p>
+      {action}
+    </div>
+  );
+}
+
+export function ErrorState({
+  error,
+  onRetry,
+}: {
+  error: unknown;
+  onRetry?: () => void;
+}) {
+  const message =
+    error && typeof error === "object" && "friendly" in error
+      ? String((error as { friendly: string }).friendly)
+      : "Something went wrong loading this data.";
+  const insufficient =
+    error && typeof error === "object" && "isInsufficientData" in error
+      ? Boolean((error as { isInsufficientData: boolean }).isInsufficientData)
+      : false;
+
+  return (
+    <div className="state-block">
+      <span className={`state-icon ${insufficient ? "warn" : "error"}`}>
+        {insufficient ? <Info size={20} /> : <ServerCrash size={20} />}
+      </span>
+      <h3>{insufficient ? "Insufficient data" : "Data unavailable"}</h3>
+      <p>{message}</p>
+      {onRetry && (
+        <button className="btn btn-ghost" onClick={onRetry}>
+          <RefreshCw size={13} /> Retry
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Prominent, unmissable banner for demo-mode data. */
+export function SimulatedBanner({ detail }: { detail?: string }) {
+  return (
+    <div className="sim-banner" role="status">
+      <AlertTriangle size={15} />
+      <div>
+        <strong>Simulated data</strong>
+        <span>
+          {detail ??
+            "Demo mode is active. These records are synthetic, tagged SIMULATED by the API, and describe no real satellite acquisition."}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** A page whose backing capability does not exist in this deployment. */
+export function NotAvailableInBackend({
+  feature,
+  reason,
+  alternative,
+}: {
+  feature: string;
+  reason: string;
+  alternative?: string;
+}) {
+  return (
+    <div className="state-block tall">
+      <span className="state-icon neutral">
+        <Info size={20} />
+      </span>
+      <h3>{feature} — not available</h3>
+      <p>{reason}</p>
+      {alternative && <p className="state-alt">{alternative}</p>}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------
+   Small helpers
+   ------------------------------------------------------------------------- */
+
+export function Tag({ children, tone = "neutral" }: { children: ReactNode; tone?: string }) {
+  return <span className={`tag tone-${tone}`}>{children}</span>;
+}
+
+export function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export function formatTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export function titleise(text: string | null | undefined): string {
+  if (!text) return "—";
+  return text.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}

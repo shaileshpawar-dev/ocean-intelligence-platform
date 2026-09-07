@@ -1,0 +1,18 @@
+# Keep the build context small and reproducible.
+**/node_modules
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+.git
+data/*.db
+data/raw/*
+data/processed/*
+ml/models/*.pt
+# The console is built inside the image by the `console` stage; never ship a
+# host-built copy, which could be stale or built against a different API URL.
+backend/app/static/app
+frontend/dist
+**/.env
+**/.env.local

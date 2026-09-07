@@ -1,0 +1,86 @@
+# syntax=docker/dockerfile:1
+#
+# Backend image. Multi-stage so the runtime layer carries no build toolchain.
+# Optional heavy dependencies (ultralytics/torch, earthengine-api) are NOT
+# installed here: the platform runs without them and reports those components
+# as unavailable. Build with --build-arg EXTRAS=vision to include them.
+#
+# Three stages: Node builds the console, Python builds the venv, and the
+# runtime carries neither toolchain -- only the venv and the built assets.
+
+# ---------------------------------------------------------------------------
+# Stage 1: build the OceanAI console.
+#
+# Node exists only here. Vite emits into backend/app/static/app, which the
+# runtime stage copies in; the shipped container has no Node and no npm.
+# ---------------------------------------------------------------------------
+FROM node:22-slim AS console
+
+WORKDIR /console
+
+# Copy manifests first so `npm ci` is cached until dependencies actually change.
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+
+COPY frontend/ ./
+# vite.config.ts writes to ../backend/app/static/app, so create that path.
+RUN mkdir -p /backend/app/static \
+    && sed -i 's#\.\./backend/app/static/app#/backend/app/static/app#' vite.config.ts \
+    && npm run build
+
+# ---------------------------------------------------------------------------
+
+FROM python:3.12-slim AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /build
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY backend/requirements.txt .
+RUN python -m venv /opt/venv \
+    && /opt/venv/bin/pip install --upgrade pip \
+    && /opt/venv/bin/pip install -r requirements.txt
+
+# ---------------------------------------------------------------------------
+
+FROM python:3.12-slim AS runtime
+
+# DATABASE_URL is set explicitly: the app lives at /app/app, so the settings
+# default (anchored to the repo root, three parents up) resolves to / in-image
+# and would try to create an unwritable /data. Being explicit here is clearer
+# than making the default clever.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    DATABASE_URL="sqlite:////app/data/oip.db"
+
+# Run as a non-root user. The container writes only to /app/data.
+RUN useradd --create-home --uid 1000 oip
+
+WORKDIR /app
+
+COPY --from=builder /opt/venv /opt/venv
+COPY --chown=oip:oip backend/ /app/
+
+# The built console. Copied after the backend so it is never shadowed by a
+# stale directory from the build context.
+COPY --from=console --chown=oip:oip /backend/app/static/app /app/app/static/app
+
+RUN mkdir -p /app/data && chown -R oip:oip /app/data
+
+USER oip
+
+EXPOSE 8000
+
+# The health endpoint returns 200 even when optional services are missing,
+# so this checks liveness rather than full capability.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=4).status==200 else 1)"
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

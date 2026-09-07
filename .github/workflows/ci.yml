@@ -1,0 +1,186 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  lint:
+    name: Lint and type-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install dev dependencies
+        run: pip install -r backend/requirements-dev.txt
+      - name: Ruff
+        run: ruff check .
+      - name: Ruff format check
+        run: ruff format --check .
+      - name: Mypy
+        run: mypy backend/app --ignore-missing-imports
+        continue-on-error: true # advisory until annotations are complete
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan history for committed credentials
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Fail on obvious credential patterns in tracked files
+        run: |
+          # Belt-and-braces check for the shapes that leaked previously.
+          if grep -rInE \
+            -e '(ngrok[_-]?auth[_-]?token|authtoken)[[:space:]]*[=:][[:space:]]*["'\'']?[A-Za-z0-9_]{20,}' \
+            -e '"private_key"[[:space:]]*:[[:space:]]*"-----BEGIN' \
+            -e '(AIza[0-9A-Za-z_-]{35}|sk-[A-Za-z0-9]{32,})' \
+            --include='*.py' --include='*.ipynb' --include='*.js' \
+            --include='*.jsx' --include='*.ts' --include='*.tsx' \
+            --include='*.json' --include='*.yml' --include='*.yaml' \
+            . ; then
+            echo "::error::Possible hardcoded credential found. Use environment variables."
+            exit 1
+          fi
+          echo "No hardcoded credential patterns found."
+
+  frontend:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: TypeScript
+        run: npm run typecheck
+      - name: ESLint
+        run: npm run lint
+      - name: Production build
+        run: npm run build
+
+  backend-tests:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r backend/requirements-dev.txt
+      - name: Run tests with coverage
+        working-directory: backend
+        run: pytest --cov=app --cov-report=xml --cov-report=term
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: backend/coverage.xml
+
+  contract-checks:
+    name: Scientific-integrity contract
+    runs-on: ubuntu-latest
+    # These assert the properties that distinguish this platform from a demo:
+    # no fabricated metrics, no unsupported claims, simulated data always
+    # labelled. A regression here is a correctness bug, not a style issue.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r backend/requirements-dev.txt
+      - name: Provenance and honesty contract tests
+        working-directory: backend
+        run: |
+          pytest -v \
+            tests/test_vision.py::TestHonestyContract \
+            tests/test_vision.py::TestSignatureGuardrail \
+            tests/test_vision.py::TestPlausibilityGate \
+            tests/test_api.py::TestProvenanceContract \
+            tests/test_risk.py::TestMissingDataHandling \
+            tests/test_forecasting.py::TestInsufficientData \
+            tests/test_refinement.py::TestTwoStagePipeline
+
+  smoke:
+    name: End-to-end smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+      - name: Boot the API and exercise the pipeline
+        working-directory: backend
+        env:
+          DEMO_MODE: "true"
+          DATABASE_URL: "sqlite:///./ci.db"
+        run: |
+          uvicorn app.main:app --host 127.0.0.1 --port 8000 &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8000/api/v1/health && break
+            sleep 1
+          done
+          set -e
+          curl -sf -X POST http://127.0.0.1:8000/api/v1/satellite/ingest | tee /tmp/ingest.json
+          python -c "import json;d=json.load(open('/tmp/ingest.json'));assert d['observations_stored']>0,d"
+          curl -sf -X POST 'http://127.0.0.1:8000/api/v1/satellite/refine?max_cells=2' >/dev/null
+          curl -sf http://127.0.0.1:8000/api/v1/pollution-zones >/dev/null
+          curl -sf http://127.0.0.1:8000/api/v1/trends >/dev/null
+          curl -sf http://127.0.0.1:8000/api/v1/models >/dev/null
+          echo "Smoke test passed."
+
+  docker-build:
+    name: Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.backend
+          push: false
+          load: true
+          tags: oip-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Verify the image boots
+        run: |
+          docker run -d --name oip -p 8000:8000 -e DEMO_MODE=true oip-backend:ci
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8000/api/v1/health && break
+            sleep 2
+          done
+          curl -sf http://127.0.0.1:8000/api/v1/health
+          docker logs oip
+          docker rm -f oip
