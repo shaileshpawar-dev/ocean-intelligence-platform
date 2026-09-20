@@ -1,0 +1,1179 @@
+"""Query and assembly layer for water intelligence.
+
+Routes parse and delegate; this module holds the logic. Three things here are
+worth knowing about before reading the code.
+
+**Status is computed, not trusted.** ``water_bodies.cached_status`` exists so
+the map can colour thousands of features in one query, but every detail
+response recomputes the status from observations. A cache that silently goes
+stale would be a source of exactly the kind of confident-but-wrong claim this
+platform is built to avoid, so the cache is only ever an optimisation for
+bulk views, never the answer to "what is the status of this river?".
+
+**Spatial queries are real.** Bounding-box filtering happens in SQL against
+indexed latitude/longitude columns. Radius search pre-filters with a bounding
+box in SQL and then applies an exact haversine distance in Python, so the
+result is a true circle rather than the square that a naive implementation
+returns.
+
+**Missing is not zero.** Every aggregate distinguishes "no station reported
+this" from "the value is zero". Counts of water bodies without recent data
+are first-class outputs, not omissions.
+"""
+
+from __future__ import annotations
+
+import math
+from collections import defaultdict
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any
+
+from sqlalchemy import Select, func, or_, select
+from sqlalchemy.orm import Session
+
+from app.models.enums import WaterStatus
+from app.models.water import (
+    DataSource,
+    District,
+    IngestionRun,
+    MonitoringStation,
+    State,
+    WaterBody,
+    WaterQualityObservation,
+)
+from app.water.freshness import Cadence
+from app.water.matching import haversine_km, normalise_name
+from app.water.parameters import BY_KEY
+from app.water.standards import DEFAULT_USE, DesignatedUse
+from app.water.status import Measurement, StatusResult, evaluate, status_rank
+
+# Cap on features returned by one map query. The map asks for a viewport, not
+# the whole country; without a cap a zoomed-out request would try to serialise
+# every station in India into one response.
+MAP_FEATURE_LIMIT = 2000
+SEARCH_LIMIT = 25
+
+
+def _as_utc(value: datetime | None) -> datetime | None:
+    """Normalise a database datetime to aware UTC (SQLite stores naive)."""
+    if value is None:
+        return None
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
+def _cadence_for(db: Session, source_key: str = "cpcb_nwdp") -> Cadence:
+    """The declared cadence of a source, for freshness judgement."""
+    source = db.scalar(select(DataSource).where(DataSource.key == source_key))
+    if source is None:
+        return Cadence.UNKNOWN
+    try:
+        return Cadence(source.expected_cadence)
+    except ValueError:
+        return Cadence.UNKNOWN
+
+
+# ---------------------------------------------------------------------------
+# Status
+# ---------------------------------------------------------------------------
+def compute_status(
+    db: Session,
+    body: WaterBody,
+    *,
+    use: DesignatedUse = DEFAULT_USE,
+    as_of_observation: bool = False,
+) -> StatusResult:
+    """Compute a water body's status from its most recent observations.
+
+    Reads only the latest observation per parameter. Regulatory limits are
+    written against individual samples, so averaging months together would
+    both smear real spikes and compare against the wrong thing.
+
+    Args:
+        db: open session.
+        body: the water body to classify.
+        use: designated-use class whose limits apply.
+        as_of_observation: evaluate as at the date of the latest observation
+            rather than today. This is what makes the platform useful on data
+            that is years old without becoming dishonest. The present-tense
+            answer for Mithi River is ``NO_RECENT_DATA``, because a 2021
+            sample cannot describe the river today; but "as of 02 Dec 2021,
+            BOD was above the class C limit" is a true, checkable statement,
+            and discarding it would throw away the actual finding. The two
+            are returned as separate fields and the historical one is always
+            rendered with its date attached.
+    """
+    rows = db.execute(
+        select(
+            WaterQualityObservation.parameter,
+            WaterQualityObservation.normalized_value,
+            WaterQualityObservation.value,
+            WaterQualityObservation.observed_at,
+            WaterQualityObservation.normalized_unit,
+        )
+        .where(WaterQualityObservation.water_body_id == body.id)
+        .order_by(WaterQualityObservation.observed_at.desc())
+        .limit(4000)
+    ).all()
+
+    latest: dict[str, Measurement] = {}
+    for parameter, normalized, raw, observed_at, unit in rows:
+        observed_at = _as_utc(observed_at)
+        if observed_at is None or parameter in latest:
+            continue
+        # Prefer the normalised value; fall back to the published one only
+        # when no conversion was needed in the first place.
+        value = normalized if normalized is not None else raw
+        latest[parameter] = Measurement(
+            parameter_key=parameter,
+            value=value,
+            observed_at=observed_at,
+            unit=unit,
+        )
+
+    measurements = list(latest.values())
+
+    if as_of_observation and measurements:
+        # Stand the clock at the moment of sampling. The freshness gate then
+        # passes and the parameter comparisons run, producing the verdict
+        # that was true on that date. The caller labels it with the date.
+        newest = max(m.observed_at for m in measurements)
+        return evaluate(measurements, use=use, cadence=_cadence_for(db), now=newest)
+
+    return evaluate(measurements, use=use, cadence=_cadence_for(db))
+
+
+def refresh_cached_statuses(db: Session, *, limit: int | None = None) -> int:
+    """Recompute and store ``cached_status`` for map and list views.
+
+    Run after ingestion. Returns the number of water bodies updated.
+    """
+    stmt = select(WaterBody).order_by(WaterBody.id)
+    if limit is not None:
+        stmt = stmt.limit(limit)
+
+    updated = 0
+    for body in db.scalars(stmt):
+        result = compute_status(db, body)
+        body.cached_status = str(result.status)
+        # Colouring every feature NO_RECENT_DATA would make the map true but
+        # useless. The historical band is cached alongside so the map can show
+        # what the last measurement found, labelled with its date.
+        historical = compute_status(db, body, as_of_observation=True)
+        body.cached_historical_status = str(historical.status)
+        updated += 1
+    db.commit()
+    return updated
+
+
+# ---------------------------------------------------------------------------
+# Filtering
+# ---------------------------------------------------------------------------
+@dataclass(slots=True)
+class WaterBodyFilters:
+    """Filters accepted by the list and map endpoints."""
+
+    state: str | None = None
+    district: str | None = None
+    water_type: str | None = None
+    status: str | None = None
+    has_recent_data: bool | None = None
+    query: str | None = None
+    bbox: tuple[float, float, float, float] | None = None
+    """(min_lat, min_lon, max_lat, max_lon)."""
+
+
+def _apply_filters(stmt: Select, filters: WaterBodyFilters) -> Select:
+    """Translate filters into SQL predicates."""
+    if filters.state:
+        stmt = stmt.join(State, WaterBody.state_id == State.id).where(
+            or_(
+                func.lower(State.slug) == filters.state.lower(),
+                func.upper(State.code) == filters.state.upper(),
+            )
+        )
+    if filters.district:
+        stmt = stmt.join(District, WaterBody.district_id == District.id).where(
+            func.lower(District.slug) == filters.district.lower()
+        )
+    if filters.water_type:
+        stmt = stmt.where(WaterBody.water_type == filters.water_type)
+    if filters.status:
+        stmt = stmt.where(WaterBody.cached_status == filters.status)
+    if filters.query:
+        needle = f"%{filters.query.strip().lower()}%"
+        stmt = stmt.where(
+            or_(
+                func.lower(WaterBody.name).like(needle),
+                func.lower(WaterBody.normalized_name).like(needle),
+            )
+        )
+    if filters.bbox:
+        min_lat, min_lon, max_lat, max_lon = filters.bbox
+        stmt = stmt.where(
+            WaterBody.centroid_lat.is_not(None),
+            WaterBody.centroid_lon.is_not(None),
+            WaterBody.centroid_lat >= min_lat,
+            WaterBody.centroid_lat <= max_lat,
+            WaterBody.centroid_lon >= min_lon,
+            WaterBody.centroid_lon <= max_lon,
+        )
+    if filters.has_recent_data is True:
+        stmt = stmt.where(WaterBody.latest_observed_at.is_not(None))
+    elif filters.has_recent_data is False:
+        stmt = stmt.where(WaterBody.latest_observed_at.is_(None))
+    return stmt
+
+
+def list_water_bodies(
+    db: Session,
+    filters: WaterBodyFilters,
+    *,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[dict], int]:
+    """A page of water bodies plus the total matching count."""
+    base = select(WaterBody)
+    filtered = _apply_filters(base, filters)
+
+    total = db.scalar(select(func.count()).select_from(filtered.subquery())) or 0
+
+    rows = db.scalars(
+        filtered.order_by(WaterBody.observation_count.desc(), WaterBody.name)
+        .limit(limit)
+        .offset(offset)
+    ).all()
+
+    return [summarise_body(db, b) for b in rows], total
+
+
+def summarise_body(db: Session, body: WaterBody, *, include_state: bool = True) -> dict:
+    """Compact representation for lists, maps and search results."""
+    state = db.get(State, body.state_id) if body.state_id else None
+    district = db.get(District, body.district_id) if body.district_id else None
+    return {
+        "id": body.id,
+        "slug": body.slug,
+        "name": body.name,
+        "water_type": str(body.water_type),
+        "state": state.name if state and include_state else None,
+        "state_slug": state.slug if state and include_state else None,
+        "district": district.name if district else None,
+        "district_slug": district.slug if district else None,
+        "latitude": body.centroid_lat,
+        "longitude": body.centroid_lon,
+        "station_count": body.station_count,
+        "observation_count": body.observation_count,
+        "latest_observed_at": (
+            _as_utc(body.latest_observed_at).isoformat()
+            if body.latest_observed_at
+            else None
+        ),
+        "status": body.cached_status,
+        "latest_available_status": body.cached_historical_status,
+        "match_confidence": body.match_confidence,
+        "match_method": body.match_method,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Detail
+# ---------------------------------------------------------------------------
+def get_water_body_detail(
+    db: Session, slug: str, *, use: DesignatedUse = DEFAULT_USE
+) -> dict | None:
+    """Everything the water-body page needs, with provenance throughout."""
+    body = db.scalar(select(WaterBody).where(WaterBody.slug == slug))
+    if body is None:
+        return None
+
+    status = compute_status(db, body, use=use)
+    # The present-tense verdict may be NO_RECENT_DATA while the measurements
+    # themselves show a clear exceedance. Both are reported: one answers
+    # "what is it like now?" (honestly, "we do not know"), the other answers
+    # "what did the last measurement show?" -- always carrying its date.
+    historical = compute_status(db, body, use=use, as_of_observation=True)
+    stations = db.scalars(
+        select(MonitoringStation)
+        .where(MonitoringStation.water_body_id == body.id)
+        .order_by(MonitoringStation.latest_observed_at.desc().nullslast())
+    ).all()
+
+    return {
+        **summarise_body(db, body),
+        "basin": body.basin,
+        "sub_basin": body.sub_basin,
+        "aliases": body.aliases or [],
+        "status_detail": status.to_dict(),
+        "latest_available_status": (
+            {
+                **historical.to_dict(),
+                "as_of": (
+                    _as_utc(body.latest_observed_at).isoformat()
+                    if body.latest_observed_at
+                    else None
+                ),
+                "note": (
+                    "Status as at the date of the most recent measurement, "
+                    "not a statement about the water body today."
+                ),
+            }
+            if body.latest_observed_at
+            else None
+        ),
+        "parameters": latest_parameters(db, body, use=use),
+        "stations": [summarise_station(db, s) for s in stations],
+        "sources": sources_for_body(db, body),
+    }
+
+
+def latest_parameters(
+    db: Session, body: WaterBody, *, use: DesignatedUse = DEFAULT_USE
+) -> list[dict]:
+    """The latest value of every parameter measured on this water body.
+
+    Only parameters that were actually measured appear. A parameter nobody
+    sampled is absent rather than rendered as zero or as a reassuring dash,
+    and the page says explicitly what was not measured.
+    """
+    rows = db.execute(
+        select(
+            WaterQualityObservation.parameter,
+            WaterQualityObservation.value,
+            WaterQualityObservation.normalized_value,
+            WaterQualityObservation.normalized_unit,
+            WaterQualityObservation.unit,
+            WaterQualityObservation.observed_at,
+            WaterQualityObservation.qualitative_value,
+            WaterQualityObservation.quality_flag,
+            WaterQualityObservation.source_reference,
+            MonitoringStation.name,
+        )
+        .join(
+            MonitoringStation,
+            MonitoringStation.id == WaterQualityObservation.station_id,
+        )
+        .where(WaterQualityObservation.water_body_id == body.id)
+        .order_by(WaterQualityObservation.observed_at.desc())
+        .limit(6000)
+    ).all()
+
+    from app.water.standards import compare
+
+    seen: dict[str, dict] = {}
+    for (
+        parameter,
+        value,
+        normalized,
+        normalized_unit,
+        unit,
+        observed_at,
+        qualitative,
+        flag,
+        reference,
+        station_name,
+    ) in rows:
+        if parameter in seen:
+            continue
+        meta = BY_KEY.get(parameter)
+        if meta is None:
+            continue
+
+        effective = normalized if normalized is not None else value
+        comparison = compare(meta, effective, use)
+        seen[parameter] = {
+            "parameter": parameter,
+            "label": meta.label,
+            "family": str(meta.family),
+            "value": effective,
+            "raw_value": value,
+            "unit": normalized_unit or unit or meta.unit,
+            "qualitative_value": qualitative,
+            "observed_at": _as_utc(observed_at).isoformat() if observed_at else None,
+            "station": station_name,
+            "quality_flag": str(flag),
+            "source_reference": reference,
+            "evidence_type": "MEASURED",
+            "comparison": comparison.to_dict(),
+            "higher_is_worse": meta.higher_is_worse,
+        }
+
+    order = {"biological": 0, "chemical": 1, "physical": 2}
+    return sorted(
+        seen.values(),
+        key=lambda p: (order.get(p["family"], 3), p["label"]),
+    )
+
+
+def summarise_station(db: Session, station: MonitoringStation) -> dict:
+    """Compact station record for maps and detail pages."""
+    body = db.get(WaterBody, station.water_body_id) if station.water_body_id else None
+    district = db.get(District, station.district_id) if station.district_id else None
+    return {
+        "id": station.id,
+        "code": station.station_code,
+        "name": station.name,
+        "slug": station.slug,
+        "latitude": station.latitude,
+        "longitude": station.longitude,
+        "geo_quality": station.geo_quality,
+        "agency": station.agency,
+        "district": district.name if district else None,
+        "water_body": body.name if body else None,
+        "water_body_slug": body.slug if body else None,
+        "observation_count": station.observation_count,
+        "latest_observed_at": (
+            _as_utc(station.latest_observed_at).isoformat()
+            if station.latest_observed_at
+            else None
+        ),
+    }
+
+
+def station_detail(db: Session, station_id: int) -> dict | None:
+    """One station with its most recent value for every parameter measured.
+
+    The station page answers "what did this specific sampling point find, and
+    when?", so values are per-parameter latest rather than a roll-up, and each
+    carries the date it was taken.
+    """
+    station = db.get(MonitoringStation, station_id)
+    if station is None:
+        return None
+
+    rows = db.execute(
+        select(
+            WaterQualityObservation.parameter,
+            WaterQualityObservation.normalized_value,
+            WaterQualityObservation.value,
+            WaterQualityObservation.normalized_unit,
+            WaterQualityObservation.observed_at,
+            WaterQualityObservation.quality_flag,
+            WaterQualityObservation.source_reference,
+        )
+        .where(WaterQualityObservation.station_id == station.id)
+        .order_by(WaterQualityObservation.observed_at.desc())
+        .limit(4000)
+    ).all()
+
+    from app.water.standards import compare
+
+    latest: dict[str, dict] = {}
+    measurements: list[Measurement] = []
+    for parameter, normalized, raw, unit, observed_at, flag, reference in rows:
+        observed_at = _as_utc(observed_at)
+        if parameter in latest or observed_at is None:
+            continue
+        meta = BY_KEY.get(parameter)
+        if meta is None:
+            continue
+        value = normalized if normalized is not None else raw
+        measurements.append(
+            Measurement(parameter_key=parameter, value=value, observed_at=observed_at)
+        )
+        latest[parameter] = {
+            "parameter": parameter,
+            "label": meta.label,
+            "family": str(meta.family),
+            "value": value,
+            "unit": unit or meta.unit,
+            "observed_at": observed_at.isoformat(),
+            "quality_flag": str(flag),
+            "source_reference": reference,
+            "evidence_type": "MEASURED",
+            "comparison": compare(meta, value, DEFAULT_USE).to_dict(),
+        }
+
+    cadence = _cadence_for(db)
+    present = evaluate(measurements, cadence=cadence)
+    historical = (
+        evaluate(
+            measurements,
+            cadence=cadence,
+            now=max(m.observed_at for m in measurements),
+        )
+        if measurements
+        else present
+    )
+
+    return {
+        **summarise_station(db, station),
+        "status_detail": present.to_dict(),
+        "latest_available_status": (
+            {
+                **historical.to_dict(),
+                "as_of": historical.freshness.observed_at.isoformat(),
+            }
+            if historical.freshness.observed_at
+            else None
+        ),
+        "parameters": sorted(
+            latest.values(),
+            key=lambda p: (
+                {"biological": 0, "chemical": 1, "physical": 2}.get(p["family"], 3),
+                p["label"],
+            ),
+        ),
+    }
+
+
+def sources_for_body(db: Session, body: WaterBody) -> list[dict]:
+    """Which sources contributed observations to this water body."""
+    rows = db.execute(
+        select(
+            DataSource.key,
+            DataSource.name,
+            DataSource.organisation,
+            DataSource.url,
+            DataSource.dataset,
+            DataSource.licence,
+            DataSource.expected_cadence,
+            func.count(WaterQualityObservation.id),
+            func.max(WaterQualityObservation.observed_at),
+            func.max(WaterQualityObservation.retrieved_at),
+        )
+        .join(DataSource, DataSource.id == WaterQualityObservation.source_id)
+        .where(WaterQualityObservation.water_body_id == body.id)
+        .group_by(DataSource.id)
+    ).all()
+
+    return [
+        {
+            "key": key,
+            "name": name,
+            "organisation": organisation,
+            "url": url,
+            "dataset": dataset,
+            "licence": licence,
+            "expected_cadence": cadence,
+            "observation_count": count,
+            "latest_observed_at": (_as_utc(latest).isoformat() if latest else None),
+            "retrieved_at": _as_utc(retrieved).isoformat() if retrieved else None,
+        }
+        for (
+            key,
+            name,
+            organisation,
+            url,
+            dataset,
+            licence,
+            cadence,
+            count,
+            latest,
+            retrieved,
+        ) in rows
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Trends
+# ---------------------------------------------------------------------------
+def parameter_trend(
+    db: Session,
+    slug: str,
+    parameter: str,
+    *,
+    days: int | None = None,
+) -> dict | None:
+    """Time series for one parameter on one water body.
+
+    Returns the points that exist. It never interpolates, never
+    forward-fills, and never pads the range with zeros -- a gap in monitoring
+    is information, and drawing a flat line across it would invent data.
+    """
+    body = db.scalar(select(WaterBody).where(WaterBody.slug == slug))
+    if body is None:
+        return None
+
+    meta = BY_KEY.get(parameter)
+    if meta is None:
+        return None
+
+    stmt = (
+        select(
+            WaterQualityObservation.observed_at,
+            WaterQualityObservation.normalized_value,
+            WaterQualityObservation.value,
+            WaterQualityObservation.quality_flag,
+            MonitoringStation.name,
+        )
+        .join(
+            MonitoringStation,
+            MonitoringStation.id == WaterQualityObservation.station_id,
+        )
+        .where(
+            WaterQualityObservation.water_body_id == body.id,
+            WaterQualityObservation.parameter == parameter,
+        )
+        .order_by(WaterQualityObservation.observed_at)
+    )
+
+    rows = db.execute(stmt).all()
+    points = [
+        {
+            "observed_at": _as_utc(observed_at).isoformat(),
+            "value": normalized if normalized is not None else value,
+            "station": station,
+            "quality_flag": str(flag),
+        }
+        for observed_at, normalized, value, flag, station in rows
+        if (normalized if normalized is not None else value) is not None
+    ]
+
+    if days is not None and points:
+        cutoff = datetime.now(UTC).timestamp() - days * 86400
+        points = [
+            p
+            for p in points
+            if datetime.fromisoformat(p["observed_at"]).timestamp() >= cutoff
+        ]
+
+    values = [p["value"] for p in points]
+    return {
+        "water_body": body.name,
+        "slug": body.slug,
+        "parameter": parameter,
+        "label": meta.label,
+        "unit": meta.unit,
+        "family": str(meta.family),
+        "higher_is_worse": meta.higher_is_worse,
+        "point_count": len(points),
+        "points": points,
+        "first_observed_at": points[0]["observed_at"] if points else None,
+        "last_observed_at": points[-1]["observed_at"] if points else None,
+        "min": min(values) if values else None,
+        "max": max(values) if values else None,
+        "mean": round(sum(values) / len(values), 3) if values else None,
+        "sufficient": len(points) >= 2,
+        "note": (
+            None
+            if len(points) >= 2
+            else "Fewer than two observations; no trend can be drawn."
+        ),
+    }
+
+
+def available_parameters(db: Session, slug: str) -> list[dict]:
+    """Which parameters have enough history on this body to plot."""
+    body = db.scalar(select(WaterBody).where(WaterBody.slug == slug))
+    if body is None:
+        return []
+
+    rows = db.execute(
+        select(
+            WaterQualityObservation.parameter,
+            func.count(WaterQualityObservation.id),
+            func.min(WaterQualityObservation.observed_at),
+            func.max(WaterQualityObservation.observed_at),
+        )
+        .where(WaterQualityObservation.water_body_id == body.id)
+        .group_by(WaterQualityObservation.parameter)
+    ).all()
+
+    out = []
+    for parameter, count, first, last in rows:
+        meta = BY_KEY.get(parameter)
+        if meta is None:
+            continue
+        out.append(
+            {
+                "parameter": parameter,
+                "label": meta.label,
+                "family": str(meta.family),
+                "unit": meta.unit,
+                "point_count": count,
+                "first_observed_at": _as_utc(first).isoformat() if first else None,
+                "last_observed_at": _as_utc(last).isoformat() if last else None,
+                "plottable": count >= 2,
+            }
+        )
+    order = {"biological": 0, "chemical": 1, "physical": 2}
+    return sorted(out, key=lambda p: (order.get(p["family"], 3), p["label"]))
+
+
+# ---------------------------------------------------------------------------
+# Map
+# ---------------------------------------------------------------------------
+def map_water_bodies(
+    db: Session, filters: WaterBodyFilters, *, limit: int = MAP_FEATURE_LIMIT
+) -> list[dict]:
+    """Water bodies as map features within a viewport."""
+    stmt = _apply_filters(select(WaterBody), filters).where(
+        WaterBody.centroid_lat.is_not(None),
+        WaterBody.centroid_lon.is_not(None),
+    )
+    rows = db.scalars(
+        stmt.order_by(WaterBody.observation_count.desc()).limit(limit)
+    ).all()
+
+    return [
+        {
+            "id": b.id,
+            "slug": b.slug,
+            "name": b.name,
+            "water_type": str(b.water_type),
+            "latitude": b.centroid_lat,
+            "longitude": b.centroid_lon,
+            "status": b.cached_status,
+            "latest_available_status": b.cached_historical_status,
+            "station_count": b.station_count,
+            "observation_count": b.observation_count,
+            "latest_observed_at": (
+                _as_utc(b.latest_observed_at).isoformat()
+                if b.latest_observed_at
+                else None
+            ),
+        }
+        for b in rows
+    ]
+
+
+def map_stations(
+    db: Session,
+    *,
+    bbox: tuple[float, float, float, float] | None = None,
+    state: str | None = None,
+    limit: int = MAP_FEATURE_LIMIT,
+) -> list[dict]:
+    """Monitoring stations as map features."""
+    stmt = select(MonitoringStation).where(
+        MonitoringStation.latitude.is_not(None),
+        MonitoringStation.longitude.is_not(None),
+        MonitoringStation.geo_quality != "missing",
+    )
+    if bbox:
+        min_lat, min_lon, max_lat, max_lon = bbox
+        stmt = stmt.where(
+            MonitoringStation.latitude >= min_lat,
+            MonitoringStation.latitude <= max_lat,
+            MonitoringStation.longitude >= min_lon,
+            MonitoringStation.longitude <= max_lon,
+        )
+    if state:
+        stmt = stmt.join(State, MonitoringStation.state_id == State.id).where(
+            or_(
+                func.lower(State.slug) == state.lower(),
+                func.upper(State.code) == state.upper(),
+            )
+        )
+
+    rows = db.scalars(
+        stmt.order_by(MonitoringStation.observation_count.desc()).limit(limit)
+    ).all()
+    return [summarise_station(db, s) for s in rows]
+
+
+# ---------------------------------------------------------------------------
+# Spatial search
+# ---------------------------------------------------------------------------
+def water_bodies_near(
+    db: Session,
+    latitude: float,
+    longitude: float,
+    radius_km: float,
+    *,
+    limit: int = 50,
+    water_type: str | None = None,
+    status: str | None = None,
+) -> list[dict]:
+    """Water bodies within ``radius_km`` of a point.
+
+    Two stages on purpose. A bounding box in SQL uses the lat/lon index to
+    discard almost everything cheaply; the exact haversine distance then runs
+    in Python over the survivors. Skipping the second stage would return a
+    square, which is what "within 10 km" must not mean.
+    """
+    lat_delta = radius_km / 110.574
+    # Longitude degrees shorten towards the poles; guard the cosine so a
+    # near-polar query cannot divide by zero.
+    lon_delta = radius_km / max(111.320 * math.cos(math.radians(latitude)), 0.01)
+
+    stmt = select(WaterBody).where(
+        WaterBody.centroid_lat.is_not(None),
+        WaterBody.centroid_lon.is_not(None),
+        WaterBody.centroid_lat.between(latitude - lat_delta, latitude + lat_delta),
+        WaterBody.centroid_lon.between(longitude - lon_delta, longitude + lon_delta),
+    )
+    if water_type:
+        stmt = stmt.where(WaterBody.water_type == water_type)
+    if status:
+        stmt = stmt.where(WaterBody.cached_status == status)
+
+    candidates = db.scalars(stmt.limit(limit * 10)).all()
+
+    out: list[dict] = []
+    for body in candidates:
+        distance = haversine_km(latitude, longitude, body.centroid_lat, body.centroid_lon)
+        if distance <= radius_km:
+            out.append({**summarise_body(db, body), "distance_km": round(distance, 2)})
+
+    out.sort(key=lambda b: b["distance_km"])
+    return out[:limit]
+
+
+# ---------------------------------------------------------------------------
+# Search
+# ---------------------------------------------------------------------------
+def search(db: Session, query: str, *, limit: int = SEARCH_LIMIT) -> list[dict]:
+    """Unified search over water bodies, states, districts and stations.
+
+    Deterministic and lexical. Results carry their type so the UI can route a
+    click correctly, and a water-body hit carries the date of its latest
+    observation so a searcher sees immediately whether the data is current.
+    """
+    text = (query or "").strip()
+    if len(text) < 2:
+        return []
+
+    needle = f"%{text.lower()}%"
+    normalised = f"%{normalise_name(text)}%"
+    results: list[dict] = []
+
+    for body in db.scalars(
+        select(WaterBody)
+        .where(
+            or_(
+                func.lower(WaterBody.name).like(needle),
+                WaterBody.normalized_name.like(normalised),
+            )
+        )
+        .order_by(WaterBody.observation_count.desc())
+        .limit(limit)
+    ):
+        summary = summarise_body(db, body)
+        results.append(
+            {
+                "type": "water_body",
+                "title": body.name,
+                "subtitle": " · ".join(
+                    x for x in [summary["district"], summary["state"]] if x
+                ),
+                "slug": body.slug,
+                "href": f"/app/water/{body.slug}",
+                "water_type": str(body.water_type),
+                "status": body.cached_status,
+                "latest_available_status": body.cached_historical_status,
+                "latest_observed_at": summary["latest_observed_at"],
+                "latitude": body.centroid_lat,
+                "longitude": body.centroid_lon,
+                "rank": body.observation_count,
+            }
+        )
+
+    for state in db.scalars(
+        select(State).where(func.lower(State.name).like(needle)).limit(5)
+    ):
+        results.append(
+            {
+                "type": "state",
+                "title": state.name,
+                "subtitle": "State",
+                "slug": state.slug,
+                "href": f"/app/state/{state.slug}",
+                "rank": 10_000,
+            }
+        )
+
+    for district, state_name in db.execute(
+        select(District, State.name)
+        .join(State, State.id == District.state_id)
+        .where(func.lower(District.name).like(needle))
+        .limit(8)
+    ):
+        results.append(
+            {
+                "type": "district",
+                "title": district.name,
+                "subtitle": f"District · {state_name}",
+                "slug": district.slug,
+                "href": f"/app/city/{district.slug}",
+                "latitude": district.centroid_lat,
+                "longitude": district.centroid_lon,
+                "rank": 9_000,
+            }
+        )
+
+    for station in db.scalars(
+        select(MonitoringStation)
+        .where(func.lower(MonitoringStation.name).like(needle))
+        .order_by(MonitoringStation.observation_count.desc())
+        .limit(8)
+    ):
+        results.append(
+            {
+                "type": "station",
+                "title": station.name,
+                "subtitle": "Monitoring station",
+                "slug": station.slug,
+                "href": f"/app/stations/{station.id}",
+                "latitude": station.latitude,
+                "longitude": station.longitude,
+                "rank": station.observation_count,
+            }
+        )
+
+    # Exact-prefix matches first, then by how much data backs the result.
+    lowered = text.lower()
+    results.sort(
+        key=lambda r: (
+            0 if str(r["title"]).lower().startswith(lowered) else 1,
+            -int(r.get("rank") or 0),
+        )
+    )
+    return results[:limit]
+
+
+# ---------------------------------------------------------------------------
+# Geography roll-ups
+# ---------------------------------------------------------------------------
+def status_distribution(db: Session, *, state: str | None = None) -> dict[str, int]:
+    """How many water bodies sit in each status band."""
+    stmt = select(WaterBody.cached_status, func.count(WaterBody.id))
+    if state:
+        stmt = stmt.join(State, WaterBody.state_id == State.id).where(
+            or_(
+                func.lower(State.slug) == state.lower(),
+                func.upper(State.code) == state.upper(),
+            )
+        )
+    rows = db.execute(stmt.group_by(WaterBody.cached_status)).all()
+    return {(status or "UNKNOWN"): count for status, count in rows}
+
+
+def list_states(db: Session) -> list[dict]:
+    """States with counts, for the India page."""
+    rows = db.execute(
+        select(
+            State,
+            func.count(func.distinct(WaterBody.id)),
+            func.max(WaterBody.latest_observed_at),
+        )
+        .outerjoin(WaterBody, WaterBody.state_id == State.id)
+        .group_by(State.id)
+        .order_by(State.name)
+    ).all()
+
+    out = []
+    for state, body_count, latest in rows:
+        stations = db.scalar(
+            select(func.count(MonitoringStation.id)).where(
+                MonitoringStation.state_id == state.id
+            )
+        )
+        out.append(
+            {
+                "code": state.code,
+                "name": state.name,
+                "slug": state.slug,
+                "water_body_count": body_count or 0,
+                "station_count": stations or 0,
+                "latest_observed_at": (_as_utc(latest).isoformat() if latest else None),
+            }
+        )
+    return out
+
+
+def state_detail(db: Session, slug: str) -> dict | None:
+    """Everything the state page shows, all derived from ingested data."""
+    state = db.scalar(
+        select(State).where(
+            or_(
+                func.lower(State.slug) == slug.lower(),
+                func.upper(State.code) == slug.upper(),
+            )
+        )
+    )
+    if state is None:
+        return None
+
+    bodies = db.scalars(select(WaterBody).where(WaterBody.state_id == state.id)).all()
+    by_type: dict[str, int] = defaultdict(int)
+    for body in bodies:
+        by_type[str(body.water_type)] += 1
+
+    stations = db.scalar(
+        select(func.count(MonitoringStation.id)).where(
+            MonitoringStation.state_id == state.id
+        )
+    )
+    observations = db.scalar(
+        select(func.count(WaterQualityObservation.id))
+        .join(WaterBody, WaterBody.id == WaterQualityObservation.water_body_id)
+        .where(WaterBody.state_id == state.id)
+    )
+
+    districts = db.execute(
+        select(District, func.count(func.distinct(WaterBody.id)))
+        .outerjoin(WaterBody, WaterBody.district_id == District.id)
+        .where(District.state_id == state.id)
+        .group_by(District.id)
+        .order_by(District.name)
+    ).all()
+
+    ranked = sorted(
+        bodies,
+        key=lambda b: (
+            -status_rank(WaterStatus(b.cached_status)) if b.cached_status else 0,
+            -b.observation_count,
+        ),
+    )
+
+    return {
+        "code": state.code,
+        "name": state.name,
+        "slug": state.slug,
+        "water_body_count": len(bodies),
+        "station_count": stations or 0,
+        "observation_count": observations or 0,
+        "by_type": dict(sorted(by_type.items(), key=lambda kv: -kv[1])),
+        "status_distribution": status_distribution(db, state=state.slug),
+        "districts": [
+            {
+                "name": d.name,
+                "slug": d.slug,
+                "water_body_count": c or 0,
+                "latitude": d.centroid_lat,
+                "longitude": d.centroid_lon,
+            }
+            for d, c in districts
+        ],
+        "notable": [summarise_body(db, b, include_state=False) for b in ranked[:12]],
+    }
+
+
+def district_detail(db: Session, slug: str) -> dict | None:
+    """City/district page payload."""
+    row = db.execute(
+        select(District, State)
+        .join(State, State.id == District.state_id)
+        .where(func.lower(District.slug) == slug.lower())
+    ).first()
+    if row is None:
+        return None
+    district, state = row
+
+    bodies = db.scalars(
+        select(WaterBody)
+        .where(WaterBody.district_id == district.id)
+        .order_by(WaterBody.observation_count.desc())
+    ).all()
+    stations = db.scalars(
+        select(MonitoringStation)
+        .where(MonitoringStation.district_id == district.id)
+        .order_by(MonitoringStation.observation_count.desc())
+    ).all()
+
+    by_type: dict[str, int] = defaultdict(int)
+    for body in bodies:
+        by_type[str(body.water_type)] += 1
+
+    return {
+        "name": district.name,
+        "slug": district.slug,
+        "state": state.name,
+        "state_slug": state.slug,
+        "latitude": district.centroid_lat,
+        "longitude": district.centroid_lon,
+        "water_body_count": len(bodies),
+        "station_count": len(stations),
+        "by_type": dict(sorted(by_type.items(), key=lambda kv: -kv[1])),
+        "water_bodies": [summarise_body(db, b) for b in bodies[:60]],
+        "stations": [summarise_station(db, s) for s in stations[:60]],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Platform overview
+# ---------------------------------------------------------------------------
+def overview(db: Session) -> dict:
+    """Headline counters for the dashboard.
+
+    Every number is a count of ingested records. Nothing here is a target, an
+    estimate or a placeholder, and the counts of water bodies *without* recent
+    data are reported alongside the flattering ones.
+    """
+    total_bodies = db.scalar(select(func.count(WaterBody.id))) or 0
+    total_stations = db.scalar(select(func.count(MonitoringStation.id))) or 0
+    total_obs = db.scalar(select(func.count(WaterQualityObservation.id))) or 0
+    latest = db.scalar(select(func.max(WaterQualityObservation.observed_at)))
+
+    distribution = status_distribution(db)
+    sources = db.scalars(select(DataSource)).all()
+    last_run = db.scalar(
+        select(IngestionRun).order_by(IngestionRun.started_at.desc()).limit(1)
+    )
+
+    return {
+        "water_bodies": total_bodies,
+        "monitoring_stations": total_stations,
+        "observations": total_obs,
+        "states_covered": db.scalar(select(func.count(State.id))) or 0,
+        "districts_covered": db.scalar(select(func.count(District.id))) or 0,
+        "latest_observation_at": _as_utc(latest).isoformat() if latest else None,
+        "status_distribution": distribution,
+        "without_recent_data": distribution.get(str(WaterStatus.NO_RECENT_DATA), 0),
+        "sources": [
+            {
+                "key": s.key,
+                "name": s.name,
+                "organisation": s.organisation,
+                "is_available": s.is_available,
+                "expected_cadence": s.expected_cadence,
+                "last_success_at": (
+                    _as_utc(s.last_success_at).isoformat() if s.last_success_at else None
+                ),
+                "last_error": s.last_error,
+            }
+            for s in sources
+        ],
+        "last_ingestion": (
+            {
+                "run_id": last_run.run_id,
+                "source": last_run.source_key,
+                "status": last_run.status,
+                "records_inserted": last_run.records_inserted,
+                "started_at": _as_utc(last_run.started_at).isoformat(),
+                "finished_at": (
+                    _as_utc(last_run.finished_at).isoformat()
+                    if last_run.finished_at
+                    else None
+                ),
+            }
+            if last_run
+            else None
+        ),
+    }
+
+
+def data_quality(db: Session) -> dict[str, Any]:
+    """Counts by quality flag, so data problems are visible not hidden."""
+    rows = db.execute(
+        select(
+            WaterQualityObservation.quality_flag,
+            func.count(WaterQualityObservation.id),
+        ).group_by(WaterQualityObservation.quality_flag)
+    ).all()
+
+    geo = db.execute(
+        select(MonitoringStation.geo_quality, func.count(MonitoringStation.id)).group_by(
+            MonitoringStation.geo_quality
+        )
+    ).all()
+
+    unmatched = db.scalar(
+        select(func.count(MonitoringStation.id)).where(
+            MonitoringStation.water_body_id.is_(None)
+        )
+    )
+
+    return {
+        "observations_by_flag": {str(flag): count for flag, count in rows},
+        "stations_by_geo_quality": {str(q): c for q, c in geo},
+        "stations_without_water_body": unmatched or 0,
+        "notes": [
+            "Records that fail validation are flagged and kept, never "
+            "silently dropped, so problems stay countable.",
+            "A station without a water body is one whose name did not "
+            "identify one; its observations are still stored.",
+        ],
+    }

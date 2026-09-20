@@ -23,6 +23,7 @@ from app.api.routes import (
     ml,
     pollution,
     satellite,
+    water,
 )
 from app.core.config import settings
 from app.core.database import SessionLocal, init_db
@@ -139,6 +140,7 @@ app.include_router(satellite.router, prefix=API_PREFIX)
 app.include_router(analytics.router, prefix=API_PREFIX)
 app.include_router(ml.router, prefix=API_PREFIX)
 app.include_router(intelligence.router, prefix=API_PREFIX)
+app.include_router(water.router, prefix=API_PREFIX)
 
 
 @app.get("/preview", tags=["system"], include_in_schema=False)

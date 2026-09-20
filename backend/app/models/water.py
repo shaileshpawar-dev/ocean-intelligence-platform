@@ -181,8 +181,19 @@ class WaterBody(Base, TimestampMixin):
     station_count: Mapped[int] = mapped_column(Integer, default=0)
     observation_count: Mapped[int] = mapped_column(Integer, default=0)
     cached_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    """Last computed :class:`WaterStatus`. Advisory; the detail endpoint
-    always recomputes from observations so a stale cache cannot mislead."""
+    """Last computed present-tense :class:`WaterStatus`. Advisory; the detail
+    endpoint always recomputes from observations so a stale cache cannot
+    mislead."""
+
+    cached_historical_status: Mapped[str | None] = mapped_column(
+        String(32), nullable=True
+    )
+    """Status as at the date of the latest observation.
+
+    Kept because the present-tense band collapses to NO_RECENT_DATA for every
+    water body whose source has not published lately, which is true but would
+    render the map a uniform grey and hide real, dated findings. This field is
+    only ever displayed with that date attached."""
 
     state: Mapped[State | None] = relationship()
     district: Mapped[District | None] = relationship()
