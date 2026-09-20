@@ -1,0 +1,614 @@
+"""Deterministic water-body identity resolution from station metadata.
+
+The problem
+-----------
+The CPCB extracts published on the National Water Data Portal ship a ``River``
+column that is empty for every row sampled nationwide. The water body's name
+is instead buried inside the station name, together with the sampling
+position, the nearest landmark and the district::
+
+    MITHI RIVER MAHIM BANDRA MUMBAI
+    RIVER COOUM AT AMANJIKARAI
+    GODAVARI AT NASIK D/S GADGEBABA MAHARAJ NAGAR NASHIK
+    GROUND WATER NEAR BPMS H.S. SCHOOL SONARI TOWN DIST CHARAIDEO
+    BORE WELL OF L & T LTD. PLOT NO. 144/146 SARKHEJ-BAVLA ROAD SANAND
+
+So identity has to be parsed. This module does that with rules, not a
+language model, for three reasons: the result must be reproducible across
+runs, it must be auditable when it is wrong, and it must not cost an API call
+per station. Every water body records which method named it and how confident
+that method is, so a low-confidence grouping is visible in the UI rather than
+presented as fact.
+
+The rules, in order of confidence
+---------------------------------
+1. **source_field** (1.0) -- the source populated ``River`` or ``Tributary``.
+   Trusted outright. Currently never fires for CPCB, but other providers do
+   populate it and the branch is the reason adding them is cheap.
+2. **station_name_parse** (0.75) -- the name contains an explicit water-type
+   keyword: ``RIVER``, ``LAKE``, ``TANK``, ``BEEL``, ``CREEK``, ``DAM``.
+3. **type_propagated** (0.6) -- the name carries no keyword, but the same
+   normalised name appears elsewhere in the corpus *with* one. ``BRAHAMPUTRA
+   RIVER AT BOGIBEEL BRIDGE`` establishes that ``BRAHMAPUTRA AT X`` is a
+   river. Inference from the data itself, never a hardcoded river list.
+4. **unclassified** (0.4) -- a name survives parsing but no type can be
+   established. Typed ``OTHER`` and labelled as such. ``ERODE-2`` and
+   ``GIDC DAHOD DAHOD`` genuinely do not identify a water body, and saying so
+   is better than guessing.
+
+Guarding against false merges
+-----------------------------
+Rivers cross state lines, so a river is keyed nationally by name. Lakes,
+tanks, ponds and wells are local features whose names repeat constantly
+across India, so those are keyed per state. Even for rivers, a candidate
+station further than :data:`MAX_MERGE_KM` from an existing body's centroid
+starts a new, state-qualified water body rather than dragging the centroid
+across the subcontinent -- which is what stops the Amravati river in Tamil
+Nadu from merging with the Amravati in Gujarat.
+"""
+
+from __future__ import annotations
+
+import math
+import re
+import unicodedata
+from dataclasses import dataclass, field
+
+from app.models.enums import WaterBodyType
+
+# Two stations more than this far apart are not assumed to be the same water
+# body even when their names match. Chosen to comfortably span a long Indian
+# river's monitored reach while still separating same-named features in
+# different parts of the country.
+MAX_MERGE_KM = 500.0
+
+# Water bodies keyed nationally; everything else is keyed per state.
+NATIONAL_TYPES = frozenset(
+    {WaterBodyType.RIVER, WaterBodyType.RIVER_STRETCH, WaterBodyType.ESTUARY}
+)
+
+CONFIDENCE = {
+    "source_field": 1.0,
+    "station_name_parse": 0.75,
+    "type_propagated": 0.6,
+    "unclassified": 0.4,
+}
+
+# ---------------------------------------------------------------------------
+# Vocabulary
+#
+# Keywords are drawn from the station names actually published, including the
+# regional terms that dominate some states: "beel" and "pukhuri" in Assam,
+# "cheruvu" and "kunta" in Telugu-speaking areas, "kere" and "katte" in
+# Karnataka, "talab" and "sagar" in the Hindi belt.
+# ---------------------------------------------------------------------------
+TYPE_KEYWORDS: tuple[tuple[str, WaterBodyType], ...] = (
+    ("river", WaterBodyType.RIVER),
+    ("nadi", WaterBodyType.RIVER),
+    ("nadhi", WaterBodyType.RIVER),
+    ("estuary", WaterBodyType.ESTUARY),
+    ("backwater", WaterBodyType.ESTUARY),
+    ("backwaters", WaterBodyType.ESTUARY),
+    ("creek", WaterBodyType.CREEK),
+    ("khadi", WaterBodyType.CREEK),
+    ("lake", WaterBodyType.LAKE),
+    ("beel", WaterBodyType.LAKE),
+    ("cheruvu", WaterBodyType.LAKE),
+    ("kere", WaterBodyType.LAKE),
+    ("sarovar", WaterBodyType.LAKE),
+    ("talab", WaterBodyType.LAKE),
+    ("jheel", WaterBodyType.LAKE),
+    ("pukhuri", WaterBodyType.POND),
+    ("pond", WaterBodyType.POND),
+    ("kunta", WaterBodyType.POND),
+    ("kunte", WaterBodyType.POND),
+    ("tank", WaterBodyType.POND),
+    ("katte", WaterBodyType.POND),
+    ("dam", WaterBodyType.RESERVOIR),
+    ("reservoir", WaterBodyType.RESERVOIR),
+    ("barrage", WaterBodyType.RESERVOIR),
+    ("canal", WaterBodyType.CANAL),
+    ("nahar", WaterBodyType.CANAL),
+    ("nala", WaterBodyType.DRAIN),
+    ("nalla", WaterBodyType.DRAIN),
+    ("nallah", WaterBodyType.DRAIN),
+    ("drain", WaterBodyType.DRAIN),
+    ("sea", WaterBodyType.COASTAL),
+    ("beach", WaterBodyType.COASTAL),
+    ("coast", WaterBodyType.COASTAL),
+    ("bay", WaterBodyType.COASTAL),
+    ("harbour", WaterBodyType.COASTAL),
+)
+
+# Phrases that mark the station as sampling groundwater rather than a surface
+# water body. ~200 of the 1,162 sampled stations are of this kind, and typing
+# them as rivers would be straightforwardly wrong.
+GROUNDWATER_PREFIXES = (
+    "ground water",
+    "groundwater",
+    "bore well",
+    "borewell",
+    "bore-well",
+    "tube well",
+    "tubewell",
+    "hand pump",
+    "handpump",
+    "well at",
+    "well of",
+    "well near",
+    "dug well",
+    "open well",
+)
+
+# Engineered assets, not natural water bodies. An overhead service tank is a
+# municipal structure; grouping it with lakes because the word "tank" appears
+# would put a water tower on a map of lakes.
+INFRASTRUCTURE_PREFIXES = (
+    "over head tank",
+    "overhead tank",
+    "o h tank",
+    "water supply",
+    "treatment plant",
+    "stp ",
+    "etp ",
+    "pumping station",
+)
+
+# Tokens that introduce the *position* of sampling. Everything from the first
+# one onward describes where on the water body the sample was taken, not
+# which water body it is.
+POSITION_MARKERS = (
+    " at ",
+    " near ",
+    " nr ",
+    " d/s ",
+    " u/s ",
+    " ds ",
+    " us ",
+    " before ",
+    " after ",
+    " from ",
+    " on ",
+    " in ",
+    " opp ",
+    " opposite ",
+    " downstream ",
+    " upstream ",
+    " confl",
+    " bridge",
+    " ghat",
+    " intake",
+)
+
+# Administrative and descriptive noise that can trail a water body's name.
+TRAILING_NOISE = {
+    "dist",
+    "distt",
+    "district",
+    "taluk",
+    "taluka",
+    "tehsil",
+    "village",
+    "town",
+    "city",
+    "state",
+    "block",
+    "panchayat",
+    "no",
+    "pt",
+    "point",
+}
+
+
+def _strip_accents(text: str) -> str:
+    """Fold accented characters to ASCII for stable matching."""
+    return "".join(
+        c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c)
+    )
+
+
+def normalise_name(name: str) -> str:
+    """Canonical form used as the matching key.
+
+    Upper-cased, accent-folded, punctuation removed, whitespace collapsed.
+    Deliberately *not* stemmed: ``MITHI`` and ``MITHIA`` are different rivers.
+    """
+    text = _strip_accents(str(name or "")).upper()
+    text = re.sub(r"[^A-Z0-9 ]+", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def slugify(text: str) -> str:
+    """URL-safe slug for routes such as ``/app/water/mithi-river``."""
+    slug = _strip_accents(str(text or "")).lower()
+    slug = re.sub(r"[^a-z0-9]+", "-", slug).strip("-")
+    return re.sub(r"-{2,}", "-", slug) or "unnamed"
+
+
+def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance in kilometres."""
+    radius = 6371.0088
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * radius * math.asin(math.sqrt(a))
+
+
+@dataclass(slots=True)
+class MatchResult:
+    """The water body a station was resolved to."""
+
+    name: str
+    """Display name, title-cased, e.g. ``Mithi River``."""
+
+    normalized_name: str
+    water_type: WaterBodyType
+    method: str
+    confidence: float
+    notes: list[str] = field(default_factory=list)
+
+    @property
+    def is_identified(self) -> bool:
+        """False when parsing produced no usable water-body name."""
+        return bool(self.normalized_name) and self.method != "unidentified"
+
+
+def _title(text: str) -> str:
+    """Title-case a parsed name without mangling short connectors."""
+    small = {"of", "at", "on", "the", "and"}
+    words = text.lower().split()
+    out = [
+        w.upper()
+        if len(w) <= 2 and w.isalpha() and w not in small
+        else (w if w in small and i else w.capitalize())
+        for i, w in enumerate(words)
+    ]
+    return " ".join(out)
+
+
+def _cut_at_position_marker(text: str) -> str:
+    """Return the part of the name before the first position marker.
+
+    Matching is done on a lower-cased copy while the slice is taken from the
+    original, because station names are published in upper case and the
+    markers are written in lower case. Comparing the two directly silently
+    matches nothing, which lets the whole sampling position leak into the
+    water body's name.
+    """
+    padded = f" {text} "
+    probe = padded.lower()
+    cut = len(padded)
+    for marker in POSITION_MARKERS:
+        idx = probe.find(marker)
+        if idx != -1:
+            cut = min(cut, idx)
+    return padded[:cut].strip()
+
+
+_LEADING_POSITION = re.compile(
+    r"^(?:at|near|nr|from|of|in|on|the)\b[\s.,-]*", re.IGNORECASE
+)
+
+
+def _strip_leading_position(text: str) -> str:
+    """Drop a position word left at the start of a parsed fragment.
+
+    Removing a leading marker such as ``BORE WELL`` from
+    ``BORE WELL AT WAHEGAON`` leaves ``AT WAHEGAON``. The position cutter
+    cannot help here -- the marker is at index 0, so there is nothing before
+    it to keep -- so the stranded preposition is stripped directly.
+    """
+    previous = None
+    while previous != text:
+        previous = text
+        text = _LEADING_POSITION.sub("", text).strip(" .,-")
+    return text
+
+
+def _strip_trailing_noise(tokens: list[str]) -> list[str]:
+    """Drop administrative filler from the end of a parsed name."""
+    while tokens and tokens[-1].lower().strip(".,;:-()") in TRAILING_NOISE:
+        tokens.pop()
+    return tokens
+
+
+def parse_station_name(station_name: str) -> MatchResult:
+    """Resolve a water body from a station name alone.
+
+    This is the branch that does the real work, because the CPCB ``River``
+    column is empty. It never raises: an unparseable name yields an
+    ``unidentified`` result that the caller records rather than discards.
+    """
+    raw = re.sub(r"\s+", " ", str(station_name or "").strip())
+    if not raw:
+        return MatchResult("", "", WaterBodyType.OTHER, "unidentified", 0.0)
+
+    lowered = raw.lower()
+
+    # -- Groundwater -------------------------------------------------------
+    # The water body is the aquifer sampled at a locality. Naming it after
+    # the locality keeps every well in one town together, which is the most
+    # useful grouping the data supports.
+    for prefix in GROUNDWATER_PREFIXES:
+        if lowered.startswith(prefix):
+            remainder = _strip_leading_position(raw[len(prefix) :].strip(" .,-"))
+            locality = _cut_at_position_marker(remainder) or remainder
+            locality = " ".join(_strip_trailing_noise(locality.split()))
+            if not locality:
+                # e.g. "GROUND WATER AT (JORHAT ASSAM)" once brackets go.
+                locality = re.sub(r"[()]", " ", remainder).strip()
+                locality = " ".join(_strip_trailing_noise(locality.split()[:3]))
+            label = f"Groundwater — {_title(locality)}" if locality else "Groundwater"
+            return MatchResult(
+                name=label,
+                normalized_name=normalise_name(f"GROUNDWATER {locality}"),
+                water_type=WaterBodyType.GROUNDWATER,
+                method="station_name_parse",
+                confidence=CONFIDENCE["station_name_parse"],
+                notes=["Groundwater sampling point, not a surface water body."],
+            )
+
+    # The same marker can also trail the name -- "PATAN BOREWELL", "WELL NO 3
+    # KADI" -- so a prefix test alone misses them.
+    if re.search(
+        r"\b(bore\s?well|tube\s?well|hand\s?pump|dug well|open well)\b", lowered
+    ):
+        locality = _cut_at_position_marker(
+            re.sub(
+                r"\b(bore\s?well|tube\s?well|hand\s?pump|dug well|open well)\b",
+                " ",
+                lowered,
+            )
+        )
+        locality = " ".join(_strip_trailing_noise(locality.split()))
+        label = f"Groundwater — {_title(locality)}" if locality else "Groundwater"
+        return MatchResult(
+            name=label,
+            normalized_name=normalise_name(f"GROUNDWATER {locality}"),
+            water_type=WaterBodyType.GROUNDWATER,
+            method="station_name_parse",
+            confidence=CONFIDENCE["station_name_parse"],
+            notes=["Groundwater sampling point, not a surface water body."],
+        )
+
+    # -- Municipal infrastructure -----------------------------------------
+    for prefix in INFRASTRUCTURE_PREFIXES:
+        if lowered.startswith(prefix):
+            return MatchResult(
+                name=_title(_cut_at_position_marker(raw)) or raw.title(),
+                normalized_name=normalise_name(_cut_at_position_marker(raw) or raw),
+                water_type=WaterBodyType.OTHER,
+                method="station_name_parse",
+                confidence=CONFIDENCE["unclassified"],
+                notes=["Engineered water-supply asset, not a natural water body."],
+            )
+
+    # -- Generic type prefix, e.g. "SEA WATER AT JUHU BEACH" ---------------
+    # Here the type keyword leads and the identifying place name follows the
+    # position marker, which is the opposite of the usual "<name> RIVER AT
+    # <place>" order. Without this branch every coastal station in Mumbai
+    # collapses into a single water body literally called "Sea Water".
+    generic = re.match(
+        r"^(sea|lake|river|creek|pond|tank|canal|estuary|backwater)"
+        r"\s+water\b(.*)$",
+        lowered,
+        re.IGNORECASE,
+    )
+    if generic:
+        keyword = generic.group(1).lower()
+        wtype = next(t for k, t in TYPE_KEYWORDS if k == keyword)
+        locality = _strip_leading_position(generic.group(2).strip(" .,-"))
+        locality = " ".join(_strip_trailing_noise(locality.split())[:5])
+        label = (
+            f"{keyword.capitalize()} Water — {_title(locality)}"
+            if locality
+            else f"{keyword.capitalize()} Water"
+        )
+        return MatchResult(
+            name=label,
+            normalized_name=normalise_name(f"{keyword} water {locality}"),
+            water_type=wtype,
+            method="station_name_parse",
+            confidence=CONFIDENCE["station_name_parse"],
+            notes=[
+                "Named from the sampling locality; the source gives the water "
+                "body only as a generic type."
+            ],
+        )
+
+    # -- "... ON RIVER X" --------------------------------------------------
+    # "WATER INTAKE POINT FOR BANKURA TOWN ON RIVER DWARAKESHWAR BANKURA"
+    # names its river only at the end.
+    tail = re.search(r"\bon river\s+([a-z][a-z .'-]{2,})", lowered)
+    if tail:
+        name = " ".join(_strip_trailing_noise(tail.group(1).split()))
+        if name:
+            return MatchResult(
+                name=f"{_title(name)} River",
+                normalized_name=normalise_name(name),
+                water_type=WaterBodyType.RIVER,
+                method="station_name_parse",
+                confidence=CONFIDENCE["station_name_parse"],
+            )
+
+    # -- Leading "RIVER X" -------------------------------------------------
+    head = _cut_at_position_marker(raw)
+    head = re.sub(r"\(.*?\)", " ", head)
+    head = re.sub(r"\s+", " ", head).strip(" .,-")
+
+    leading = re.match(r"^(river|lake|dam|canal|creek)\s+(.+)$", head, re.IGNORECASE)
+    if leading:
+        kind = leading.group(1).lower()
+        name = " ".join(_strip_trailing_noise(leading.group(2).split()))
+        wtype = next(t for k, t in TYPE_KEYWORDS if k == kind)
+        if name:
+            display = _title(name)
+            if kind not in display.lower():
+                display = f"{display} {kind.capitalize()}"
+            return MatchResult(
+                name=display,
+                normalized_name=normalise_name(name),
+                water_type=wtype,
+                method="station_name_parse",
+                confidence=CONFIDENCE["station_name_parse"],
+            )
+
+    # -- Trailing / embedded type keyword ---------------------------------
+    tokens = _strip_trailing_noise(head.split())
+    if not tokens:
+        return MatchResult("", "", WaterBodyType.OTHER, "unidentified", 0.0)
+
+    lowered_tokens = [t.lower().strip(".,") for t in tokens]
+    for index in range(len(lowered_tokens) - 1, -1, -1):
+        for keyword, wtype in TYPE_KEYWORDS:
+            if lowered_tokens[index] == keyword:
+                name_tokens = tokens[: index + 1]
+                if len(name_tokens) == 1:
+                    # The keyword alone, e.g. a bare "LAKE". Not a name.
+                    continue
+                display = _title(" ".join(name_tokens))
+                return MatchResult(
+                    name=display,
+                    normalized_name=normalise_name(" ".join(name_tokens[:index])),
+                    water_type=wtype,
+                    method="station_name_parse",
+                    confidence=CONFIDENCE["station_name_parse"],
+                )
+
+    # -- No keyword: a bare name such as "GODAVARI" ------------------------
+    # Typed OTHER here. A later propagation pass may upgrade it if the same
+    # name appears elsewhere with an explicit keyword.
+    name_tokens = tokens[:4]
+    display = _title(" ".join(name_tokens))
+    return MatchResult(
+        name=display,
+        normalized_name=normalise_name(" ".join(name_tokens)),
+        water_type=WaterBodyType.OTHER,
+        method="unclassified",
+        confidence=CONFIDENCE["unclassified"],
+        notes=["Water-body type not stated by the source and not inferable."],
+    )
+
+
+def resolve(
+    station_name: str,
+    *,
+    river: str | None = None,
+    tributary: str | None = None,
+) -> MatchResult:
+    """Resolve a water body, preferring populated source fields.
+
+    ``river`` and ``tributary`` come from the source row. When either is
+    populated it wins outright, because a field the provider filled in is
+    better evidence than anything parsed out of a free-text label.
+    """
+    for field_value in (river, tributary):
+        text = (field_value or "").strip()
+        if text and text not in {"-", "--", "NA", "N/A"}:
+            display = _title(text)
+            if "river" not in display.lower():
+                display = f"{display} River"
+            return MatchResult(
+                name=display,
+                normalized_name=normalise_name(text),
+                water_type=WaterBodyType.RIVER,
+                method="source_field",
+                confidence=CONFIDENCE["source_field"],
+            )
+
+    return parse_station_name(station_name)
+
+
+def propagate_types(results: list[MatchResult]) -> dict[str, WaterBodyType]:
+    """Learn water-body types from the corpus itself.
+
+    Builds a map from normalised name to type using only results that carried
+    an explicit keyword. ``BRAHAMPUTRA RIVER AT BOGIBEEL BRIDGE`` teaches the
+    platform that ``BRAHMAPUTRA`` is a river, so the many bare ``BRAHMAPUTRA
+    AT <place>`` stations can be typed from evidence in the data rather than
+    from a hardcoded list of Indian rivers.
+
+    A name that appears with conflicting types is left out: ambiguity is not
+    resolved by majority vote, because the tie-break would be arbitrary.
+    """
+    votes: dict[str, set[WaterBodyType]] = {}
+    for result in results:
+        if result.method == "station_name_parse" and result.normalized_name:
+            votes.setdefault(result.normalized_name, set()).add(result.water_type)
+
+    return {
+        name: next(iter(types))
+        for name, types in votes.items()
+        if len(types) == 1 and next(iter(types)) is not WaterBodyType.OTHER
+    }
+
+
+def apply_propagation(
+    result: MatchResult, learned: dict[str, WaterBodyType]
+) -> MatchResult:
+    """Upgrade an unclassified result using a learned type, if one exists."""
+    if result.method != "unclassified" or not result.normalized_name:
+        return result
+
+    wtype = learned.get(result.normalized_name)
+    if wtype is None:
+        return result
+
+    suffix = {
+        WaterBodyType.RIVER: "River",
+        WaterBodyType.LAKE: "Lake",
+        WaterBodyType.POND: "Tank",
+        WaterBodyType.RESERVOIR: "Reservoir",
+        WaterBodyType.CREEK: "Creek",
+        WaterBodyType.CANAL: "Canal",
+        WaterBodyType.DRAIN: "Drain",
+        WaterBodyType.COASTAL: "Coast",
+        WaterBodyType.ESTUARY: "Estuary",
+    }.get(wtype)
+
+    name = result.name
+    if suffix and suffix.lower() not in name.lower():
+        name = f"{name} {suffix}"
+
+    return MatchResult(
+        name=name,
+        normalized_name=result.normalized_name,
+        water_type=wtype,
+        method="type_propagated",
+        confidence=CONFIDENCE["type_propagated"],
+        notes=[
+            "Type inferred from other stations on the same named water body "
+            "elsewhere in the source data, not stated for this station."
+        ],
+    )
+
+
+def merge_key(result: MatchResult, state_code: str | None) -> tuple[str, str, str]:
+    """Key under which stations are grouped into one water body.
+
+    Rivers are keyed nationally because they cross state lines; local
+    features are keyed per state because their names repeat all over India.
+    """
+    scope = "" if result.water_type in NATIONAL_TYPES else (state_code or "")
+    return (result.normalized_name, str(result.water_type), scope)
+
+
+def is_plausible_merge(
+    lat: float | None,
+    lon: float | None,
+    centroid_lat: float | None,
+    centroid_lon: float | None,
+) -> bool:
+    """Whether a station is close enough to join an existing water body.
+
+    Missing coordinates return ``True``: the name matched, and refusing the
+    merge purely because a position is absent would fragment a real river
+    into one water body per ungeocoded station.
+    """
+    if None in (lat, lon, centroid_lat, centroid_lon):
+        return True
+    assert lat is not None and lon is not None
+    assert centroid_lat is not None and centroid_lon is not None
+    return haversine_km(lat, lon, centroid_lat, centroid_lon) <= MAX_MERGE_KM

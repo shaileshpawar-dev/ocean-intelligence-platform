@@ -135,3 +135,110 @@ class AgentRunStatus(StrEnum):
     SUCCESS = "success"
     FAILED = "failed"
     PARTIAL = "partial"
+
+
+# ---------------------------------------------------------------------------
+# India Water Intelligence vocabularies
+#
+# These sit alongside the marine-pollution vocabularies above rather than
+# replacing them. A satellite pollution detection and a laboratory BOD
+# measurement are different kinds of claim, and collapsing them into one
+# enum is exactly the conflation this platform exists to avoid.
+# ---------------------------------------------------------------------------
+class WaterBodyType(StrEnum):
+    """What kind of water body a record describes.
+
+    Kept explicit because behaviour genuinely differs: a river has stretches
+    and an upstream/downstream order, a lake does not.
+    """
+
+    RIVER = "river"
+    RIVER_STRETCH = "river_stretch"
+    LAKE = "lake"
+    POND = "pond"
+    RESERVOIR = "reservoir"
+    CANAL = "canal"
+    CREEK = "creek"
+    ESTUARY = "estuary"
+    COASTAL = "coastal"
+    MARINE = "marine"
+    GROUNDWATER = "groundwater"
+    DRAIN = "drain"
+    OTHER = "other"
+    """Used when the source gives no basis to classify. Never guessed."""
+
+
+class WaterEvidenceType(StrEnum):
+    """How a piece of water-body evidence came to exist.
+
+    The separation that matters most is MEASURED from everything else. A
+    laboratory BOD value and a satellite turbidity proxy are both useful and
+    are not the same claim; only one of them is a measurement of the quantity
+    it names.
+    """
+
+    MEASURED = "MEASURED"
+    """Laboratory or field instrument measurement of the named quantity."""
+
+    SATELLITE_OBSERVED = "SATELLITE_OBSERVED"
+    """Derived from satellite reflectance or backscatter. A proxy, not a lab
+    value. Never describes BOD, COD, coliform or dissolved metals."""
+
+    IMAGE_DETECTED = "IMAGE_DETECTED"
+    """Output of a detector run on an image. Describes appearance only."""
+
+    REPORTED = "REPORTED"
+    """Asserted by a document, bulletin or person. Not independently verified."""
+
+    INFERRED = "INFERRED"
+    """Derived by reasoning over other evidence. The weakest claim."""
+
+    FORECAST = "FORECAST"
+    """A projection about the future."""
+
+    RETRIEVED = "RETRIEVED"
+    """A passage retrieved from the document corpus, quoted as found."""
+
+
+class WaterStatus(StrEnum):
+    """Evidence-based status of a water body.
+
+    Deliberately not a 0-100 score. A single number invites the reader to
+    believe a precision the underlying monthly grab samples cannot support,
+    and it hides which parameter drove it. Each band below is reached by a
+    stated rule over named parameters against a cited standard.
+    """
+
+    WITHIN_REFERENCE = "WITHIN_REFERENCE"
+    """Every evaluable parameter satisfies the selected standard."""
+
+    ELEVATED = "ELEVATED"
+    """At least one parameter breaches its limit, none severely."""
+
+    HIGH_CONCERN = "HIGH_CONCERN"
+    """Severe breach, or several simultaneous breaches."""
+
+    POLLUTED_STRETCH = "POLLUTED_STRETCH"
+    """Meets CPCB's national polluted-river-stretch criterion on BOD."""
+
+    INSUFFICIENT_DATA = "INSUFFICIENT_DATA"
+    """Observations exist but none of the parameters the standard needs."""
+
+    NO_RECENT_DATA = "NO_RECENT_DATA"
+    """Latest observation is too old to describe the present state."""
+
+
+class QualityFlag(StrEnum):
+    """Result of validating one ingested record.
+
+    Malformed values are flagged and kept, not silently dropped. A discarded
+    record is invisible; a flagged one can be counted, inspected and fixed.
+    """
+
+    OK = "ok"
+    SUSPECT = "suspect"
+    """Parsed, but a validation rule fired -- implausible magnitude, censored
+    value, future date."""
+
+    INVALID = "invalid"
+    """Could not be parsed into the parameter's type at all."""
