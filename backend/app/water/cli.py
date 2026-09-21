@@ -10,6 +10,7 @@
     python -m app.water.cli coverage [--markdown PATH]
     python -m app.water.cli import-classifications --file prs.csv --year 2025 \
         --reference "CPCB PRS report 2025, Annexure I"
+    python -m app.water.cli fetch-imagery [--slug hussain-sagar-lake] [--limit N]
     python -m app.water.cli fetch-geometry [--state MH] [--slug mithi-river] [--limit N]
 
 This is the manual sync the platform uses in place of a scheduler. CPCB
@@ -131,6 +132,34 @@ def _import_classifications(path: str, source: str, year: int, reference: str) -
     return 0 if not report.rejected else 1
 
 
+def _fetch_imagery(slugs: list[str] | None, limit: int | None) -> int:
+    from sqlalchemy import select
+
+    from app.models.water import WaterBody
+    from app.models.water_geo import WaterBodyGeometry
+    from app.water.satellite import fetch_imagery
+
+    init_db()
+    counts: dict[str, int] = {}
+    with SessionLocal() as db:
+        query = (
+            select(WaterBody)
+            .join(WaterBodyGeometry, WaterBodyGeometry.water_body_id == WaterBody.id)
+            .where(WaterBodyGeometry.geometry_type.in_(["Polygon", "MultiPolygon"]))
+            .order_by(WaterBody.observation_count.desc())
+        )
+        if slugs:
+            query = select(WaterBody).where(WaterBody.slug.in_(slugs))
+        if limit:
+            query = query.limit(limit)
+        for body in db.scalars(query).all():
+            outcome = fetch_imagery(db, body)
+            counts[outcome.status] = counts.get(outcome.status, 0) + 1
+            print(f"{body.slug}: {outcome.status} -- {outcome.detail}")
+    print(json.dumps(counts, indent=2))
+    return 0
+
+
 def _health() -> int:
     from app.water.providers import all_providers
 
@@ -213,6 +242,11 @@ def main(argv: list[str] | None = None) -> int:
     classifications.add_argument(
         "--reference", required=True, help="Where the table was taken from."
     )
+    imagery = sub.add_parser(
+        "fetch-imagery", help="Retrieve Sentinel-2 scenes for matched lakes."
+    )
+    imagery.add_argument("--slug", nargs="+", help="Only these water bodies.")
+    imagery.add_argument("--limit", type=int, help="At most this many bodies.")
     geometry = sub.add_parser(
         "fetch-geometry", help="Match OSM geometry to water bodies (Overpass)."
     )
@@ -235,6 +269,8 @@ def main(argv: list[str] | None = None) -> int:
         return _import_cities()
     if args.command == "import-classifications":
         return _import_classifications(args.file, args.source, args.year, args.reference)
+    if args.command == "fetch-imagery":
+        return _fetch_imagery(args.slug, args.limit)
     if args.command == "fetch-geometry":
         return _fetch_geometry(args.state, args.slug, args.limit)
     if args.command == "coverage":

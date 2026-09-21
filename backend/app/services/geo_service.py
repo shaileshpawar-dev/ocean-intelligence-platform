@@ -648,6 +648,19 @@ def sources_panel(db: Session, body: WaterBody, detail: dict) -> list[dict]:
                 "records": prov["feature_count"],
             }
         )
+    for image in detail.get("imagery", [])[:1]:
+        panel.append(
+            {
+                "role": "Satellite imagery",
+                "name": image["source"],
+                "organisation": image["provider"],
+                "url": "https://planetarycomputer.microsoft.com/dataset/sentinel-2-l2a",
+                "licence": image["licence"],
+                "latest": image["acquisition_date"],
+                "retrieved_at": image["retrieved_at"],
+                "records": None,
+            }
+        )
     for c in (detail.get("latest_available_status") or {}).get(
         "source_classifications", []
     ):

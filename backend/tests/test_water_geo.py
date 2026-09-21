@@ -149,6 +149,11 @@ class TestOsmMatching:
         body = WaterBody(name="Ganga River (Bihar)", aliases=[])
         assert name_cores(body) == ["GANGA", "GANGES"]
 
+    def test_proper_names_keep_their_type_like_words(self):
+        """Regression: "Hussain Sagar Lake" searched OSM for "Hussain" only."""
+        cores = name_cores(WaterBody(name="Hussain Sagar Lake", aliases=[]))
+        assert "HUSSAIN SAGAR" in cores
+
     def test_spelling_variants_are_searched(self):
         body = WaterBody(name="Cauvery River", aliases=[])
         assert "KAVERI" in name_cores(body)

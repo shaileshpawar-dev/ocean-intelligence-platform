@@ -71,7 +71,7 @@ _TYPE_WORDS = {k.upper() for k, _ in TYPE_KEYWORDS} | {
 }
 _NAME_SUFFIX = (
     r"( (river|nadi|nala|nalla|nallah|lake|talao|talav|talab|tank|creek|canal|"
-    r"dam|reservoir|jheel|sarovar|kere|cheruvu|pond|drain))*"
+    r"dam|reservoir|jheel|sarovar|sagar|tal|kund|kere|cheruvu|pond|drain))*"
 )
 
 
@@ -161,12 +161,16 @@ def name_cores(body: WaterBody) -> list[str]:
     """
     cores: list[str] = []
     for name in [body.name, *(body.aliases or [])]:
-        plain = _QUALIFIER.sub(" ", name or "")
-        tokens = [t for t in normalise_name(plain).split() if t not in _TYPE_WORDS]
-        core = " ".join(tokens)
-        for candidate in (core, *SEARCH_VARIANTS.get(core, ())):
-            if len(candidate) >= 3 and candidate not in cores:
-                cores.append(candidate)
+        words = normalise_name(_QUALIFIER.sub(" ", name or "")).split()
+        # Two readings: every type word removed ("MITHI"), and only the final
+        # one removed. SAGAR is a type word in "RANI SAGAR" but part of the
+        # proper name in "Hussain Sagar Lake".
+        stripped = " ".join(t for t in words if t not in _TYPE_WORDS)
+        last_dropped = words[:-1] if words and words[-1] in _TYPE_WORDS else words
+        for core in (stripped, " ".join(last_dropped)):
+            for candidate in (core, *SEARCH_VARIANTS.get(core, ())):
+                if len(candidate) >= 3 and candidate not in cores:
+                    cores.append(candidate)
     return cores
 
 
@@ -204,6 +208,8 @@ def build_query(policy: MatchPolicy, cores: list[str], windows: list[geo.BBox]) 
 
 
 REQUEST_DEADLINE_SECONDS = 75.0
+WINDOWS_PER_QUERY = 8
+CHUNK_PAUSE_SECONDS = 2.0
 
 
 class OverpassDeadlineError(httpx.HTTPError):
@@ -373,8 +379,17 @@ def match_geometry(
             for s in located
         ]
     )
+    # A national river can have 40+ station windows; one union query over all
+    # of them is heavy for a shared server, so windows go in small chunks.
+    payload: dict = {"elements": []}
     try:
-        payload = fetch(build_query(policy, cores, windows))
+        for i in range(0, len(windows), WINDOWS_PER_QUERY):
+            if i:
+                time.sleep(CHUNK_PAUSE_SECONDS)
+            part = fetch(build_query(policy, cores, windows[i : i + WINDOWS_PER_QUERY]))
+            payload["elements"].extend(part.get("elements", []))
+            if "osm3s" in part:
+                payload["osm3s"] = part["osm3s"]
     except (httpx.HTTPError, ValueError) as exc:
         return GeometryOutcome("source_error", f"Overpass request failed: {exc}")
 
@@ -556,7 +571,8 @@ def prefetch(
     slugs: list[str] | None = None,
     limit: int | None = None,
     retry_statuses: tuple[str, ...] = ("not_attempted", "source_error"),
-    pause_seconds: float = 1.5,
+    pause_seconds: float = 6.0,
+    error_backoff_seconds: float = 30.0,
     fetch: Callable[[str], dict] = overpass_fetch,
 ) -> dict:
     """Fetch geometry for many bodies politely (one request at a time)."""
@@ -582,6 +598,10 @@ def prefetch(
             time.sleep(pause_seconds)
         outcome = fetch_and_store(db, body, fetch=fetch)
         counts[outcome.status] = counts.get(outcome.status, 0) + 1
+        if outcome.status == "source_error":
+            # Usually 429/504 from the shared public instance: back off
+            # rather than keep adding load.
+            time.sleep(error_backoff_seconds)
         logger.info(
             "water_geometry",
             extra={"slug": body.slug, "status": outcome.status, "detail": outcome.detail},

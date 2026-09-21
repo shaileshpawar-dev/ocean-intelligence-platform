@@ -510,10 +510,12 @@ def get_water_body_detail(
 def _geography(db: Session, body: WaterBody, status: StatusResult) -> dict:
     """Phase 2 layers: geometry, data quality, availability, sources panel."""
     from app.services import geo_service as gs
+    from app.water.satellite import images_for
 
     status_dict = status.to_dict()
     geometry = gs.water_body_geometry(db, body)
     partial = {
+        "imagery": images_for(db, body),
         "geometry": geometry,
         "sources": sources_for_body(db, body),
         "reference": reference_for(body).to_dict(),
@@ -526,6 +528,11 @@ def _geography(db: Session, body: WaterBody, status: StatusResult) -> dict:
         "data_quality": gs.data_quality(db, body, status_dict),
         "availability": gs.availability(body, status_dict),
         "sources_panel": gs.sources_panel(db, body, partial),
+        "imagery": images_for(db, body),
+        "imagery_note": (
+            "Satellite scenes are shown as visual evidence. Any index derived "
+            "from them is an uncalibrated proxy, never a laboratory measurement."
+        ),
     }
 
 
