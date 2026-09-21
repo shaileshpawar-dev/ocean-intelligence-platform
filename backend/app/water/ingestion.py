@@ -50,6 +50,7 @@ from app.models.water import (
     WaterQualityObservation,
 )
 from app.water.matching import (
+    DRAIN_TO_RIVER_KM,
     MatchResult,
     apply_propagation,
     haversine_km,
@@ -283,7 +284,7 @@ class _Registry:
             district_id=district.id if district else None,
             centroid_lat=latitude,
             centroid_lon=longitude,
-            aliases=[],
+            aliases=list(match.aliases),
             match_confidence=match.confidence,
             match_method=match.method,
         )
@@ -298,9 +299,15 @@ class _Registry:
         body: WaterBody | None,
         state: State | None,
         district: District | None,
+        position: str | None = None,
     ) -> MonitoringStation:
         """Get or create the monitoring station a row came from."""
-        code = normalise_name(row.station_name)[:160]
+        # Scoped by state: the same label ("RANI TALAB") names different
+        # stations in different states, and keying on the label alone merged
+        # them into one station with two states' observations.
+        code = f"{(row.state_code or '').upper()}:{normalise_name(row.station_name)}"[
+            :160
+        ]
         if code in self.stations:
             return self.stations[code]
 
@@ -331,12 +338,16 @@ class _Registry:
                 latitude=row.latitude,
                 longitude=row.longitude,
                 geo_quality=geo_quality,
+                position_descriptor=(position or None) and position[:300],
             )
             self.db.add(found)
             self.db.flush()
             self.created_stations += 1
-        elif found.water_body_id is None and body is not None:
-            found.water_body_id = body.id
+        else:
+            if found.water_body_id is None and body is not None:
+                found.water_body_id = body.id
+            if found.position_descriptor is None and position:
+                found.position_descriptor = position[:300]
 
         self.stations[code] = found
         return found
@@ -511,17 +522,19 @@ def _ingest_plan(
     # -- MATCH: resolve every distinct station name in this resource -------
     # Two passes, because type propagation needs to see the whole batch
     # before it can tell that "GODAVARI AT NASIK" is a river.
-    by_station: dict[str, list[ObservationRow]] = defaultdict(list)
+    # Grouped by (state, label): the same label names different stations in
+    # different states, and grouping on the label alone folded them together.
+    by_station: dict[tuple[str, str], list[ObservationRow]] = defaultdict(list)
     for row in rows:
-        by_station[row.station_name].append(row)
+        by_station[((row.state_code or "").upper(), row.station_name)].append(row)
 
     first_pass = {
-        name: resolve(name, river=group[0].river, tributary=group[0].tributary)
-        for name, group in by_station.items()
+        key: resolve(key[1], river=group[0].river, tributary=group[0].tributary)
+        for key, group in by_station.items()
     }
     learned = propagate_types(list(first_pass.values()))
     matches = {
-        name: apply_propagation(match, learned) for name, match in first_pass.items()
+        key: apply_propagation(match, learned) for key, match in first_pass.items()
     }
 
     retrieved_at = datetime.now(UTC)
@@ -534,7 +547,13 @@ def _ingest_plan(
         body = registry.water_body(
             matches[name], state, district, sample.latitude, sample.longitude
         )
-        station = registry.station(sample, body, state, district)
+        match = matches[name]
+        station = registry.station(sample, body, state, district, match.position)
+        if body is not None and match.aliases:
+            known = list(body.aliases or [])
+            added = [a for a in match.aliases if a not in known and a != body.name]
+            if added:
+                body.aliases = known + added
         touched_stations.add(station.id)
         if body is not None:
             touched_bodies.add(body.id)
@@ -590,6 +609,27 @@ def _ingest_plan(
     db.flush()
     counts["inserted"] = len(pending)
     return counts
+
+
+def _merge_into(db: Session, source: WaterBody, target: WaterBody) -> None:
+    """Move everything attached to ``source`` onto ``target`` and delete it.
+
+    The source's name is kept as an alias of the target, so a search for the
+    old label still finds the merged water body.
+    """
+    for model in (MonitoringStation, WaterQualityObservation, WaterEvidence):
+        db.query(model).filter(model.water_body_id == source.id).update(
+            {model.water_body_id: target.id}, synchronize_session=False
+        )
+    db.query(WaterBodyStatusHistory).filter(
+        WaterBodyStatusHistory.water_body_id == source.id
+    ).delete(synchronize_session=False)
+    aliases = list(target.aliases or [])
+    for name in [source.name, *(source.aliases or [])]:
+        if name not in aliases and name != target.name:
+            aliases.append(name)
+    target.aliases = aliases
+    db.delete(source)
 
 
 def _reconcile_untyped(db: Session) -> dict:
@@ -661,18 +701,7 @@ def _reconcile_untyped(db: Session) -> dict:
                     else 0.0
                 ),
             )
-            for model in (MonitoringStation, WaterQualityObservation, WaterEvidence):
-                db.query(model).filter(model.water_body_id == body.id).update(
-                    {model.water_body_id: target.id}, synchronize_session=False
-                )
-            db.query(WaterBodyStatusHistory).filter(
-                WaterBodyStatusHistory.water_body_id == body.id
-            ).delete(synchronize_session=False)
-            aliases = list(target.aliases or [])
-            if body.name not in aliases and body.name != target.name:
-                aliases.append(body.name)
-            target.aliases = aliases
-            db.delete(body)
+            _merge_into(db, body, target)
             touched.add(target.id)
             deleted.add(body.id)
             merged += 1
@@ -694,6 +723,41 @@ def _reconcile_untyped(db: Session) -> dict:
             body.match_confidence = upgraded.confidence
             touched.add(body.id)
             retyped += 1
+
+    # -- Drains sharing a river's name ------------------------------------
+    # "MITHI NALLAH AT KURLA" and "MITHI RIVER MAHIM" are one watercourse
+    # under a local label. A drain merges into a same-named river only when
+    # the two are within DRAIN_TO_RIVER_KM; further apart they stay separate.
+    rivers: dict[str, list[WaterBody]] = defaultdict(list)
+    for body in db.scalars(
+        select(WaterBody).where(WaterBody.water_type == WaterBodyType.RIVER)
+    ):
+        rivers[body.normalized_name].append(body)
+    for drain in db.scalars(
+        select(WaterBody).where(WaterBody.water_type == WaterBodyType.DRAIN)
+    ).all():
+        if drain.id in deleted:
+            continue
+        for river in rivers.get(drain.normalized_name, []):
+            if None in (
+                drain.centroid_lat,
+                drain.centroid_lon,
+                river.centroid_lat,
+                river.centroid_lon,
+            ):
+                continue
+            km = haversine_km(
+                drain.centroid_lat,
+                drain.centroid_lon,
+                river.centroid_lat,
+                river.centroid_lon,
+            )
+            if km <= DRAIN_TO_RIVER_KM:
+                _merge_into(db, drain, river)
+                touched.add(river.id)
+                deleted.add(drain.id)
+                merged += 1
+                break
 
     db.commit()
     if merged or retyped:

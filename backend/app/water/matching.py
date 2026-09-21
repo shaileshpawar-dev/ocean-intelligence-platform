@@ -174,6 +174,11 @@ POSITION_MARKERS = (
     " opposite ",
     " downstream ",
     " upstream ",
+    " midstream",
+    " mid stream",
+    " mid-stream",
+    " d/stream",
+    " u/stream",
     " confl",
     " bridge",
     " ghat",
@@ -244,6 +249,36 @@ PLACE_ALIASES: dict[str, tuple[str, ...]] = {
 }
 
 
+# Spelling variants of the same river as they occur in the published station
+# names. Each pair names one watercourse spelled two ways -- not two rivers
+# that happen to be similar -- and the canonical form is the one most widely
+# used in official Indian sources. Kept deliberately short: an entry here
+# merges records, so it has to be certain.
+CANONICAL_SPELLINGS: dict[str, str] = {
+    "BRAHAMPUTRA": "BRAHMAPUTRA",
+    "BRAHMPUTRA": "BRAHMAPUTRA",
+    "GODAVRI": "GODAVARI",
+    "KAVERI": "CAUVERY",
+    "MAHANADHI": "MAHANADI",
+    "HOOGHLY": "HUGLI",
+    "SABARAMATI": "SABARMATI",
+    "NARMADHA": "NARMADA",
+    "TAPTI": "TAPI",
+}
+
+# Drains may share a name with the river they join ("Mithi Nallah", "Mithi
+# River"). Within this distance a drain with the same name as a river is the
+# same watercourse under a local label, and its stations join the river.
+DRAIN_TO_RIVER_KM = 25.0
+
+
+def canonical_core(normalized: str) -> str:
+    """Rewrite known spelling variants inside a normalised name."""
+    if not normalized:
+        return normalized
+    return " ".join(CANONICAL_SPELLINGS.get(t, t) for t in normalized.split())
+
+
 def expand_place_aliases(text: str) -> str:
     """Append the official alternative name of any place mentioned.
 
@@ -308,6 +343,12 @@ class MatchResult:
     method: str
     confidence: float
     notes: list[str] = field(default_factory=list)
+    position: str | None = None
+    """Where on the water body the sample was taken ("At Nasik D/S ..."),
+    kept on the station. Never allowed to become part of the body's name."""
+
+    aliases: list[str] = field(default_factory=list)
+    """Other spellings seen for this water body, e.g. before canonicalisation."""
 
     @property
     def is_identified(self) -> bool:
@@ -578,7 +619,81 @@ def resolve(
                 confidence=CONFIDENCE["source_field"],
             )
 
-    return parse_station_name(station_name)
+    return finalise(station_name, parse_station_name(station_name))
+
+
+_TYPE_WORDS_UPPER = frozenset({k.upper() for k, _ in TYPE_KEYWORDS} | {"WATER"})
+
+
+def sampling_descriptor(station_name: str, result: MatchResult) -> str | None:
+    """The part of a station name that describes *where* it samples.
+
+    ``GODAVARI AT NASIK D/S GADGEBABA MAHARAJ NAGAR NASHIK`` names the
+    Godavari and then a position on it. The position is information about the
+    station, so it is returned for the station record rather than discarded
+    -- and it is never allowed to split the water body.
+
+    Matching is done token by token on normalised forms but the text is cut
+    from the original tokens, so ``D/S`` survives as ``D/S`` rather than
+    becoming ``D S``.
+    """
+    core = result.normalized_name.split()
+    raw_tokens = str(station_name or "").split()
+    norm_tokens = [normalise_name(t) for t in raw_tokens]
+    if not core or not raw_tokens:
+        return None
+
+    # A multi-word token such as "D/S" normalises to "D S"; compare on the
+    # first word of each so positions stay aligned with the raw tokens.
+    heads = [t.split()[0] if t else "" for t in norm_tokens]
+    for i in range(len(heads) - len(core) + 1):
+        if heads[i : i + len(core)] == core:
+            end = i + len(core)
+            while end < len(heads) and heads[end] in _TYPE_WORDS_UPPER:
+                end += 1
+            descriptor = " ".join(raw_tokens[end:]).strip(" ,.-")
+            if not descriptor:
+                return None
+            # Title-case words, keep position abbreviations upper-case.
+            words = [
+                w.upper() if "/" in w or w.upper() in {"D/S", "U/S", "NH"} else w.title()
+                for w in descriptor.split()
+            ]
+            return " ".join(words)
+    return None
+
+
+def finalise(station_name: str, result: MatchResult) -> MatchResult:
+    """Attach the sampling descriptor, then apply canonical spellings.
+
+    The descriptor is taken first, against the name as published, because a
+    station labelled ``BRAHAMPUTRA RIVER AT BOGIBEEL`` does not contain the
+    canonical spelling ``BRAHMAPUTRA``.
+    """
+    if result.position is None:
+        result.position = sampling_descriptor(station_name, result)
+
+    if not result.normalized_name:
+        return result
+
+    canonical = canonical_core(result.normalized_name)
+    if canonical == result.normalized_name:
+        return result
+
+    original = result.name
+    renamed = []
+    for word in result.name.split():
+        variant = normalise_name(word)
+        renamed.append(
+            CANONICAL_SPELLINGS[variant].title()
+            if variant in CANONICAL_SPELLINGS
+            else word
+        )
+    result.name = " ".join(renamed)
+    if original != result.name and original not in result.aliases:
+        result.aliases.append(original)
+    result.normalized_name = canonical
+    return result
 
 
 def propagate_types(results: list[MatchResult]) -> dict[str, WaterBodyType]:

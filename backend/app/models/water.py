@@ -171,6 +171,20 @@ class WaterBody(Base, TimestampMixin):
     match_method: Mapped[str] = mapped_column(String(48), default="source_field")
     """``source_field``, ``station_name_parse`` or ``manual_override``."""
 
+    source_ids: Mapped[dict] = mapped_column(JSON, default=dict)
+    """Identifiers of this water body in external sources, e.g.
+    ``{"osm": ["way/49011690", ...]}``. Empty until a source supplies one."""
+
+    designated_use: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    """CPCB designated-best-use class *if an authoritative source states it*.
+    Never inferred; null for every water body today."""
+
+    designated_use_source: Mapped[str | None] = mapped_column(String(300), nullable=True)
+
+    geometry_status: Mapped[str] = mapped_column(String(24), default="not_attempted")
+    """``not_attempted``, ``matched``, ``ambiguous``, ``not_found``,
+    ``unsupported`` or ``error`` -- so "no geometry" is always explained."""
+
     # -- Denormalised for map and list performance -------------------------
     # Recomputed by the ingestion pipeline. Kept on the row so the map
     # endpoint can filter and colour thousands of features without a
@@ -217,12 +231,18 @@ class RiverStretch(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(240))
 
     priority_band: Mapped[str | None] = mapped_column(String(8), nullable=True)
-    """CPCB restoration priority I-V, from the stretch's maximum BOD."""
+    """CPCB restoration priority I-V as published for this stretch."""
 
     max_bod: Mapped[float | None] = mapped_column(Float, nullable=True)
     station_count: Mapped[int] = mapped_column(Integer, default=0)
-    derivation: Mapped[str] = mapped_column(String(64), default="cpcb_bod_criterion")
-    """How the stretch was derived, so the claim can be audited."""
+    derivation: Mapped[str] = mapped_column(String(64), default="source_defined")
+    """How the stretch was defined. Only ``source_defined`` is created today:
+    the platform does not derive stretches itself."""
+
+    official_stretch_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    assessment_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_reference: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     water_body: Mapped[WaterBody] = relationship()
 
@@ -259,6 +279,18 @@ class MonitoringStation(Base, TimestampMixin):
 
     latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    position_descriptor: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    """Where on the water body this station samples ("At Nasik D/S ..."),
+    parsed from the station name. Kept here so it never splits a body."""
+
+    relationship_type: Mapped[str] = mapped_column(String(32), default="name_match")
+    """How the station is tied to its water body: ``name_match``,
+    ``on_feature``, ``near_feature``, ``distant_from_feature`` or
+    ``unassigned``."""
+
+    geometry_distance_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    """Distance to the water body's mapped geometry, once geometry exists."""
+
     geo_quality: Mapped[str] = mapped_column(String(24), default="ok")
     """``ok``, ``suspect`` (outside India's bounding box) or ``missing``."""
 
