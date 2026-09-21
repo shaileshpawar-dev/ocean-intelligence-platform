@@ -1,14 +1,20 @@
-# OceanAI — Ocean Intelligence Platform
+# OceanAI — India Water Intelligence
 
-**Satellite-based marine pollution intelligence: SAR dark-formation detection, two-stage refinement, explainable risk scoring, backtested forecasting, grounded retrieval and an agentic reporting workflow — with an explicit provenance contract on every claim.**
+**What is actually known about India's rivers, lakes, ponds and coastal waters — when it was measured, what it showed, against which standard, and where every number came from.**
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB)](https://www.python.org/)
 [![React 18](https://img.shields.io/badge/react-18-61DAFB)](https://react.dev/)
 [![FastAPI](https://img.shields.io/badge/fastapi-0.115-009688)](https://fastapi.tiangolo.com/)
-[![Tests](https://img.shields.io/badge/tests-205%20passing-brightgreen)](#testing)
+[![Tests](https://img.shields.io/badge/tests-314%20passing-brightgreen)](#testing)
+[![Data: CPCB](https://img.shields.io/badge/data-CPCB%20via%20NWDP-0369a1)](docs/data-sources.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-## 🌊 Live Demo
+> **Live demo status.** The public deployment below still runs **v1, the marine
+> pollution platform**. The India Water Intelligence version on this branch has
+> been built and verified locally (tests, browser, Docker) but **has not been
+> deployed**. See [Deploying V2](#deploying-v2).
+
+## 🌊 Live Demo (v1)
 
 ### ▶ **[Open the OceanAI dashboard](http://oceanai-alb-746074560.ap-south-1.elb.amazonaws.com/app)**
 
@@ -31,6 +37,166 @@ Running on AWS ECS Fargate behind an Application Load Balancer in `ap-south-1`.
 > any conclusion from what the dashboard displays.
 
 ---
+
+
+---
+
+# Part 1 — India Water Intelligence
+
+## The problem
+
+India's water-quality data exists, but it is scattered across monitoring
+portals, spreadsheets and reports, keyed by station labels rather than by
+water body, and often years old without saying so. A dashboard that shows
+"Mithi River: polluted" is making a claim about today that its data may not
+support.
+
+## What this does
+
+It resolves CPCB monitoring records into **water bodies**, places them on a
+map of India, judges each against **cited CPCB standards**, and is explicit on
+every screen about the difference between *what the water is like now* and
+*what the last measurement found*.
+
+```mermaid
+flowchart LR
+    SRC["CPCB surface-water data<br/>National Water Data Portal<br/>(public CKAN API)"] --> ING["Ingestion<br/>validate · normalise · match · dedupe"]
+    ING --> DB[("Water bodies · stations<br/>177k observations")]
+    STD["CPCB criteria<br/>Classes A–E · PRS bands"] --> ENG["Status engine<br/>freshness gate → bands"]
+    DB --> ENG
+    ENG --> API["FastAPI /api/v1"]
+    DB --> QA["Water Q&A<br/>IDENTIFY→OBSERVE→RESEARCH→ANALYZE→REPORT"]
+    QA --> API
+    API --> MAP["India water map"]
+    API --> PAGES["Water body · state · city · station pages"]
+    API --> AI["Ask about water<br/>citations → map"]
+```
+
+### The honest centre of the product
+
+The newest CPCB data anywhere on the portal is from **2021**. So every water
+body carries two statuses:
+
+| | Mithi River, Mumbai |
+|---|---|
+| **Right now** | *No recent data* — latest observation 02 Dec 2021, too old to describe today |
+| **When last measured** | *Polluted stretch*, CPCB priority V, **as of 02 Dec 2021** |
+
+A platform showing only the first would be useless; one showing only the
+second without its date would be misleading. The map colours by the dated
+verdict and says so in its legend.
+
+## Real data
+
+Verified against the live source before any code was written
+([details](docs/data-sources.md)):
+
+- **Source:** CPCB Surface Water Quality (Manual), 315 datastore-backed
+  resources, public, no key.
+- **Ingested locally:** 7 states — Maharashtra, Delhi, Uttar Pradesh,
+  Karnataka, Tamil Nadu, West Bengal, Gujarat — **177,112 observations,
+  1,190 stations, 765 water bodies**, 42/42 resources, zero errors.
+- **43 parameters**, including BOD, COD, dissolved oxygen, pH, faecal and
+  total coliform, heavy metals and nutrients.
+- The source's `River` column is empty everywhere, so water bodies are
+  **parsed from station names** by deterministic rules with a recorded
+  confidence ([how](docs/data-model.md)).
+
+## Status, not a score
+
+No 0–100 pollution score. A band — *within reference, elevated, high concern,
+polluted stretch, insufficient data, no recent data* — reached by stated rules
+over named parameters against **CPCB Designated Best Use criteria** (class C
+by default) and the national **polluted-river-stretch** BOD bands. A parameter
+that was not measured is never treated as compliant; dissolved oxygen fails
+when it is *low*. [Engine details](docs/water-status-engine.md).
+
+## The map and the AI are one system
+
+- `/app/map` — India, full screen, loaded per viewport, coloured by status
+  when last measured, searchable, with a detail panel (a bottom sheet on
+  phones).
+- `/app/ai` — ask *"Show polluted rivers near Mumbai"* or *"Has the Godavari
+  improved?"*. Answers are built from stored records, every figure cited with
+  its date and source row, and no language model produces any value. Each
+  answer can be put on the map, and each citation flies the map to its
+  evidence.
+- *"How much mercury is in Mithi River?"* → **no evidence**: nobody measured
+  mercury there, so no number is given.
+
+[Map and Q&A details](docs/water-map-and-ai.md).
+
+## Pages
+
+| Route | Purpose |
+|---|---|
+| `/app/india` | Coverage, data currency, status distribution, sources |
+| `/app/map` | The India water map |
+| `/app/ai` | Ask about water |
+| `/app/water/:slug` | Water body: dual status, why, parameters, trend, stations, location, sources |
+| `/app/state/:slug`, `/app/city/:slug` | State and district pages |
+| `/app/stations/:id` | Monitoring station |
+| `/app/standards` | Every threshold applied, with its source |
+| `/app/data-quality` | Provider health, last run, validation outcomes |
+
+## Water API
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /water-bodies` · `/water-bodies/{slug}` | List and filter; detail with both statuses |
+| `GET /water-bodies/{slug}/trend?parameter=bod` | Observed points only, no interpolation |
+| `GET /water-bodies/{slug}/parameters` · `/stations` · `/sources` | Supporting views |
+| `GET /stations` · `/stations/{id}` | Monitoring stations |
+| `GET /map/water-bodies?bbox=` · `/map/stations` · `/map/near` | Viewport and true-circle radius queries |
+| `GET /states` · `/states/{slug}` · `/cities/{slug}` | Geography |
+| `GET /search?q=` | Water bodies, districts (with official renamings), states, stations |
+| `POST /water/ask` | Grounded Q&A with citations, trace and map action |
+| `GET /water-overview` · `/water-standards` · `/water-parameters` · `/water-quality-report` | Platform views |
+
+## Run it locally
+
+```bash
+python -m venv .venv && source .venv/Scripts/activate
+pip install -r backend/requirements-dev.txt
+cd frontend && npm install && npm run build && cd ..
+```
+
+Load real data (public source, no key; roughly ten seconds per state):
+
+```bash
+cd backend && python -m app.water.cli ingest --states MH DL KA
+```
+
+```bash
+uvicorn app.main:app --port 8000
+```
+
+Open <http://localhost:8000/app/map>. In Docker, set
+`WATER_BOOTSTRAP_STATES=MH` and the container ingests on first start.
+
+## Deploying V2
+
+Not done in this change. The image builds and runs locally, and a fresh
+container rebuilds Maharashtra's data from the source in about 11 seconds.
+Rolling it out means pushing a new image tag to `oceanai/backend`,
+registering task definition revision 2 with `WATER_BOOTSTRAP_STATES` set, and
+updating the `oceanai-api` service — see [deployment](docs/deployment.md). It
+is left for an explicit go-ahead because it replaces the public demo.
+
+## Water limitations
+
+The newest data is from 2021; 7 of 35 states are ingested; identity is parsed
+and about a third of stations name no water body; long rivers can split
+across unbridged states; river stretches, satellite evidence for inland
+water, imagery, clustering and boundary layers are not implemented.
+[Full list](docs/limitations.md#8-india-water-intelligence).
+
+---
+
+# Part 2 — Marine pollution intelligence (v1, preserved)
+
+The original platform below is unchanged and still available: the ocean map
+at `/app/ocean-map`, events, risk, forecasts, research and agents.
 
 ## Table of contents
 
@@ -56,7 +222,7 @@ The defining design constraint is **epistemic honesty**: the system distinguishe
 |---|---|
 | Backend | 64 Python modules, ~10,300 lines |
 | Frontend | 18 pages, 27 TypeScript/CSS source files |
-| Tests | 205, including a scientific-integrity contract suite |
+| Tests | 314 in the repository — 205 marine, 109 water — including scientific-integrity suites |
 | Corpus | 19 seed documents (14 real regulations, 5 methodology notes) |
 | Agents | 5-stage linear workflow over 8 bounded tools |
 
@@ -357,7 +523,7 @@ cd frontend && npm install && npm run dev     # proxies /api to 127.0.0.1:8000
 | Evaluation | `ml/evaluation/evaluate_detector.py` is the **only** thing permitted to write metrics into the registry |
 | Drift detection | PSI over two windows, with an explicit insufficient-data state |
 | Monitoring | Measured request latency and volume — not synthetic numbers |
-| CI | Lint, format, secret scan, 205 tests, scientific-integrity contract, end-to-end smoke test, Docker build-and-boot |
+| CI | Lint, format, secret scan, 314 tests, scientific-integrity contract, end-to-end smoke test, Docker build-and-boot |
 
 The **scientific-integrity contract** runs as its own CI job because a regression there is a correctness bug, not a style issue:
 
@@ -408,7 +574,7 @@ The public endpoint is **HTTP only**. Enabling HTTPS requires a domain you own:
 
 **Frontend** — React 18 · TypeScript · Vite · TanStack Query · React Router · Recharts · Leaflet · lucide-react
 
-**Quality** — pytest (205) · ruff (lint + format) · mypy (advisory) · ESLint · `tsc --noEmit` · GitHub Actions
+**Quality** — pytest (314) · ruff (lint + format) · mypy (advisory) · ESLint · `tsc --noEmit` · GitHub Actions
 
 **Infrastructure** — Docker (multi-stage) · AWS ECS Fargate · ECR · ALB · CloudWatch · IAM
 
@@ -579,7 +745,7 @@ A fuller account, including the security incident inherited from the predecessor
 ## Testing
 
 ```bash
-cd backend && pytest                                        # 205 tests
+cd backend && pytest                                        # 314 tests
 ```
 
 ```bash
@@ -596,6 +762,10 @@ ruff check . && ruff format --check .
 
 | Document | Contents |
 |---|---|
+| [data-sources.md](docs/data-sources.md) | Water sources: what was verified, integrated, and not |
+| [data-model.md](docs/data-model.md) | Water-body model, identity resolution, geometry |
+| [water-status-engine.md](docs/water-status-engine.md) | Bands, standards, freshness, the two statuses |
+| [water-map-and-ai.md](docs/water-map-and-ai.md) | Map behaviour and the grounded water Q&A |
 | [architecture.md](docs/architecture.md) | Component design and data flow |
 | [ai-pipeline.md](docs/ai-pipeline.md) | SAR physics, detection logic, the two-stage rationale |
 | [forecasting.md](docs/forecasting.md) | Model progression, backtesting, scope boundary |

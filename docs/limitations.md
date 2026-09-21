@@ -245,3 +245,46 @@ The distinction between the columns is enforced in code — by the signature
 vocabulary, the `EvidenceLevel` propagation, the plausibility gate and the
 `forecast_kind` field — and asserted by the scientific-integrity CI job. It is
 the point of the project.
+
+## 8. India water intelligence
+
+**Data age.** The newest CPCB surface-water data published on the National
+Water Data Portal is from 2021. Every water body's present-tense status is
+therefore "no recent data". The dated "when last measured" status is a true
+statement about that sample and nothing more.
+
+**Coverage.** Seven of 35 states are ingested locally (Maharashtra, Delhi,
+Uttar Pradesh, Karnataka, Tamil Nadu, West Bengal, Gujarat). The rest are one
+CLI command away, but have not been loaded or checked.
+
+**Identity is parsed, not supplied.** The source's `River` column is empty, so
+water bodies are resolved from station names. About a third of stations do not
+name a water body at all (`ERODE-2`, `GIDC DAHOD`) and are shown as
+"Unclassified". Some parses are imperfect: a drain meeting a river
+(`CHIKHALI NALLAH MEETS GODAVARI RIVER`) is read as a river. Every body shows
+its match method and confidence.
+
+**Long rivers can split.** Same-named stations more than 500 km apart form
+separate bodies unless intermediate stations bridge them. The Ganga in West
+Bengal is separate from the Ganga in Uttar Pradesh because Bihar is not yet
+ingested.
+
+**Standards.** Status defaults to CPCB class C. A different designated use can
+legitimately change the verdict. The CPCB criteria PDFs could not be fetched
+directly (expired TLS certificate); the values were verified from independent
+sources quoting them and match the platform's thresholds.
+
+**Not implemented:** river-stretch derivation (schema only), status history
+population, satellite or image evidence for inland water bodies, official or
+field imagery, marker clustering, administrative/basin boundary layers,
+PostGIS, user-reported issues, pollution-source context. None of these is
+presented in the UI as if it existed.
+
+**Satellite honesty.** No satellite-derived value is attached to any water
+body. When one is, it will be labelled `SATELLITE_OBSERVED` and will never
+report BOD, COD, coliform or dissolved metals, which optical and SAR sensors
+cannot measure.
+
+**Q&A.** Intent routing is rule-based and can misroute unusual phrasings; it
+fails towards "no evidence", never towards an invented answer. No language
+model is used on the water path.

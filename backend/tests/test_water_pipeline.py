@@ -349,6 +349,8 @@ class TestWaterApi:
         assert "Yamuna River" in {i["name"] for i in items}
         state = client.get("/api/v1/states/delhi").json()
         assert state["water_body_count"] == 1
+        # The state page shows this date; it was previously never returned.
+        assert state["latest_observed_at"].startswith("2021-12-02")
 
     def test_unknown_water_body_is_404(self, client):
         assert client.get("/api/v1/water-bodies/atlantis").status_code == 404

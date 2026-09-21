@@ -1,0 +1,97 @@
+# Data sources
+
+What the water platform reads, how each source was verified, and what was
+deliberately not integrated. Every claim in this document was checked against
+the live source on 2026-09-20/21, not inferred from a website's existence.
+
+## Integrated
+
+### CPCB Surface Water Quality (Manual) — via the National Water Data Portal
+
+| | |
+|---|---|
+| Publisher | Central Pollution Control Board, published by the National Water Informatics Centre |
+| Portal | <https://nwdp.nwic.gov.in/dataset/?organization=cpcb> |
+| Access | CKAN API, **public, no key, no registration** |
+| Licence | "Other (Open)" as declared on the portal |
+| Datasets | Physical, chemical and biological parameters — 315 CSV resources |
+| Coverage | 35 state/UT codes, three periods each: 1961–2020, 2021–2025, 2026–2030 |
+| Adapter | `backend/app/water/providers/nwdp_cpcb.py` |
+| Declared cadence | Monthly (the programme's sampling interval) |
+
+**Verified facts that shaped the design:**
+
+- `/api/3/action/datastore_search` works unauthenticated for every resource
+  (all 315 are `datastore_active`), with paging up to 1,000 rows.
+- `/api/3/action/datastore_search_sql` is **disabled** ("Action name not
+  known"), so aggregation happens in-process after paging.
+- The **2026–2030 resources exist but are empty** placeholders. The adapter
+  skips them.
+- **The newest data anywhere is from 2021.** Every sampled state's 2021–2025
+  resource contains only 2021 rows; the 1961–2020 resources hold mostly
+  2018–2019 monthly series. This is why the platform reports "no recent data"
+  for every water body and shows the last measured status with its date.
+- The **`River`, `Basin` and `Tributary` columns are empty** in every row
+  sampled nationwide (0 of 3,000+). Water-body identity is parsed from the
+  station name — see `data-model.md`.
+- Values are text. `'-'`, `''` and `None` all mean "not measured"; censored
+  values such as `'<0.01'` occur. Timestamps are `DD-MM-YYYY HH:MM`.
+- Conductivity headers say `mS/cm`, but published magnitudes (hundreds to
+  thousands for urban lakes) are µS/cm. The parser treats magnitude as
+  decisive and documents the assumption in `parameters.py`.
+- District names are inconsistent: `MUMBAI CITY` alongside `Mumbai Suburban`;
+  `Bangalore Urban` alongside post-rename spellings elsewhere. All-caps names
+  are recased; official renamings are resolved by an alias table.
+
+**Parameters published (43 canonical):** temperature, turbidity, conductivity,
+colour, odour, total solids; pH, dissolved oxygen, TDS, ammonia, nitrate,
+nitrite+nitrate, total phosphorus, chloride, sulphate, fluoride, hardness,
+alkalinity, calcium, magnesium, sodium, potassium, carbonate, bicarbonate,
+boron, SAR; arsenic, cadmium, chromium, lead, mercury, nickel, iron,
+manganese, copper, zinc; BOD, COD, faecal coliform, total coliform.
+
+**Ingested locally in this session:** Maharashtra, Delhi, Uttar Pradesh,
+Karnataka, Tamil Nadu, West Bengal and Gujarat — 42 resources, 177,112
+observations, 1,190 stations, 765 water bodies. The other 28 states are one
+command away: `python -m app.water.cli ingest --states <codes>`.
+
+### Reference standards (not a data feed)
+
+| Document | Used for |
+|---|---|
+| CPCB, *Designated Best Use Water Quality Criteria* | Class A–E limits in `water/standards.py` |
+| CPCB, *Polluted River Stretches: Criteria and Status* | 3 mg/L BOD threshold and priority bands I–V |
+
+Both were verified via search results quoting the criteria; the CPCB site's
+TLS certificate was expired at the time, so the PDF itself could not be
+fetched directly. The numeric values match across independent sources.
+
+## Not integrated, and why
+
+Listed so their absence is visible rather than mistaken for coverage.
+
+| Source | Status | Reason |
+|---|---|---|
+| CPCB real-time water quality (`rtwqmsdb1.cpcb.gov.in`) | Not integrated | A dashboard application; no documented public API was found. |
+| Bhuvan / NRSC water bodies | Not integrated | No public, documented, unauthenticated query endpoint was verified in this session. Not stubbed. |
+| MPCB (Maharashtra) | Not integrated | Publishes reports and bulletins, not a machine-readable feed that was verified. |
+| Central Water Commission | Not integrated | Hydrological (level/flow), not water quality; out of scope for status. |
+| Sentinel-1/2 for water bodies | Not integrated | The Earth Engine provider exists for the marine pipeline; nothing derives water-body indicators from it yet. See `limitations.md`. |
+| data.gov.in OGD | Not integrated | Mirrors the same CPCB tables but requires an API key; NWDP gives the same data without one. |
+
+No adapter was written for any of these. A provider that cannot reach real
+data is not registered, so it cannot appear in the UI as a working
+integration.
+
+## Adding a provider
+
+Implement `WaterDataProvider` (`water/providers/base.py`): `info`, `plans()`
+and `fetch()`. Two rules are part of the contract:
+
+1. **Never fabricate.** On failure raise `ProviderUnavailableError`; never
+   return an empty iterator that the caller would read as "no data".
+2. **Declare a cadence**, or `Cadence.UNKNOWN`. Freshness is judged against
+   it.
+
+Register it in `water/providers/__init__.py`. Ingestion, matching,
+validation, de-duplication and status then apply unchanged.

@@ -1104,6 +1104,12 @@ def state_detail(db: Session, slug: str) -> dict | None:
             MonitoringStation.state_id == state.id
         )
     )
+    latest_in_state = db.scalar(
+        select(func.max(MonitoringStation.latest_observed_at)).where(
+            MonitoringStation.state_id == state.id
+        )
+    )
+
     # Observations taken at stations in this state -- not every observation
     # of every river that happens to touch it.
     observations = db.scalar(
@@ -1142,6 +1148,9 @@ def state_detail(db: Session, slug: str) -> dict | None:
         "water_body_count": len(bodies),
         "station_count": stations or 0,
         "observation_count": observations or 0,
+        "latest_observed_at": (
+            _as_utc(latest_in_state).isoformat() if latest_in_state else None
+        ),
         "by_type": dict(sorted(by_type.items(), key=lambda kv: -kv[1])),
         "status_distribution": status_distribution(db, state=state.slug),
         "historical_status_distribution": status_distribution(
