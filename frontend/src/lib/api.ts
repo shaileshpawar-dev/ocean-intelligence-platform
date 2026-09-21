@@ -49,6 +49,7 @@ import type {
   WaterBodySummary,
   WaterOverview,
   WaterQualityReport,
+  WaterAnswer,
   WaterSource,
 } from "./waterTypes";
 
@@ -344,4 +345,7 @@ export const api = {
 
   waterStandards: () => get<StandardsSummary>("/water-standards"),
   waterQualityReport: () => get<WaterQualityReport>("/water-quality-report"),
+
+  /** Grounded Q&A. Figures come from stored observations, never a model. */
+  waterAsk: (question: string) => post<WaterAnswer>("/water/ask", { question }),
 };

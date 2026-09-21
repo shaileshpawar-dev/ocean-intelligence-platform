@@ -29,6 +29,7 @@ import {
   Search,
   Map,
   Scale,
+  Sparkles,
   ShieldAlert,
   TrendingUp,
   Waves,
@@ -49,6 +50,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     items: [
       { to: "/app/india", label: "India Overview", icon: LayoutDashboard },
       { to: "/app/map", label: "Water Map", icon: Map },
+      { to: "/app/ai", label: "Ask about water", icon: Sparkles },
       { to: "/app/standards", label: "Reference Standards", icon: Scale },
       { to: "/app/data-quality", label: "Data Sources", icon: Database },
     ],

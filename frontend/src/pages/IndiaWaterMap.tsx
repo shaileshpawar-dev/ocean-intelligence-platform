@@ -22,7 +22,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   CircleMarker,
@@ -36,6 +36,7 @@ import type { LatLngBoundsExpression } from "leaflet";
 import {
   CalendarClock,
   Filter,
+  Sparkles,
   Layers,
   Loader2,
   MapPin,
@@ -113,6 +114,31 @@ export default function IndiaWaterMap() {
   // fly-to triggers has returned it, so the panel opens on real map data.
   const [pendingSlug, setPendingSlug] = useState<string | null>(null);
 
+  // Links from the Q&A page: ?highlight=a,b rings those water bodies,
+  // ?bbox= frames them, ?focus= flies to one and opens its panel. This is
+  // what makes a citation click land on the evidence.
+  const [params, setParams] = useSearchParams();
+  const highlighted = useMemo(
+    () => new Set((params.get("highlight") ?? "").split(",").filter(Boolean)),
+    [params],
+  );
+  const frame = useMemo(() => parseBox(params.get("bbox")), [params]);
+  const focusSlug = params.get("focus");
+
+  const focusTarget = useQuery({
+    queryKey: ["water-body", focusSlug],
+    queryFn: () => api.waterBody(focusSlug as string),
+    enabled: Boolean(focusSlug),
+  });
+
+  useEffect(() => {
+    const target = focusTarget.data;
+    if (target && target.latitude != null && target.longitude != null) {
+      setFlyTo([target.latitude, target.longitude, 12]);
+      setPendingSlug(target.slug);
+    }
+  }, [focusTarget.data]);
+
   const bodies = useQuery({
     queryKey: ["map-water-bodies", bbox, typeFilter, statusFilter],
     queryFn: () =>
@@ -173,16 +199,17 @@ export default function IndiaWaterMap() {
 
         <ViewportReporter onChange={handleViewport} />
         <FlyController target={flyTo} />
+        <FrameController box={focusSlug ? null : frame} />
 
         {layers.waterBodies &&
           features.map((feature) => (
             <CircleMarker
               key={`wb-${feature.id}`}
               center={[feature.latitude, feature.longitude]}
-              radius={radiusFor(feature, zoom)}
+              radius={radiusFor(feature, zoom) + (highlighted.has(feature.slug) ? 3 : 0)}
               pathOptions={{
-                color: "#ffffff",
-                weight: 1.5,
+                color: highlighted.has(feature.slug) ? "#0c4a6e" : "#ffffff",
+                weight: highlighted.has(feature.slug) ? 3 : 1.5,
                 fillColor: colourFor(feature.latest_available_status),
                 fillOpacity: 0.85,
               }}
@@ -233,6 +260,23 @@ export default function IndiaWaterMap() {
               </CircleMarker>
             ))}
       </MapContainer>
+
+      {highlighted.size > 0 && (
+        <div className="wmap-banner" role="status">
+          <Sparkles size={14} aria-hidden />
+          <span>
+            Showing {highlighted.size} water bod
+            {highlighted.size === 1 ? "y" : "ies"} from an answer
+          </span>
+          <button
+            type="button"
+            onClick={() => setParams({})}
+            aria-label="Clear highlighted results"
+          >
+            Clear
+          </button>
+        </div>
+      )}
 
       {/* -- Floating search ------------------------------------------- */}
       <div className="wmap-search-wrap">
@@ -472,6 +516,30 @@ function ViewportReporter({
 
   // Report once on mount so the first fetch is scoped too.
   useMemo(() => report(map), []); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
+function parseBox(raw: string | null): [[number, number], [number, number]] | null {
+  if (!raw) return null;
+  const parts = raw.split(",").map(Number);
+  if (parts.length !== 4 || parts.some((n) => Number.isNaN(n))) return null;
+  return [
+    [parts[0], parts[1]],
+    [parts[2], parts[3]],
+  ];
+}
+
+/** Frames the map around an answer's results, once per distinct box. */
+function FrameController({
+  box,
+}: {
+  box: [[number, number], [number, number]] | null;
+}) {
+  const map = useMap();
+  const key = box ? box.flat().join(",") : "";
+  useEffect(() => {
+    if (box) map.fitBounds(box, { padding: [40, 40], maxZoom: 12 });
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }
 

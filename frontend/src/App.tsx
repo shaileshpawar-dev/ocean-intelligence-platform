@@ -23,6 +23,7 @@ const CityPage = lazy(() => import("./pages/CityPage"));
 const StationDetail = lazy(() => import("./pages/StationDetail"));
 const WaterStandards = lazy(() => import("./pages/WaterStandards"));
 const DataSources = lazy(() => import("./pages/DataSources"));
+const WaterAI = lazy(() => import("./pages/WaterAI"));
 const Overview = lazy(() => import("./pages/Overview"));
 const LiveMonitoring = lazy(() => import("./pages/LiveMonitoring"));
 const Events = lazy(() => import("./pages/Events"));
@@ -60,6 +61,7 @@ const APP_ROUTES: { path: string; element: React.ReactNode }[] = [
   { path: "/app/stations/:stationId", element: <StationDetail /> },
   { path: "/app/standards", element: <WaterStandards /> },
   { path: "/app/data-quality", element: <DataSources /> },
+  { path: "/app/ai", element: <WaterAI /> },
 
   // -- Marine pollution intelligence (preserved) ----------------------
   { path: "/app/overview", element: <Overview /> },

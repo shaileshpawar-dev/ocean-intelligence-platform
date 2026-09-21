@@ -364,3 +364,66 @@ export interface ListEnvelope<T> {
   items: T[];
   provenance?: Record<string, unknown>;
 }
+
+/* ------------------------------------------------------------------ */
+/* Water Q&A                                                           */
+/* ------------------------------------------------------------------ */
+
+export type WaterAnswerStatus = "grounded" | "partial" | "no_evidence";
+
+export interface WaterCitation {
+  position: number;
+  kind: "observation" | "status" | "document" | "water_body";
+  title: string;
+  detail: string;
+  evidence_type: WaterEvidenceType;
+  water_body_slug: string | null;
+  station_id: number | null;
+  observed_at: string | null;
+  source: string | null;
+  source_reference: string | null;
+  url: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  href: string | null;
+}
+
+export interface MapAction {
+  type: "highlight";
+  water_body_slugs: string[];
+  focus: string | null;
+  bbox: [number, number, number, number] | null;
+  href: string;
+}
+
+export interface WaterTraceStep {
+  stage: "IDENTIFY" | "OBSERVE" | "RESEARCH" | "ANALYZE" | "REPORT";
+  tool: string;
+  arguments: Record<string, unknown>;
+  result: string;
+  duration_ms: number;
+}
+
+export interface WaterAnswer {
+  question: string;
+  intent: string;
+  status: WaterAnswerStatus;
+  headline: string;
+  sections: Record<string, unknown>[];
+  citations: WaterCitation[];
+  limitations: string[];
+  map_action: MapAction | null;
+  resolution: {
+    water_bodies: string[];
+    districts: string[];
+    states: string[];
+    parameters: string[];
+    radius_km: number | null;
+    water_types: string[];
+  };
+  trace: WaterTraceStep[];
+  pipeline_version: string;
+  llm_used: boolean;
+  notes: string[];
+  answered_at: string;
+}
