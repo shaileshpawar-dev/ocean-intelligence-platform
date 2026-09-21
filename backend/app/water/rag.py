@@ -504,8 +504,13 @@ def _body_status_section(
         if historical
         else "No measurement has ever been recorded"
     )
-    if historical and historical.get("priority_band"):
-        status_line += f" (CPCB restoration priority {historical['priority_band']})"
+    for classification in (historical or {}).get("source_classifications", []):
+        if classification.get("priority"):
+            status_line += (
+                f" (listed by {classification['source']} as priority "
+                f"{classification['priority']})"
+            )
+            break
 
     citations.append(
         Citation(
@@ -563,12 +568,7 @@ def _body_status_section(
             )
         )
         comparison = reading["comparison"]
-        verdict = {
-            "exceeds": "above the class C limit",
-            "below": "below the class C minimum",
-            "within": "within the class C limit",
-            "no_standard": "no class C limit applies",
-        }.get(comparison["compliance"], comparison["compliance"])
+        verdict = _verdict_words(comparison)
         indicators.append(
             {
                 "label": reading["label"],
@@ -592,8 +592,22 @@ def _body_status_section(
         "why": (historical or present)["reasons"][:3],
         "latest_observed_at": detail.get("latest_observed_at"),
         "sources": [s["name"] for s in detail["sources"]],
+        "reference": detail["reference"],
         "summary": detail,
     }
+
+
+def _verdict_words(comparison: dict) -> str:
+    """Plain words for a REFERENCE_COMPARISON, naming the standard used."""
+    standard = comparison.get("standard_name") or "the reference"
+    return {
+        "exceeds": f"above the {standard} limit",
+        "below": f"below the {standard} minimum",
+        "within": f"within the {standard} limit",
+        "no_standard": f"{standard} sets no limit for this parameter",
+        "no_reference": "no applicable reference; shown as measured",
+        "not_measured": "not measured",
+    }.get(comparison["compliance"], comparison["compliance"])
 
 
 def _answer_status(
@@ -621,10 +635,19 @@ def _answer_status(
             f"{s['water_body']}: {s['latest_available_status']}" for s in sections
         )
 
-    limitations.append(
-        "Status is judged against CPCB class C (drinking-water source after "
-        "conventional treatment). Another designated use can change the verdict."
-    )
+    for section in sections:
+        reference = section["reference"]
+        if reference.get("standard_code"):
+            limitations.append(
+                f"{section['water_body']} is compared against "
+                f"{reference['standard_name']} ({reference['basis_label'].lower()}). "
+                "Another designated use can change the verdict."
+            )
+        else:
+            limitations.append(
+                f"{section['water_body']}: reference comparison unavailable. "
+                f"{reference['reason']}"
+            )
 
     status = AnswerStatus.GROUNDED
     if resolution.parameters and not any(s["indicators"] for s in sections):
@@ -1018,7 +1041,7 @@ def _answer_parameter_filter(
             }
         )
 
-    what = f"{label} above its class C limit" if parameter else "matching status"
+    what = f"{label} outside its reference limit" if parameter else "matching status"
     return WaterAnswer(
         question=question,
         intent=Intent.PARAMETER,

@@ -1,33 +1,32 @@
 """The water status engine.
 
+Four layers, kept separate all the way to the API
+---------------------------------------------------
+A. **MEASURED** -- the values, as sampled, with their dates.
+B. **REFERENCE_COMPARISON** -- each value judged against the reference
+   standard that applies to this water body (see ``standards.select_reference``),
+   or an explicit "no applicable reference".
+C. **SOURCE_CLASSIFICATION** -- official classifications published by a
+   source, such as CPCB's polluted-river-stretch list. Never manufactured
+   from observations.
+D. **DERIVED_STATUS** -- the band the platform reads from A-C, with every
+   contributing parameter, limit, date and classification listed.
+
 What it refuses to do
 ---------------------
-It does not produce a 0-100 "pollution score". A single number would imply a
-precision that monthly grab samples cannot support, it would hide which
-parameter drove it, and -- worst -- it would let unmeasured parameters quietly
-average away a real exceedance. Instead the engine returns a **band**, the
-**named parameters** that put it there, and the **cited limit** each one
-breached.
+No 0-100 score. No present-tense status from an observation too old to
+support one. No comparison against a standard that nobody established applies.
+No "polluted stretch" label unless a source published one.
 
-It also refuses to describe the present state of a water body from an
-observation that is too old to support such a claim. That check runs first,
-before any threshold comparison, because no amount of parameter analysis
-makes a 2021 sample a statement about today.
-
-How a band is reached
----------------------
-1. If nothing was ever observed -> ``NO_RECENT_DATA`` with that stated.
-2. If the latest observation is too old for its source's cadence ->
-   ``NO_RECENT_DATA``, carrying the historical reading and its date.
-3. If no parameter covered by the selected standard was measured ->
-   ``INSUFFICIENT_DATA``. Emphatically not "clean".
-4. If BOD exceeds the national polluted-stretch threshold ->
-   ``POLLUTED_STRETCH``, with the CPCB priority band.
-5. Else, by the breaches found: a severe breach or three or more breaches ->
-   ``HIGH_CONCERN``; one or two -> ``ELEVATED``; none -> ``WITHIN_REFERENCE``.
-
-Every branch is reported in ``reasons`` so the UI can answer "why this
-status?" from the engine's own output rather than by re-deriving it.
+How the band is reached
+-----------------------
+1. Nothing observed -> ``NO_RECENT_DATA``.
+2. Latest observation too old for the source's cadence -> ``NO_RECENT_DATA``.
+3. An official polluted-stretch classification -> ``POLLUTED_STRETCH``.
+4. No applicable reference -> ``NO_APPLICABLE_REFERENCE``.
+5. None of the governed parameters measured -> ``INSUFFICIENT_DATA``.
+6. A breach at >=3x its limit, or three or more breaches -> ``HIGH_CONCERN``;
+   one or two -> ``ELEVATED``; none -> ``WITHIN_REFERENCE``.
 """
 
 from __future__ import annotations
@@ -39,23 +38,16 @@ from app.models.enums import WaterStatus
 from app.water.freshness import Cadence, FreshnessAssessment, assess
 from app.water.parameters import BY_KEY
 from app.water.standards import (
-    DEFAULT_USE,
-    USE_LABELS,
     Comparison,
-    DesignatedUse,
+    ReferenceSelection,
+    SelectionBasis,
     compare,
-    priority_band,
-    threshold_for,
+    governed_parameters,
 )
 
-ENGINE_VERSION = "water-status-1.0.0"
+ENGINE_VERSION = "water-status-2.0.0"
 
-# A breach this far past its limit counts as severe on its own. Three times a
-# regulatory limit is not a marginal exceedance under any reading.
 SEVERE_EXCEEDANCE_FACTOR = 3.0
-
-# Number of simultaneous breaches that escalates to HIGH_CONCERN without any
-# single one being severe.
 MULTI_BREACH_ESCALATION = 3
 
 STATUS_LABELS: dict[WaterStatus, str] = {
@@ -65,18 +57,19 @@ STATUS_LABELS: dict[WaterStatus, str] = {
     WaterStatus.POLLUTED_STRETCH: "Polluted stretch",
     WaterStatus.INSUFFICIENT_DATA: "Insufficient data",
     WaterStatus.NO_RECENT_DATA: "No recent data",
+    WaterStatus.NO_APPLICABLE_REFERENCE: "No applicable reference",
 }
 
-# Ordering used when rolling several stations up to one water body. Worse
-# outcomes win; the two "we do not know" bands rank below every real finding
-# so a single measured breach is never masked by a silent neighbour.
+# Worse outcomes win a roll-up; the "we do not know" bands rank below every
+# real finding so a silent station never masks a measured breach.
 _SEVERITY_ORDER: dict[WaterStatus, int] = {
     WaterStatus.NO_RECENT_DATA: 0,
-    WaterStatus.INSUFFICIENT_DATA: 1,
-    WaterStatus.WITHIN_REFERENCE: 2,
-    WaterStatus.ELEVATED: 3,
-    WaterStatus.HIGH_CONCERN: 4,
-    WaterStatus.POLLUTED_STRETCH: 5,
+    WaterStatus.NO_APPLICABLE_REFERENCE: 1,
+    WaterStatus.INSUFFICIENT_DATA: 2,
+    WaterStatus.WITHIN_REFERENCE: 3,
+    WaterStatus.ELEVATED: 4,
+    WaterStatus.HIGH_CONCERN: 5,
+    WaterStatus.POLLUTED_STRETCH: 6,
 }
 
 
@@ -94,16 +87,41 @@ class Measurement:
 
 
 @dataclass(slots=True)
+class ClassificationRef:
+    """An official classification, carried into the engine as-is."""
+
+    source: str
+    classification_type: str
+    assessment_year: int | None
+    priority: str | None
+    stretch_name: str | None
+    source_reference: str
+
+    def to_dict(self) -> dict:
+        """Serialise as a SOURCE_CLASSIFICATION evidence item."""
+        return {
+            "evidence_type": "SOURCE_CLASSIFICATION",
+            "source": self.source,
+            "classification_type": self.classification_type,
+            "assessment_year": self.assessment_year,
+            "priority": self.priority,
+            "stretch_name": self.stretch_name,
+            "source_reference": self.source_reference,
+        }
+
+
+@dataclass(slots=True)
 class StatusResult:
-    """A status band plus everything needed to defend it."""
+    """The four layers plus everything needed to defend the band."""
 
     status: WaterStatus
-    designated_use: DesignatedUse
+    reference: ReferenceSelection
     freshness: FreshnessAssessment
+    measurements: list[Measurement] = field(default_factory=list)
     comparisons: list[Comparison] = field(default_factory=list)
+    classifications: list[ClassificationRef] = field(default_factory=list)
     reasons: list[str] = field(default_factory=list)
-    priority: str | None = None
-    priority_description: str | None = None
+    limitations: list[str] = field(default_factory=list)
     engine_version: str = ENGINE_VERSION
     evaluated_parameters: int = 0
     missing_parameters: list[str] = field(default_factory=list)
@@ -119,194 +137,217 @@ class StatusResult:
         return [c for c in self.comparisons if c.failed]
 
     def to_dict(self) -> dict:
-        """Serialise the verdict together with its justification."""
+        """Serialise the layers separately, then the derived band."""
+        standard = self.reference.standard
         return {
+            # D. derived status
             "status": str(self.status),
             "label": self.label,
-            "designated_use": str(self.designated_use),
-            "designated_use_label": USE_LABELS[self.designated_use],
+            "evidence_type": "DERIVED_STATUS",
+            "reasons": self.reasons,
+            "limitations": self.limitations,
             "describes_present_state": self.freshness.describes_present_state,
             "freshness": self.freshness.to_dict(),
-            "reasons": self.reasons,
-            "priority_band": self.priority,
-            "priority_description": self.priority_description,
+            # A. measurements
+            "measurements": [
+                {
+                    "parameter": m.parameter_key,
+                    "label": BY_KEY[m.parameter_key].label
+                    if m.parameter_key in BY_KEY
+                    else m.parameter_key,
+                    "value": m.value,
+                    "unit": m.unit,
+                    "observed_at": m.observed_at.isoformat(),
+                    "evidence_type": "MEASURED",
+                }
+                for m in self.measurements
+            ],
+            # B. reference comparison
+            "reference": self.reference.to_dict(),
+            "comparisons": [c.to_dict() for c in self.comparisons],
+            "failing_parameters": [c.to_dict() for c in self.failing],
             "evaluated_parameters": self.evaluated_parameters,
             "missing_parameters": self.missing_parameters,
-            "failing_parameters": [c.to_dict() for c in self.failing],
-            "comparisons": [c.to_dict() for c in self.comparisons],
+            # C. source classification
+            "source_classifications": [c.to_dict() for c in self.classifications],
             "engine_version": self.engine_version,
+            # Kept for clients built against Phase 1.
+            "designated_use": standard.code if standard else None,
+            "designated_use_label": standard.name
+            if standard
+            else "No applicable reference",
+            "priority_band": next(
+                (c.priority for c in self.classifications if c.priority), None
+            ),
+            "priority_description": None,
         }
 
 
 def evaluate(
     measurements: list[Measurement],
     *,
-    use: DesignatedUse = DEFAULT_USE,
+    reference: ReferenceSelection,
+    classifications: list[ClassificationRef] | None = None,
     cadence: Cadence = Cadence.MONTHLY,
     now: datetime | None = None,
 ) -> StatusResult:
-    """Classify a water body from its latest measurements.
+    """Classify a water body from its latest measurement of each parameter.
 
-    Only the most recent value per parameter is judged. Averaging across
-    months would smear a spike that matters into a mean that does not, and
-    the regulatory limits are written against individual samples.
+    Only the most recent value per parameter is judged: limits are written
+    against individual samples, and averaging months would smear real spikes.
     """
-    if not measurements:
-        freshness = assess(None, cadence, now=now)
-        return StatusResult(
-            status=WaterStatus.NO_RECENT_DATA,
-            designated_use=use,
-            freshness=freshness,
-            reasons=[
-                "No observation has ever been recorded for this water body. "
-                "This is an absence of data, not evidence that the water is "
-                "clean."
-            ],
-        )
+    classifications = classifications or []
 
-    # Latest value per parameter.
     latest: dict[str, Measurement] = {}
     for m in measurements:
         held = latest.get(m.parameter_key)
         if held is None or m.observed_at > held.observed_at:
             latest[m.parameter_key] = m
+    current = sorted(latest.values(), key=lambda m: m.parameter_key)
 
-    newest = max(m.observed_at for m in latest.values())
+    newest = max((m.observed_at for m in current), default=None)
     freshness = assess(newest, cadence, now=now)
 
-    # -- Gate 1: is this observation allowed to describe the present? ------
-    if not freshness.describes_present_state:
-        return StatusResult(
-            status=WaterStatus.NO_RECENT_DATA,
-            designated_use=use,
-            freshness=freshness,
-            reasons=[
-                freshness.summary(),
-                "No present-tense status is derived from an observation this "
-                "old. The historical measurements remain available, dated.",
-            ],
-        )
+    result = StatusResult(
+        status=WaterStatus.NO_RECENT_DATA,
+        reference=reference,
+        freshness=freshness,
+        measurements=current,
+        classifications=classifications,
+    )
 
-    # -- Gate 2: did anyone measure what the standard actually governs? ----
-    comparisons: list[Comparison] = []
-    missing: list[str] = []
-    for key, measurement in sorted(latest.items()):
-        param = BY_KEY.get(key)
-        if param is None:
-            continue
-        if threshold_for(key, use) is None:
-            continue
-        comparisons.append(compare(param, measurement.value, use))
+    if not current:
+        result.reasons = [
+            "No observation has ever been recorded for this water body. This is "
+            "an absence of data, not evidence that the water is clean."
+        ]
+        return result
 
-    for key in sorted(_standard_keys(use)):
-        if key not in latest:
-            param = BY_KEY.get(key)
-            missing.append(param.label if param else key)
-
+    # B. comparisons are computed whatever the freshness, so a reader can see
+    # what the last sample showed; only the *present-tense* band is gated.
+    governed = governed_parameters(reference.standard) if reference.standard else set()
+    result.comparisons = [
+        compare(m.parameter_key, m.value, reference.standard)
+        for m in current
+        if m.parameter_key in BY_KEY
+        and (not reference.standard or m.parameter_key in governed)
+    ]
     evaluable = [
         c
-        for c in comparisons
-        if c.compliance.value not in ("not_measured", "no_standard")
+        for c in result.comparisons
+        if c.compliance.value in ("within", "exceeds", "below")
     ]
+    result.evaluated_parameters = len(evaluable)
+    result.missing_parameters = sorted(
+        BY_KEY[k].label for k in governed - set(latest) if k in BY_KEY
+    )
 
+    dates = sorted({m.observed_at.date() for m in current})
+    date_note = (
+        f"Observations used: {dates[0]:%d %b %Y}"
+        if len(dates) == 1
+        else f"Observations used: {dates[0]:%d %b %Y} to {dates[-1]:%d %b %Y}"
+    )
+
+    # 1-2. freshness gate
+    if not freshness.describes_present_state:
+        result.status = WaterStatus.NO_RECENT_DATA
+        result.reasons = [
+            freshness.summary(),
+            "The current condition cannot be established from this dataset. The "
+            "latest measurements remain available, dated.",
+        ]
+        return result
+
+    # 3. official classification
+    stretch = next(
+        (c for c in classifications if c.classification_type == "polluted_river_stretch"),
+        None,
+    )
+    if stretch is not None:
+        result.status = WaterStatus.POLLUTED_STRETCH
+        result.reasons = [
+            f"{stretch.source} lists this water body"
+            + (f" ({stretch.stretch_name})" if stretch.stretch_name else "")
+            + " as a polluted river stretch"
+            + (f", priority {stretch.priority}" if stretch.priority else "")
+            + (
+                f", assessment {stretch.assessment_year}"
+                if stretch.assessment_year
+                else ""
+            )
+            + ".",
+            *(c.explain() for c in result.failing),
+            date_note,
+        ]
+        return result
+
+    # 4. no reference
+    if not reference.available:
+        result.status = WaterStatus.NO_APPLICABLE_REFERENCE
+        result.reasons = [
+            "Reference comparison unavailable. " + reference.reason,
+            "The measured values are shown as measured; no judgement is made.",
+            date_note,
+        ]
+        return result
+
+    # 5. nothing governed was measured
     if not evaluable:
-        return StatusResult(
-            status=WaterStatus.INSUFFICIENT_DATA,
-            designated_use=use,
-            freshness=freshness,
-            comparisons=comparisons,
-            missing_parameters=missing,
-            reasons=[
-                f"Observations exist, but none of the parameters that class "
-                f"{use} governs were measured. Status cannot be determined; "
-                "this is not a finding that the water is within limits.",
-                freshness.summary(),
-            ],
-        )
+        result.status = WaterStatus.INSUFFICIENT_DATA
+        result.reasons = [
+            f"None of the parameters {reference.standard.name} governs was measured. "
+            "Status cannot be determined; this is not a finding that the water is "
+            "within limits.",
+            date_note,
+        ]
+        return result
 
-    failing = [c for c in evaluable if c.failed]
-    reasons = [c.explain() for c in failing] or [
-        f"All {len(evaluable)} evaluable parameter(s) satisfy the class {use} limits."
-    ]
-    reasons.append(freshness.summary())
-    if missing:
-        reasons.append("Not evaluated (not measured): " + ", ".join(missing) + ".")
-
-    # -- Gate 3: the national polluted-stretch criterion -------------------
-    bod = latest.get("bod")
-    band = priority_band(bod.value) if bod else None
-    if band is not None:
-        priority, description = band
-        return StatusResult(
-            status=WaterStatus.POLLUTED_STRETCH,
-            designated_use=use,
-            freshness=freshness,
-            comparisons=comparisons,
-            reasons=[
-                f"Biochemical oxygen demand is {bod.value} mg/L, above the "
-                "3 mg/L threshold CPCB uses nationally to identify a polluted "
-                f"location (restoration priority {priority}: {description}).",
-                *reasons,
-            ],
-            priority=priority,
-            priority_description=description,
-            evaluated_parameters=len(evaluable),
-            missing_parameters=missing,
-        )
-
-    # -- Gate 4: severity from the breaches found --------------------------
+    # 6. severity from breaches
+    failing = result.failing
     severe = [
         c
         for c in failing
         if c.exceedance_factor is not None
         and c.exceedance_factor >= SEVERE_EXCEEDANCE_FACTOR
     ]
-
-    if severe or len(failing) >= MULTI_BREACH_ESCALATION:
-        status = WaterStatus.HIGH_CONCERN
-        if severe:
-            reasons.insert(
-                0,
-                f"{severe[0].parameter_label} is at least "
-                f"{SEVERE_EXCEEDANCE_FACTOR:g} times its class {use} limit.",
-            )
-        else:
-            reasons.insert(
-                0,
-                f"{len(failing)} parameters simultaneously breach their "
-                f"class {use} limits.",
-            )
+    reasons = [c.explain() for c in failing] or [
+        f"All {len(evaluable)} evaluated parameter(s) are within "
+        f"{reference.standard.name}."
+    ]
+    if severe:
+        result.status = WaterStatus.HIGH_CONCERN
+        reasons.insert(
+            0,
+            f"{severe[0].parameter_label} is at least {SEVERE_EXCEEDANCE_FACTOR:g} "
+            "times its limit.",
+        )
+    elif len(failing) >= MULTI_BREACH_ESCALATION:
+        result.status = WaterStatus.HIGH_CONCERN
+        reasons.insert(0, f"{len(failing)} parameters breach their limits at once.")
     elif failing:
-        status = WaterStatus.ELEVATED
+        result.status = WaterStatus.ELEVATED
     else:
-        status = WaterStatus.WITHIN_REFERENCE
+        result.status = WaterStatus.WITHIN_REFERENCE
 
-    return StatusResult(
-        status=status,
-        designated_use=use,
-        freshness=freshness,
-        comparisons=comparisons,
-        reasons=reasons,
-        evaluated_parameters=len(evaluable),
-        missing_parameters=missing,
-    )
-
-
-def _standard_keys(use: DesignatedUse) -> set[str]:
-    """Parameter keys the selected standard sets a limit for."""
-    from app.water.standards import thresholds_for_use
-
-    return {t.parameter_key for t in thresholds_for_use(use)}
+    reasons.append(date_note)
+    if result.missing_parameters:
+        result.limitations.append(
+            "Not evaluated because not measured: "
+            + ", ".join(result.missing_parameters)
+            + "."
+        )
+    if reference.basis is SelectionBasis.NATIONAL_ASSESSMENT_CATEGORY:
+        result.limitations.append(
+            "Reference chosen by CPCB's national assessment practice for rivers, "
+            "not from a designated use recorded for this river."
+        )
+    result.reasons = reasons
+    return result
 
 
 def roll_up(results: list[StatusResult]) -> WaterStatus:
-    """Combine per-station statuses into one for a water body.
-
-    Takes the worst real finding. A river with one clean station and one
-    polluted station is not half-clean: the pollution is the fact that
-    matters, and averaging it away would be the single most misleading thing
-    this platform could do.
-    """
+    """Combine per-station statuses: the worst real finding wins."""
     if not results:
         return WaterStatus.NO_RECENT_DATA
     return max((r.status for r in results), key=lambda s: _SEVERITY_ORDER[s])

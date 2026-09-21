@@ -330,7 +330,11 @@ class NWDPCPCBProvider(WaterDataProvider):
             "station_name": station,
             "latitude": latitude,
             "longitude": longitude,
-            "state_name": _clean(_get("state", record)) or state_name,
+            # The resource's own state (from its catalogue code) wins over the
+            # free-text column: the Dadra & Nagar Haveli resource labels its
+            # rows "Daman & Diu" (the UTs merged in 2020), which collided with
+            # the Daman & Diu resource.
+            "state_name": state_name or _clean(_get("state", record)),
             "state_code": plan.state_code,
             "district": _clean(_get("district", record)),
             "tehsil": _clean(_get("tehsil", record)),

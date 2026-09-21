@@ -21,7 +21,7 @@ from app.api.deps import make_provenance
 from app.core.database import get_db
 from app.services import water_service as ws
 from app.water.parameters import registry_summary
-from app.water.standards import DEFAULT_USE, DesignatedUse, standards_summary
+from app.water.standards import standards_summary
 
 router = APIRouter(tags=["water"])
 
@@ -101,10 +101,18 @@ def list_water_bodies(
 def water_body_detail(
     db: DbSession,
     slug: str,
-    designated_use: DesignatedUse = DEFAULT_USE,
+    reference: str | None = Query(
+        None,
+        pattern=r"^[A-Ea-e]$|^[A-Z0-9-]{3,48}$",
+        description=(
+            "Compare against a specific standard: a CPCB designated-use class "
+            "letter (A-E) or a standard code. Omit to let the platform select "
+            "the applicable reference, which may be none."
+        ),
+    ),
 ) -> dict:
     """One water body with status, parameters, stations and sources."""
-    detail = ws.get_water_body_detail(db, slug, use=designated_use)
+    detail = ws.get_water_body_detail(db, slug, reference=reference)
     if detail is None:
         raise HTTPException(status_code=404, detail=f"No water body '{slug}'.")
     detail["provenance"] = make_provenance(

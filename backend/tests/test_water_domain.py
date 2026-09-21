@@ -36,14 +36,17 @@ from app.water.matching import (
 )
 from app.water.parameters import BY_KEY, parse_value
 from app.water.parameters import resolve as resolve_parameter
+from app.water.reference_catalog import BY_CODE, EP_BATHING
 from app.water.standards import (
     Compliance,
     DesignatedUse,
+    SelectionBasis,
     compare,
     priority_band,
+    select_reference,
     threshold_for,
 )
-from app.water.status import Measurement, evaluate, roll_up
+from app.water.status import ClassificationRef, Measurement, evaluate, roll_up
 
 NOW = datetime(2026, 9, 21, tzinfo=UTC)
 
@@ -115,8 +118,24 @@ class TestStandards:
         limit = threshold_for("bod", DesignatedUse.C)
         assert limit is not None
         assert limit.maximum == 3.0
-        assert "CPCB" in limit.source
-        assert limit.source_url
+        standard = BY_CODE["CPCB-DBU-C"]
+        assert "CPCB" in standard.legal_basis
+        assert standard.source_url
+
+    def test_bathing_criteria_match_the_published_schedule(self):
+        """Values as read from EP Rules 1986, item 93."""
+        assert EP_BATHING.threshold("bod").maximum == 3.0
+        assert EP_BATHING.threshold("dissolved_oxygen").minimum == 5.0
+        ph = EP_BATHING.threshold("ph")
+        assert (ph.minimum, ph.maximum) == (6.5, 8.5)
+        fc = EP_BATHING.threshold("fecal_coliform")
+        assert (fc.maximum, fc.desirable) == (2500, 500)
+
+    def test_desirable_level_is_advisory_not_a_breach(self):
+        result = compare("fecal_coliform", 1200.0, EP_BATHING)
+        assert result.failed is False
+        assert result.above_desirable is True
+        assert compare("fecal_coliform", 11000.0, EP_BATHING).failed is True
 
     def test_missing_value_is_not_compliance(self):
         result = compare("bod", None, DesignatedUse.C)
@@ -128,6 +147,11 @@ class TestStandards:
         """Class D sets no BOD limit; that is not a pass."""
         result = compare("bod", 500.0, DesignatedUse.D)
         assert result.compliance is Compliance.NO_STANDARD
+        assert result.failed is False
+
+    def test_no_reference_is_not_compliance(self):
+        result = compare("bod", 40.0, None)
+        assert result.compliance is Compliance.NO_REFERENCE
         assert result.failed is False
 
     def test_exceedance_is_detected_with_factor(self):
@@ -156,9 +180,44 @@ class TestStandards:
     def test_cpcb_priority_bands(self, bod, band):
         assert priority_band(bod)[0] == band
 
-    def test_bod_at_or_below_threshold_is_not_a_polluted_stretch(self):
+    def test_bod_at_or_below_threshold_is_not_a_band(self):
         assert priority_band(3.0) is None
         assert priority_band(None) is None
+
+
+class TestReferenceSelection:
+    """Phase 2: no standard is applied by default."""
+
+    def test_rivers_get_the_national_assessment_reference(self):
+        selection = select_reference("river")
+        assert selection.standard is EP_BATHING
+        assert selection.basis is SelectionBasis.NATIONAL_ASSESSMENT_CATEGORY
+        assert "polluted river stretches" in selection.reason
+
+    @pytest.mark.parametrize(
+        "water_type", ["lake", "pond", "reservoir", "creek", "canal", "drain", "other"]
+    )
+    def test_no_hidden_class_c_default(self, water_type):
+        selection = select_reference(water_type)
+        assert selection.standard is None
+        assert selection.basis is SelectionBasis.NONE
+        assert selection.reason
+
+    def test_groundwater_reason_names_the_missing_standard(self):
+        assert "IS 10500" in select_reference("groundwater").reason
+
+    def test_recorded_designated_use_wins_over_national_category(self):
+        selection = select_reference("river", designated_use="A")
+        assert selection.standard.code == "CPCB-DBU-A"
+        assert selection.basis is SelectionBasis.WATER_BODY_DESIGNATED_USE
+
+    def test_explicit_choice_wins_over_everything(self):
+        selection = select_reference("lake", explicit="B", designated_use="A")
+        assert selection.standard.code == "CPCB-DBU-B"
+        assert selection.basis is SelectionBasis.USER_SELECTED
+
+    def test_unknown_explicit_code_falls_back_to_selection(self):
+        assert select_reference("lake", explicit="NOT-A-STANDARD").standard is None
 
 
 # ---------------------------------------------------------------------------
@@ -207,9 +266,14 @@ class TestFreshness:
 
 
 # ---------------------------------------------------------------------------
+RIVER = select_reference("river")
+NO_REF = select_reference("lake")
+CLASS_C = select_reference("lake", explicit="C")
+
+
 class TestStatusEngine:
     def test_no_observations_is_not_clean(self):
-        result = evaluate([], now=NOW)
+        result = evaluate([], reference=RIVER, now=NOW)
         assert result.status is WaterStatus.NO_RECENT_DATA
         assert "not evidence that the water is clean" in " ".join(result.reasons)
 
@@ -218,24 +282,66 @@ class TestStatusEngine:
         old = datetime(2018, 12, 4, tzinfo=UTC)
         result = evaluate(
             [Measurement("bod", 40.0, old), Measurement("fecal_coliform", 920.0, old)],
+            reference=RIVER,
             cadence=Cadence.MONTHLY,
             now=NOW,
         )
         assert result.status is WaterStatus.NO_RECENT_DATA
-        assert result.freshness.describes_present_state is False
+        assert "cannot be established" in " ".join(result.reasons)
+        # The comparison is still computed so the reader can see what it showed.
+        assert any(c.failed for c in result.comparisons)
 
-    def test_same_values_when_fresh_are_a_polluted_stretch(self):
-        observed = _recent()
+    def test_one_high_reading_is_never_a_polluted_stretch(self):
+        """Phase 2: that label comes only from a source classification."""
         result = evaluate(
-            [Measurement("bod", 40.0, observed)], cadence=Cadence.MONTHLY, now=NOW
+            [Measurement("bod", 40.0, _recent())],
+            reference=RIVER,
+            cadence=Cadence.MONTHLY,
+            now=NOW,
+        )
+        assert result.status is WaterStatus.HIGH_CONCERN
+        assert result.status is not WaterStatus.POLLUTED_STRETCH
+
+    def test_official_classification_produces_polluted_stretch(self):
+        stretch = ClassificationRef(
+            source="CPCB",
+            classification_type="polluted_river_stretch",
+            assessment_year=2025,
+            priority="IV",
+            stretch_name="Test stretch",
+            source_reference="test",
+        )
+        result = evaluate(
+            [Measurement("bod", 8.0, _recent())],
+            reference=RIVER,
+            classifications=[stretch],
+            cadence=Cadence.MONTHLY,
+            now=NOW,
         )
         assert result.status is WaterStatus.POLLUTED_STRETCH
-        assert result.priority == "I"
+        payload = result.to_dict()
+        assert (
+            payload["source_classifications"][0]["evidence_type"]
+            == "SOURCE_CLASSIFICATION"
+        )
+
+    def test_no_reference_means_no_judgement(self):
+        result = evaluate(
+            [Measurement("bod", 40.0, _recent())],
+            reference=NO_REF,
+            cadence=Cadence.MONTHLY,
+            now=NOW,
+        )
+        assert result.status is WaterStatus.NO_APPLICABLE_REFERENCE
+        assert result.failing == []
+        assert "Reference comparison unavailable" in result.reasons[0]
+        # The measurement is still reported.
+        assert result.to_dict()["measurements"][0]["value"] == 40.0
 
     def test_unmeasured_governed_parameters_are_insufficient_not_clean(self):
-        observed = _recent()
         result = evaluate(
-            [Measurement("calcium", 40.0, observed)],
+            [Measurement("calcium", 40.0, _recent())],
+            reference=RIVER,
             cadence=Cadence.MONTHLY,
             now=NOW,
         )
@@ -250,6 +356,7 @@ class TestStatusEngine:
                 Measurement("dissolved_oxygen", 7.5, observed),
                 Measurement("ph", 7.2, observed),
             ],
+            reference=RIVER,
             cadence=Cadence.MONTHLY,
             now=NOW,
         )
@@ -257,7 +364,8 @@ class TestStatusEngine:
 
     def test_low_oxygen_alone_is_flagged(self):
         result = evaluate(
-            [Measurement("dissolved_oxygen", 1.0, _recent())],
+            [Measurement("dissolved_oxygen", 4.0, _recent())],
+            reference=RIVER,
             cadence=Cadence.MONTHLY,
             now=NOW,
         )
@@ -266,47 +374,74 @@ class TestStatusEngine:
 
     def test_severe_single_breach_escalates(self):
         result = evaluate(
-            [Measurement("total_coliform", 50_000.0, _recent())],
+            [Measurement("fecal_coliform", 50_000.0, _recent())],
+            reference=RIVER,
             cadence=Cadence.MONTHLY,
             now=NOW,
         )
         assert result.status is WaterStatus.HIGH_CONCERN
 
-    def test_status_is_explained_not_scored(self):
-        """No opaque number: the reasons name parameters and cite limits."""
+    def test_layers_are_separate_and_unscored(self):
+        """No opaque number, and each layer carries its own evidence type."""
         result = evaluate(
-            [Measurement("bod", 12.0, _recent())], cadence=Cadence.MONTHLY, now=NOW
+            [Measurement("bod", 12.0, _recent())],
+            reference=RIVER,
+            cadence=Cadence.MONTHLY,
+            now=NOW,
         )
-        assert result.reasons
-        assert not hasattr(result, "score")
         payload = result.to_dict()
         assert "score" not in payload
-        assert payload["failing_parameters"][0]["standard_source"]
+        assert payload["evidence_type"] == "DERIVED_STATUS"
+        assert payload["measurements"][0]["evidence_type"] == "MEASURED"
+        assert payload["comparisons"][0]["evidence_type"] == "REFERENCE_COMPARISON"
+        assert payload["reference"]["basis"] == "national_assessment_category"
+        assert payload["failing_parameters"][0]["standard_url"]
+
+    def test_reasons_carry_the_observation_date(self):
+        result = evaluate(
+            [Measurement("bod", 12.0, _recent())],
+            reference=RIVER,
+            cadence=Cadence.MONTHLY,
+            now=NOW,
+        )
+        assert any("Observations used" in r for r in result.reasons)
 
     def test_missing_parameters_are_named(self):
         result = evaluate(
-            [Measurement("bod", 1.0, _recent())], cadence=Cadence.MONTHLY, now=NOW
+            [Measurement("bod", 1.0, _recent())],
+            reference=RIVER,
+            cadence=Cadence.MONTHLY,
+            now=NOW,
         )
         assert "Dissolved oxygen" in result.missing_parameters
 
     def test_rollup_takes_the_worst_not_the_average(self):
         observed = _recent()
         clean = evaluate(
-            [Measurement("bod", 1.0, observed)], cadence=Cadence.MONTHLY, now=NOW
-        )
-        dirty = evaluate(
-            [Measurement("bod", 40.0, observed)], cadence=Cadence.MONTHLY, now=NOW
-        )
-        assert roll_up([clean, dirty]) is WaterStatus.POLLUTED_STRETCH
-
-    def test_designated_use_is_reported_with_the_verdict(self):
-        result = evaluate(
-            [Measurement("bod", 2.5, _recent())],
-            use=DesignatedUse.A,
+            [Measurement("bod", 1.0, observed)],
+            reference=RIVER,
             cadence=Cadence.MONTHLY,
             now=NOW,
         )
-        assert result.to_dict()["designated_use"] == "A"
+        dirty = evaluate(
+            [Measurement("bod", 40.0, observed)],
+            reference=RIVER,
+            cadence=Cadence.MONTHLY,
+            now=NOW,
+        )
+        assert roll_up([clean, dirty]) is WaterStatus.HIGH_CONCERN
+
+    def test_selected_standard_is_reported_with_the_verdict(self):
+        result = evaluate(
+            [Measurement("bod", 2.5, _recent())],
+            reference=select_reference("lake", explicit="A"),
+            cadence=Cadence.MONTHLY,
+            now=NOW,
+        )
+        payload = result.to_dict()
+        assert payload["reference"]["standard_code"] == "CPCB-DBU-A"
+        assert payload["reference"]["basis"] == "user_selected"
+        assert result.status is WaterStatus.ELEVATED
 
 
 # ---------------------------------------------------------------------------

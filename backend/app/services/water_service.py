@@ -42,11 +42,18 @@ from app.models.water import (
     WaterBody,
     WaterQualityObservation,
 )
+from app.models.water_geo import SourceClassification
 from app.water.freshness import Cadence
 from app.water.matching import PLACE_ALIASES, haversine_km, normalise_name
 from app.water.parameters import BY_KEY
-from app.water.standards import DEFAULT_USE, DesignatedUse
-from app.water.status import Measurement, StatusResult, evaluate, status_rank
+from app.water.standards import ReferenceSelection, compare, select_reference
+from app.water.status import (
+    ClassificationRef,
+    Measurement,
+    StatusResult,
+    evaluate,
+    status_rank,
+)
 
 # Cap on features returned by one map query. The map asks for a viewport, not
 # the whole country; without a cap a zoomed-out request would try to serialise
@@ -80,7 +87,7 @@ def compute_status(
     db: Session,
     body: WaterBody,
     *,
-    use: DesignatedUse = DEFAULT_USE,
+    reference: str | None = None,
     as_of_observation: bool = False,
 ) -> StatusResult:
     """Compute a water body's status from its most recent observations.
@@ -92,7 +99,9 @@ def compute_status(
     Args:
         db: open session.
         body: the water body to classify.
-        use: designated-use class whose limits apply.
+        reference: a standard code or designated-use class chosen by the
+            reader. Without one the reference is *selected* -- see
+            ``standards.select_reference`` -- and may be none at all.
         as_of_observation: evaluate as at the date of the latest observation
             rather than today. This is what makes the platform useful on data
             that is years old without becoming dishonest. The present-tense
@@ -132,13 +141,21 @@ def compute_status(
         )
 
     measurements = list(latest.values())
+    selection = reference_for(body, reference)
+    classifications = classifications_for(db, body)
 
     if as_of_observation and measurements:
         # Stand the clock at the moment of sampling. The freshness gate then
         # passes and the parameter comparisons run, producing the verdict
         # that was true on that date. The caller labels it with the date.
         newest = max(m.observed_at for m in measurements)
-        result = evaluate(measurements, use=use, cadence=_cadence_for(db), now=newest)
+        result = evaluate(
+            measurements,
+            reference=selection,
+            classifications=classifications,
+            cadence=_cadence_for(db),
+            now=newest,
+        )
         # With the clock stopped at the sample date the freshness sentence
         # would read "0 days ago": true of that frozen clock, false for the
         # reader. Replace it with a statement of what was actually done.
@@ -154,7 +171,38 @@ def compute_status(
         ]
         return result
 
-    return evaluate(measurements, use=use, cadence=_cadence_for(db))
+    return evaluate(
+        measurements,
+        reference=selection,
+        classifications=classifications,
+        cadence=_cadence_for(db),
+    )
+
+
+def reference_for(body: WaterBody, explicit: str | None = None) -> ReferenceSelection:
+    """The reference standard that applies to ``body`` (or why none does)."""
+    return select_reference(
+        body.water_type, explicit=explicit, designated_use=body.designated_use
+    )
+
+
+def classifications_for(db: Session, body: WaterBody) -> list[ClassificationRef]:
+    """Official classifications published for this water body, if any."""
+    return [
+        ClassificationRef(
+            source=c.source,
+            classification_type=c.classification_type,
+            assessment_year=c.assessment_year,
+            priority=c.priority,
+            stretch_name=c.stretch_name,
+            source_reference=c.source_reference,
+        )
+        for c in db.scalars(
+            select(SourceClassification).where(
+                SourceClassification.water_body_id == body.id
+            )
+        )
+    ]
 
 
 def refresh_cached_statuses(db: Session, *, limit: int | None = None) -> int:
@@ -409,19 +457,19 @@ def summarise_body(
 # Detail
 # ---------------------------------------------------------------------------
 def get_water_body_detail(
-    db: Session, slug: str, *, use: DesignatedUse = DEFAULT_USE
+    db: Session, slug: str, *, reference: str | None = None
 ) -> dict | None:
     """Everything the water-body page needs, with provenance throughout."""
     body = db.scalar(select(WaterBody).where(WaterBody.slug == slug))
     if body is None:
         return None
 
-    status = compute_status(db, body, use=use)
+    status = compute_status(db, body, reference=reference)
     # The present-tense verdict may be NO_RECENT_DATA while the measurements
     # themselves show a clear exceedance. Both are reported: one answers
     # "what is it like now?" (honestly, "we do not know"), the other answers
     # "what did the last measurement show?" -- always carrying its date.
-    historical = compute_status(db, body, use=use, as_of_observation=True)
+    historical = compute_status(db, body, reference=reference, as_of_observation=True)
     stations = db.scalars(
         select(MonitoringStation)
         .where(MonitoringStation.water_body_id == body.id)
@@ -450,14 +498,16 @@ def get_water_body_detail(
             if body.latest_observed_at
             else None
         ),
-        "parameters": latest_parameters(db, body, use=use),
+        "parameters": latest_parameters(db, body, reference=reference),
+        "reference": reference_for(body, reference).to_dict(),
+        "designated_use_recorded": body.designated_use,
         "stations": summarise_stations(db, list(stations)),
         "sources": sources_for_body(db, body),
     }
 
 
 def latest_parameters(
-    db: Session, body: WaterBody, *, use: DesignatedUse = DEFAULT_USE
+    db: Session, body: WaterBody, *, reference: str | None = None
 ) -> list[dict]:
     """The latest value of every parameter measured on this water body.
 
@@ -465,6 +515,7 @@ def latest_parameters(
     sampled is absent rather than rendered as zero or as a reassuring dash,
     and the page says explicitly what was not measured.
     """
+    selection = reference_for(body, reference)
     rows = db.execute(
         select(
             WaterQualityObservation.parameter,
@@ -509,7 +560,7 @@ def latest_parameters(
             continue
 
         effective = normalized if normalized is not None else value
-        comparison = compare(meta, effective, use)
+        comparison = compare(meta, effective, selection.standard)
         seen[parameter] = {
             "parameter": parameter,
             "label": meta.label,
@@ -588,7 +639,8 @@ def station_detail(db: Session, station_id: int) -> dict | None:
         .limit(4000)
     ).all()
 
-    from app.water.standards import compare
+    body = db.get(WaterBody, station.water_body_id) if station.water_body_id else None
+    selection = reference_for(body) if body is not None else select_reference("other")
 
     latest: dict[str, dict] = {}
     measurements: list[Measurement] = []
@@ -613,14 +665,15 @@ def station_detail(db: Session, station_id: int) -> dict | None:
             "quality_flag": str(flag),
             "source_reference": reference,
             "evidence_type": "MEASURED",
-            "comparison": compare(meta, value, DEFAULT_USE).to_dict(),
+            "comparison": compare(meta, value, selection.standard).to_dict(),
         }
 
     cadence = _cadence_for(db)
-    present = evaluate(measurements, cadence=cadence)
+    present = evaluate(measurements, reference=selection, cadence=cadence)
     historical = (
         evaluate(
             measurements,
+            reference=selection,
             cadence=cadence,
             now=max(m.observed_at for m in measurements),
         )
@@ -630,6 +683,7 @@ def station_detail(db: Session, station_id: int) -> dict | None:
 
     return {
         **summarise_station(db, station),
+        "reference": selection.to_dict(),
         "status_detail": present.to_dict(),
         "latest_available_status": (
             {

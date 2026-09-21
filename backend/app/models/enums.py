@@ -219,13 +219,18 @@ class WaterStatus(StrEnum):
     """Severe breach, or several simultaneous breaches."""
 
     POLLUTED_STRETCH = "POLLUTED_STRETCH"
-    """Meets CPCB's national polluted-river-stretch criterion on BOD."""
+    """Listed as a polluted river stretch by an official source (CPCB). Only
+    ever set from a source classification, never from observations alone."""
 
     INSUFFICIENT_DATA = "INSUFFICIENT_DATA"
     """Observations exist but none of the parameters the standard needs."""
 
     NO_RECENT_DATA = "NO_RECENT_DATA"
     """Latest observation is too old to describe the present state."""
+
+    NO_APPLICABLE_REFERENCE = "NO_APPLICABLE_REFERENCE"
+    """Measured, but no reference standard is established for this water
+    body, so no judgement is made. Not a pass and not a failure."""
 
 
 class QualityFlag(StrEnum):

@@ -300,8 +300,12 @@ class TestWaterApi:
         body = client.get("/api/v1/water-bodies/mithi-river").json()
         assert body["status_detail"]["status"] == "NO_RECENT_DATA"
         historical = body["latest_available_status"]
-        assert historical["status"] == "POLLUTED_STRETCH"
+        # Rivers are compared against the national assessment reference;
+        # BOD 12 mg/L is 4x its 3 mg/L limit, and DO 1.5 is below 5.
+        assert historical["status"] == "HIGH_CONCERN"
+        assert historical["reference"]["standard_code"] == "EP1986-93-BATHING"
         assert historical["as_of"].startswith("2021-12-02")
+        assert body["reference"]["basis"] == "national_assessment_category"
 
     def test_historical_reasons_never_say_zero_days(self, client):
         body = client.get("/api/v1/water-bodies/mithi-river").json()

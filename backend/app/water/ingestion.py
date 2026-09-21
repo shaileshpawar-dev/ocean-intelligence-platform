@@ -153,11 +153,23 @@ class _Registry:
         found = self.db.scalar(select(State).where(State.code == key))
         if found is None:
             label = name or key
-            found = State(code=key, name=label, slug=slugify(label))
+            slug = slugify(label)
+            # Two codes can arrive with the same name (merged UTs); the code is
+            # the identity, so the second one gets a code-qualified slug.
+            if self.db.scalar(select(State.id).where(State.slug == slug)):
+                slug = f"{slug}-{key.lower()}"
+            found = State(code=key, name=label, slug=slug)
             self.db.add(found)
             self.db.flush()
         self.states[key] = found
         return found
+
+    def reset(self) -> None:
+        """Forget cached rows after a rollback, so none is reused detached."""
+        self.states.clear()
+        self.districts.clear()
+        self.bodies.clear()
+        self.stations.clear()
 
     def district(self, state: State | None, name: str | None) -> District | None:
         """Get or create a district within a state."""
@@ -438,6 +450,19 @@ def ingest_provider(
             errors.append(message)
             logger.error("ingest_plan_failed", extra={"plan": plan.identifier})
             db.rollback()
+            registry.reset()
+            continue
+        except Exception as exc:
+            # A data problem inside one resource (a constraint the source's
+            # rows violate) is recorded against that resource, rolled back,
+            # and the run moves on. Before this, one conflicting row in the
+            # Dadra & Nagar Haveli resource aborted a 35-state run.
+            errors.append(
+                f"{plan.description}: ingestion error: {type(exc).__name__}: {exc}"[:500]
+            )
+            logger.exception("ingest_plan_error", extra={"plan": plan.identifier})
+            db.rollback()
+            registry.reset()
             continue
 
         run.records_seen += counts["seen"]

@@ -1,28 +1,26 @@
-"""Reference water-quality standards, with provenance on every threshold.
+"""Reference selection and comparison.
 
-Why this module is not a dict of magic numbers
-----------------------------------------------
-"Is this river polluted?" has no answer until someone says *polluted for
-what*. Water that is unfit to drink untreated may be perfectly fit for
-irrigation. CPCB encodes exactly that idea in its **Designated Best Use**
-classification: five classes, A through E, each with its own limits.
+    observation -> which reference applies? -> compare -> comparison result
 
-So a threshold here is never bare. It carries the use class it belongs to,
-the organisation that set it, the document it came from and that document's
-URL, and those travel with the comparison all the way into the API response.
-A user who disagrees with a classification can see precisely which limit,
-from which standard, produced it.
+Phase 1 compared every water body against CPCB class C by default. That was
+an invisible assumption: class C is a *designated use*, and nobody had
+designated it for most of the water bodies it was applied to. This module
+replaces the default with an explicit selection, made in this order:
 
-Sources
--------
-* CPCB, *Designated Best Use Water Quality Criteria* (primary water quality
-  criteria for the five classes).
-* CPCB, *Polluted River Stretches in India: Criteria and Status* -- the BOD
-  bands used nationally to prioritise river stretches for restoration.
+1. **User-selected** -- the reader chose a standard to compare against.
+2. **Designated use recorded for the water body** by an authoritative source.
+3. **Station classification** from the source (none is published today).
+4. **National assessment category** -- CPCB assesses *river* monitoring
+   locations against the Primary Water Quality Criteria for Bathing Water
+   (Environment (Protection) Rules 1986, item 93) when it identifies polluted
+   stretches. Rivers therefore get that reference, and the reason says so.
+5. **None.** No comparison is made, the result says why, and the measured
+   values are still shown.
 
-Both are Indian national standards. No threshold in this module was invented
-by the platform, and none is applied to a parameter the standard does not
-cover.
+Every comparison carries the code, name, legal basis and URL of the standard
+it used, and the basis on which that standard was selected.
+
+Threshold values live in :mod:`app.water.reference_catalog`, not here.
 """
 
 from __future__ import annotations
@@ -30,143 +28,163 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from app.models.enums import WaterBodyType
 from app.water.parameters import BY_KEY, Parameter
+from app.water.reference_catalog import (
+    ALL_STANDARDS,
+    BY_CODE,
+    DBU_BY_CLASS,
+    DBU_CLASSES,
+    EP_BATHING,
+    StandardDef,
+    ThresholdDef,
+)
 
 
 class DesignatedUse(StrEnum):
-    """CPCB Designated-Best-Use classes for inland surface water."""
+    """CPCB Designated-Best-Use classes, selectable explicitly by a reader."""
 
     A = "A"
-    """Drinking water source without conventional treatment, after disinfection."""
-
     B = "B"
-    """Outdoor bathing (organised)."""
-
     C = "C"
-    """Drinking water source after conventional treatment and disinfection."""
-
     D = "D"
-    """Propagation of wildlife and fisheries."""
-
     E = "E"
-    """Irrigation, industrial cooling, controlled waste disposal."""
 
 
 USE_LABELS: dict[DesignatedUse, str] = {
-    DesignatedUse.A: "Drinking water source (disinfection only)",
-    DesignatedUse.B: "Outdoor bathing (organised)",
-    DesignatedUse.C: "Drinking water source (conventional treatment)",
-    DesignatedUse.D: "Wildlife and fisheries",
-    DesignatedUse.E: "Irrigation and industrial cooling",
+    DesignatedUse(code[-1]): s.category or s.name
+    for code, s in ((d.code, d) for d in DBU_CLASSES)
 }
 
-CPCB_CRITERIA_SOURCE = "CPCB — Designated Best Use Water Quality Criteria"
-CPCB_CRITERIA_URL = (
-    "https://cpcb.nic.in/wqm/Designated_Best_Use_Water_Quality_Criteria.pdf"
-)
-CPCB_PRS_SOURCE = "CPCB — Polluted River Stretches in India: Criteria and Status"
-CPCB_PRS_URL = "https://cpcb.nic.in/wqm/RS-criteria-status.pdf"
 
-# Class C is the working default. It is the criterion for a drinking-water
-# source with conventional treatment, which is what most monitored Indian
-# river stretches are actually used for, and it is the class whose BOD limit
-# (3 mg/L) coincides with the national polluted-stretch threshold. Any class
-# can be selected per request; this is only the default.
-DEFAULT_USE = DesignatedUse.C
+class SelectionBasis(StrEnum):
+    """Why a reference standard applies to a water body."""
+
+    USER_SELECTED = "user_selected"
+    WATER_BODY_DESIGNATED_USE = "water_body_designated_use"
+    STATION_CLASSIFICATION = "station_classification"
+    NATIONAL_ASSESSMENT_CATEGORY = "national_assessment_category"
+    NONE = "none"
+
+
+BASIS_LABELS: dict[SelectionBasis, str] = {
+    SelectionBasis.USER_SELECTED: "Selected by you",
+    SelectionBasis.WATER_BODY_DESIGNATED_USE: (
+        "Designated use recorded for this water body"
+    ),
+    SelectionBasis.STATION_CLASSIFICATION: "Station classification from the source",
+    SelectionBasis.NATIONAL_ASSESSMENT_CATEGORY: "National assessment category",
+    SelectionBasis.NONE: "No applicable reference",
+}
+
+# Types CPCB assesses against the bathing criteria when identifying polluted
+# river stretches. Only these receive a reference without an explicit choice.
+NATIONAL_ASSESSMENT_TYPES = frozenset({WaterBodyType.RIVER, WaterBodyType.RIVER_STRETCH})
+
+_NO_REFERENCE_REASONS: dict[str, str] = {
+    WaterBodyType.GROUNDWATER: (
+        "Groundwater is judged against the drinking-water standard IS 10500, "
+        "which is not loaded in this platform."
+    ),
+    WaterBodyType.COASTAL: (
+        "Coastal waters are classified SW-I to SW-V by designated use; no class "
+        "is recorded for this location."
+    ),
+    WaterBodyType.MARINE: (
+        "Marine waters are classified SW-I to SW-V by designated use; no class "
+        "is recorded for this location."
+    ),
+}
+_DEFAULT_NO_REFERENCE = (
+    "No designated use is recorded for this water body, and CPCB's national "
+    "assessment criterion applies to river locations only. Choose a "
+    "designated-use class to compare against one explicitly."
+)
 
 
 @dataclass(frozen=True, slots=True)
-class Threshold:
-    """One limit for one parameter under one designated use."""
+class ReferenceSelection:
+    """The standard that applies, and why -- or why none does."""
 
-    parameter_key: str
-    use: DesignatedUse
-    minimum: float | None = None
-    maximum: float | None = None
-    unit: str | None = None
-    source: str = CPCB_CRITERIA_SOURCE
-    source_url: str = CPCB_CRITERIA_URL
-    note: str = ""
+    standard: StandardDef | None
+    basis: SelectionBasis
+    reason: str
 
-    def describe(self) -> str:
-        """Render the limit in words, for the UI and reports."""
-        param = BY_KEY.get(self.parameter_key)
-        label = param.label if param else self.parameter_key
-        unit = f" {self.unit}" if self.unit else ""
-        if self.minimum is not None and self.maximum is not None:
-            return f"{label} must be between {self.minimum} and {self.maximum}{unit}"
-        if self.minimum is not None:
-            return f"{label} must be at least {self.minimum}{unit}"
-        if self.maximum is not None:
-            return f"{label} must not exceed {self.maximum}{unit}"
-        return f"{label} has no numeric limit in this standard"
+    @property
+    def available(self) -> bool:
+        """True when a comparison can be made."""
+        return self.standard is not None
 
-
-# ---------------------------------------------------------------------------
-# CPCB Designated Best Use criteria.
-#
-# Only the parameters each class actually specifies are listed. Class D says
-# nothing about coliforms and Class E says nothing about BOD; inventing those
-# limits to make the table look complete would be fabrication, so those
-# combinations are simply absent and evaluate to "no applicable standard".
-# ---------------------------------------------------------------------------
-THRESHOLDS: tuple[Threshold, ...] = (
-    # -- Class A ------------------------------------------------------------
-    Threshold("total_coliform", DesignatedUse.A, maximum=50, unit="MPN/100mL"),
-    Threshold("ph", DesignatedUse.A, minimum=6.5, maximum=8.5),
-    Threshold("dissolved_oxygen", DesignatedUse.A, minimum=6.0, unit="mg/L"),
-    Threshold("bod", DesignatedUse.A, maximum=2.0, unit="mg/L"),
-    # -- Class B ------------------------------------------------------------
-    Threshold("total_coliform", DesignatedUse.B, maximum=500, unit="MPN/100mL"),
-    Threshold("ph", DesignatedUse.B, minimum=6.5, maximum=8.5),
-    Threshold("dissolved_oxygen", DesignatedUse.B, minimum=5.0, unit="mg/L"),
-    Threshold("bod", DesignatedUse.B, maximum=3.0, unit="mg/L"),
-    # -- Class C ------------------------------------------------------------
-    Threshold("total_coliform", DesignatedUse.C, maximum=5000, unit="MPN/100mL"),
-    Threshold("ph", DesignatedUse.C, minimum=6.0, maximum=9.0),
-    Threshold("dissolved_oxygen", DesignatedUse.C, minimum=4.0, unit="mg/L"),
-    Threshold("bod", DesignatedUse.C, maximum=3.0, unit="mg/L"),
-    # -- Class D ------------------------------------------------------------
-    Threshold("ph", DesignatedUse.D, minimum=6.5, maximum=8.5),
-    Threshold("dissolved_oxygen", DesignatedUse.D, minimum=4.0, unit="mg/L"),
-    Threshold(
-        "ammonia_n",
-        DesignatedUse.D,
-        maximum=1.2,
-        unit="mg/L",
-        note="Free ammonia as N.",
-    ),
-    # -- Class E ------------------------------------------------------------
-    Threshold("ph", DesignatedUse.E, minimum=6.0, maximum=8.5),
-    Threshold(
-        "electrical_conductivity",
-        DesignatedUse.E,
-        maximum=2250,
-        unit="uS/cm",
-        note="Published as 2250 micro mhos/cm at 25 degC, equivalent to uS/cm.",
-    ),
-    Threshold("sodium_adsorption_ratio", DesignatedUse.E, maximum=26),
-    Threshold("boron", DesignatedUse.E, maximum=2.0, unit="mg/L"),
-)
-
-_INDEX: dict[tuple[str, DesignatedUse], Threshold] = {
-    (t.parameter_key, t.use): t for t in THRESHOLDS
-}
+    def to_dict(self) -> dict:
+        """Serialise with the standard's provenance."""
+        s = self.standard
+        return {
+            "available": self.available,
+            "basis": str(self.basis),
+            "basis_label": BASIS_LABELS[self.basis],
+            "reason": self.reason,
+            "standard_code": s.code if s else None,
+            "standard_name": s.name if s else None,
+            "category": s.category if s else None,
+            "legal_basis": s.legal_basis if s else None,
+            "source_url": s.source_url if s else None,
+            "verified_note": s.verified_note if s else None,
+        }
 
 
-def threshold_for(parameter_key: str, use: DesignatedUse) -> Threshold | None:
-    """The limit for one parameter under one use, or ``None`` if unspecified."""
-    return _INDEX.get((parameter_key, use))
+def select_reference(
+    water_type: str | WaterBodyType,
+    *,
+    explicit: str | None = None,
+    designated_use: str | None = None,
+    station_class: str | None = None,
+) -> ReferenceSelection:
+    """Choose the reference standard for a water body, or decline to.
 
+    Args:
+        water_type: the water body's type.
+        explicit: a standard code or class letter chosen by the reader.
+        designated_use: class recorded for the water body by a source.
+        station_class: class published for the station by a source.
+    """
+    if explicit:
+        code = DBU_BY_CLASS.get(explicit.upper(), explicit.upper())
+        standard = BY_CODE.get(code)
+        if standard is not None:
+            return ReferenceSelection(
+                standard,
+                SelectionBasis.USER_SELECTED,
+                f"Compared against {standard.name} because you selected it.",
+            )
 
-def thresholds_for_use(use: DesignatedUse) -> list[Threshold]:
-    """Every limit defined by one designated-use class."""
-    return [t for t in THRESHOLDS if t.use == use]
+    for value, basis, what in (
+        (designated_use, SelectionBasis.WATER_BODY_DESIGNATED_USE, "water body"),
+        (station_class, SelectionBasis.STATION_CLASSIFICATION, "station"),
+    ):
+        if value and value.upper() in DBU_BY_CLASS:
+            standard = BY_CODE[DBU_BY_CLASS[value.upper()]]
+            return ReferenceSelection(
+                standard,
+                basis,
+                f"The source records designated use class {value.upper()} for this "
+                f"{what}.",
+            )
 
+    if str(water_type) in {str(t) for t in NATIONAL_ASSESSMENT_TYPES}:
+        return ReferenceSelection(
+            EP_BATHING,
+            SelectionBasis.NATIONAL_ASSESSMENT_CATEGORY,
+            "CPCB assesses river monitoring locations against the Primary Water "
+            "Quality Criteria for Bathing Water (Environment (Protection) Rules "
+            "1986, item 93) when identifying polluted river stretches, so rivers "
+            "are compared against that standard.",
+        )
 
-def parameters_with_standards() -> set[str]:
-    """Parameter keys covered by at least one standard."""
-    return {t.parameter_key for t in THRESHOLDS}
+    return ReferenceSelection(
+        None,
+        SelectionBasis.NONE,
+        _NO_REFERENCE_REASONS.get(str(water_type), _DEFAULT_NO_REFERENCE),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -176,19 +194,16 @@ class Compliance(StrEnum):
     """Outcome of comparing one measured value against one threshold."""
 
     WITHIN = "within"
-    """Value satisfies the limit."""
-
     EXCEEDS = "exceeds"
-    """Value is above a maximum."""
-
     BELOW = "below"
-    """Value is under a minimum -- the dissolved-oxygen failure mode."""
-
     NO_STANDARD = "no_standard"
-    """This standard sets no limit for this parameter. Not a pass."""
+    """The selected standard sets no limit for this parameter. Not a pass."""
 
     NOT_MEASURED = "not_measured"
     """No value available. Emphatically not a pass."""
+
+    NO_REFERENCE = "no_reference"
+    """No reference standard applies to this water body at all."""
 
 
 @dataclass(slots=True)
@@ -199,29 +214,33 @@ class Comparison:
     parameter_label: str
     value: float | None
     unit: str | None
-    use: DesignatedUse
     compliance: Compliance
-    threshold: Threshold | None = None
+    standard: StandardDef | None = None
+    threshold: ThresholdDef | None = None
     exceedance_factor: float | None = None
-    """How many times the limit the value is. Only set when it fails."""
+    above_desirable: bool = False
 
     @property
     def failed(self) -> bool:
         """True only for a real, measured breach."""
         return self.compliance in (Compliance.EXCEEDS, Compliance.BELOW)
 
+    @property
+    def use(self) -> str | None:
+        """Short label of the standard, for sentences."""
+        return self.standard.code if self.standard else None
+
     def explain(self) -> str:
         """One sentence a non-specialist can read."""
         label = self.parameter_label
+        unit = f" {self.unit}" if self.unit else ""
+        name = self.standard.name if self.standard else "the selected standard"
         if self.compliance is Compliance.NOT_MEASURED:
             return f"{label} was not measured in the latest observation."
+        if self.compliance is Compliance.NO_REFERENCE:
+            return f"{label} is {self.value}{unit}; no reference standard applies."
         if self.compliance is Compliance.NO_STANDARD:
-            return (
-                f"{label} has no limit under {USE_LABELS[self.use]} "
-                f"(class {self.use}), so no judgement is made."
-            )
-
-        unit = f" {self.unit}" if self.unit else ""
+            return f"{label} is {self.value}{unit}; {name} sets no limit for it."
         assert self.threshold is not None
         if self.compliance is Compliance.EXCEEDS:
             times = (
@@ -230,119 +249,138 @@ class Comparison:
                 else ""
             )
             return (
-                f"{label} is {self.value}{unit}, above the class "
-                f"{self.use} limit of {self.threshold.maximum}{unit}{times}."
+                f"{label} is {self.value}{unit}, above the limit of "
+                f"{self.threshold.maximum}{unit} in {name}{times}."
             )
         if self.compliance is Compliance.BELOW:
             return (
-                f"{label} is {self.value}{unit}, below the class "
-                f"{self.use} minimum of {self.threshold.minimum}{unit}."
+                f"{label} is {self.value}{unit}, below the minimum of "
+                f"{self.threshold.minimum}{unit} in {name}."
             )
-        return f"{label} is {self.value}{unit}, within the class {self.use} limit."
+        note = (
+            f" It is above the desirable level of {self.threshold.desirable}{unit}."
+            if self.above_desirable
+            else ""
+        )
+        return f"{label} is {self.value}{unit}, within the limit in {name}.{note}"
 
     def to_dict(self) -> dict:
         """Serialise, carrying the standard's provenance with the verdict."""
+        t, s = self.threshold, self.standard
         return {
             "parameter": self.parameter_key,
             "label": self.parameter_label,
             "value": self.value,
             "unit": self.unit,
-            "designated_use": str(self.use),
-            "designated_use_label": USE_LABELS[self.use],
             "compliance": str(self.compliance),
             "failed": self.failed,
+            "evidence_type": "REFERENCE_COMPARISON",
             "exceedance_factor": (
                 round(self.exceedance_factor, 2) if self.exceedance_factor else None
             ),
-            "limit_min": self.threshold.minimum if self.threshold else None,
-            "limit_max": self.threshold.maximum if self.threshold else None,
-            "standard_source": self.threshold.source if self.threshold else None,
-            "standard_url": self.threshold.source_url if self.threshold else None,
+            "above_desirable": self.above_desirable,
+            "threshold_type": t.threshold_type if t else None,
+            "limit_min": t.minimum if t else None,
+            "limit_max": t.maximum if t else None,
+            "desirable": t.desirable if t else None,
+            "standard_code": s.code if s else None,
+            "standard_name": s.name if s else None,
+            "standard_source": s.legal_basis if s else None,
+            "standard_url": s.source_url if s else None,
+            # Kept for clients built against Phase 1.
+            "designated_use": s.code[-1] if s and s.code.startswith("CPCB-DBU") else None,
             "explanation": self.explain(),
         }
+
+
+def _as_standard(
+    reference: StandardDef | DesignatedUse | str | None,
+) -> StandardDef | None:
+    if reference is None or isinstance(reference, StandardDef):
+        return reference
+    text = str(reference).upper()
+    return BY_CODE.get(DBU_BY_CLASS.get(text, text))
 
 
 def compare(
     parameter: Parameter | str,
     value: float | None,
-    use: DesignatedUse = DEFAULT_USE,
+    reference: StandardDef | DesignatedUse | str | None,
 ) -> Comparison:
-    """Judge one value against the standard for ``use``.
+    """Judge one value against the standard ``reference``.
 
-    A missing value yields ``NOT_MEASURED`` and a parameter the standard does
-    not cover yields ``NO_STANDARD``. Neither is reported as compliance --
-    that distinction is the whole point, because "we did not look" must never
-    render as "it is fine".
+    ``reference`` may be a standard, a class letter or ``None`` (no applicable
+    reference). A missing value is ``NOT_MEASURED`` and an uncovered parameter
+    is ``NO_STANDARD``; neither is ever reported as compliance.
     """
     param = BY_KEY[parameter] if isinstance(parameter, str) else parameter
-    limit = threshold_for(param.key, use)
+    standard = _as_standard(reference)
+    base = {
+        "parameter_key": param.key,
+        "parameter_label": param.label,
+        "unit": param.unit,
+    }
 
     if value is None:
         return Comparison(
-            parameter_key=param.key,
-            parameter_label=param.label,
-            value=None,
-            unit=param.unit,
-            use=use,
-            compliance=Compliance.NOT_MEASURED,
-            threshold=limit,
+            value=None, compliance=Compliance.NOT_MEASURED, standard=standard, **base
         )
+    if standard is None:
+        return Comparison(value=value, compliance=Compliance.NO_REFERENCE, **base)
 
+    limit = standard.threshold(param.key)
     if limit is None:
         return Comparison(
-            parameter_key=param.key,
-            parameter_label=param.label,
-            value=value,
-            unit=param.unit,
-            use=use,
-            compliance=Compliance.NO_STANDARD,
+            value=value, compliance=Compliance.NO_STANDARD, standard=standard, **base
         )
 
     if limit.maximum is not None and value > limit.maximum:
-        factor = value / limit.maximum if limit.maximum else None
         return Comparison(
-            parameter_key=param.key,
-            parameter_label=param.label,
             value=value,
-            unit=param.unit,
-            use=use,
             compliance=Compliance.EXCEEDS,
+            standard=standard,
             threshold=limit,
-            exceedance_factor=factor,
+            exceedance_factor=value / limit.maximum if limit.maximum else None,
+            **base,
         )
-
     if limit.minimum is not None and value < limit.minimum:
         return Comparison(
-            parameter_key=param.key,
-            parameter_label=param.label,
             value=value,
-            unit=param.unit,
-            use=use,
             compliance=Compliance.BELOW,
+            standard=standard,
             threshold=limit,
+            **base,
         )
-
     return Comparison(
-        parameter_key=param.key,
-        parameter_label=param.label,
         value=value,
-        unit=param.unit,
-        use=use,
         compliance=Compliance.WITHIN,
+        standard=standard,
         threshold=limit,
+        above_desirable=bool(limit.desirable is not None and value > limit.desirable),
+        **base,
     )
 
 
+def threshold_for(parameter_key: str, use: DesignatedUse | str) -> ThresholdDef | None:
+    """The limit a designated-use class sets for a parameter."""
+    standard = _as_standard(use)
+    return standard.threshold(parameter_key) if standard else None
+
+
+def governed_parameters(standard: StandardDef) -> set[str]:
+    """Parameter keys a standard sets limits for."""
+    return {t.parameter for t in standard.thresholds}
+
+
 # ---------------------------------------------------------------------------
-# CPCB polluted-river-stretch priority bands
+# CPCB polluted-river-stretch bands (context only)
 #
-# National criterion: a monitoring location with BOD above 3 mg/L is treated
-# as polluted, and two or more such locations in continuous sequence on the
-# same river constitute a Polluted River Stretch. The priority band scales the
-# urgency of restoration.
+# These bands classify *stretches* that CPCB has identified. The platform
+# does not identify stretches itself and never labels a water body a polluted
+# stretch from one observation; the bands are exposed so that an imported
+# official classification can be explained.
 # ---------------------------------------------------------------------------
 PRS_BOD_THRESHOLD = 3.0
-"""BOD (mg/L) above which CPCB treats a location as polluted."""
 
 PRS_BANDS: tuple[tuple[str, float, float | None, str], ...] = (
     ("I", 30.0, None, "BOD above 30 mg/L"),
@@ -352,13 +390,12 @@ PRS_BANDS: tuple[tuple[str, float, float | None, str], ...] = (
     ("V", 3.0, 6.0, "BOD 3-6 mg/L"),
 )
 
+CPCB_PRS_SOURCE = "CPCB — Polluted River Stretches for Restoration of Water Quality"
+CPCB_PRS_URL = "https://cpcb.nic.in/reports-3/"
+
 
 def priority_band(bod: float | None) -> tuple[str, str] | None:
-    """Map a BOD value onto its CPCB restoration-priority band.
-
-    Returns ``(band, description)`` or ``None`` when BOD is missing or at or
-    below the 3 mg/L polluted threshold.
-    """
+    """The CPCB priority band a BOD value falls in (context, not a verdict)."""
     if bod is None or bod <= PRS_BOD_THRESHOLD:
         return None
     for band, low, high, description in PRS_BANDS:
@@ -368,41 +405,53 @@ def priority_band(bod: float | None) -> tuple[str, str] | None:
 
 
 def standards_summary() -> dict:
-    """The standards in force, for the API and documentation."""
-    by_use: dict[str, list[dict]] = {}
-    for use in DesignatedUse:
-        by_use[str(use)] = [
-            {
-                "parameter": t.parameter_key,
-                "min": t.minimum,
-                "max": t.maximum,
-                "unit": t.unit,
-                "describes": t.describe(),
-            }
-            for t in thresholds_for_use(use)
-        ]
+    """The standards and the selection rules in force, for API and docs."""
     return {
-        "default_use": str(DEFAULT_USE),
-        "default_use_label": USE_LABELS[DEFAULT_USE],
-        "classes": {str(u): USE_LABELS[u] for u in DesignatedUse},
-        "thresholds_by_use": by_use,
-        "polluted_stretch": {
-            "bod_threshold_mg_l": PRS_BOD_THRESHOLD,
-            "bands": [
-                {"priority": b, "min": lo, "max": hi, "describes": d}
-                for b, lo, hi, d in PRS_BANDS
-            ],
-            "source": CPCB_PRS_SOURCE,
-            "source_url": CPCB_PRS_URL,
+        "selection_order": [
+            {"basis": str(b), "label": BASIS_LABELS[b]} for b in SelectionBasis
+        ],
+        "national_assessment": {
+            "applies_to": sorted(str(t) for t in NATIONAL_ASSESSMENT_TYPES),
+            "standard_code": EP_BATHING.code,
+            "reason": select_reference(WaterBodyType.RIVER).reason,
         },
-        "sources": [
-            {"name": CPCB_CRITERIA_SOURCE, "url": CPCB_CRITERIA_URL},
-            {"name": CPCB_PRS_SOURCE, "url": CPCB_PRS_URL},
+        "standards": [
+            {
+                "code": s.code,
+                "name": s.name,
+                "category": s.category,
+                "issuing_body": s.issuing_body,
+                "legal_basis": s.legal_basis,
+                "source_url": s.source_url,
+                "verified_note": s.verified_note,
+                "thresholds": [
+                    {
+                        "parameter": t.parameter,
+                        "label": BY_KEY[t.parameter].label
+                        if t.parameter in BY_KEY
+                        else t.parameter,
+                        "type": t.threshold_type,
+                        "min": t.minimum,
+                        "max": t.maximum,
+                        "desirable": t.desirable,
+                        "unit": t.unit,
+                        "note": t.note or None,
+                    }
+                    for t in s.thresholds
+                ],
+            }
+            for s in ALL_STANDARDS
+        ],
+        "polluted_stretch_bands": [
+            {"priority": b, "min": lo, "max": hi, "describes": d}
+            for b, lo, hi, d in PRS_BANDS
         ],
         "notes": [
-            "A parameter absent from a class is not judged under that class. "
-            "No limit is invented to fill the table.",
-            "Class C is the platform default because it matches the use to "
-            "which most monitored Indian river stretches are actually put.",
+            "No standard is applied by default. Rivers are compared against the "
+            "national assessment criterion; other water bodies are compared only "
+            "when a designated use is recorded or chosen explicitly.",
+            "A parameter a standard does not govern is never treated as compliant.",
+            "Polluted-stretch bands describe CPCB-identified stretches; the "
+            "platform does not assign that classification from observations.",
         ],
     }
