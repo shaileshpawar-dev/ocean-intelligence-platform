@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import make_provenance
@@ -340,3 +341,25 @@ def water_parameters() -> dict:
 def water_quality_report(db: DbSession) -> dict:
     """Validation outcomes, so data problems are countable rather than hidden."""
     return ws.data_quality(db)
+
+
+# ---------------------------------------------------------------------------
+# Water intelligence Q&A
+# ---------------------------------------------------------------------------
+class WaterQuestion(BaseModel):
+    """A natural-language question about Indian water bodies."""
+
+    question: str = Field(..., min_length=3, max_length=500)
+
+
+@router.post("/water/ask", summary="Ask a grounded question about water bodies")
+def water_ask(db: DbSession, body: WaterQuestion) -> dict:
+    """Answer from stored observations, with citations and a map action.
+
+    Entity resolution and every figure come from database lookups. When no
+    record supports an answer the response says so (``no_evidence``) rather
+    than producing one.
+    """
+    from app.water.rag import answer
+
+    return answer(db, body.question)

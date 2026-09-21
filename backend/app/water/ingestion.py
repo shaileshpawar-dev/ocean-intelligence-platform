@@ -160,6 +160,10 @@ class _Registry:
         """Get or create a district within a state."""
         if state is None or not name:
             return None
+        # The source mixes "Mumbai Suburban" with "MUMBAI CITY". Only
+        # all-caps names are recased, so a deliberate spelling is never touched.
+        if name.isupper():
+            name = name.title()
         slug = slugify(name)
         key = (state.id, slug)
         if key in self.districts:
