@@ -38,8 +38,14 @@ import type {
   DistrictDetail,
   ListEnvelope,
   MapFeature,
+  BoundaryCollection,
+  CitySummary,
+  ClusterResponse,
+  GeometryCollection,
+  MapLayerCatalogue,
+  SearchResponse,
+  WaterCoverage,
   ParameterTrend,
-  SearchHit,
   StandardsSummary,
   StateDetail,
   StateSummary,
@@ -291,9 +297,10 @@ export const api = {
   } = {}) =>
     get<ListEnvelope<WaterBodySummary>>(`/water-bodies${qs(params)}`),
 
-  waterBody: (slug: string, designatedUse?: string | null) =>
+  /** `reference` overrides the selected standard: a class letter (A-E) or a code. */
+  waterBody: (slug: string, reference?: string | null) =>
     get<WaterBodyDetail>(
-      `/water-bodies/${encodeURIComponent(slug)}${qs({ designated_use: designatedUse })}`,
+      `/water-bodies/${encodeURIComponent(slug)}${qs({ reference })}`,
     ),
 
   waterBodyParameters: (slug: string) =>
@@ -339,9 +346,31 @@ export const api = {
   states: () => get<{ count: number; items: StateSummary[] }>("/states"),
   state: (slug: string) => get<StateDetail>(`/states/${encodeURIComponent(slug)}`),
   city: (slug: string) => get<DistrictDetail>(`/cities/${encodeURIComponent(slug)}`),
+  cities: () => get<{ count: number; items: CitySummary[] }>("/cities"),
 
-  waterSearch: (q: string, limit = 25) =>
-    get<{ query: string; count: number; items: SearchHit[] }>(`/search${qs({ q, limit })}`),
+  /* -- Geography layers ------------------------------------------------ */
+  mapLayers: () => get<MapLayerCatalogue>("/map/layers"),
+
+  mapGeometries: (params: {
+    bbox?: string | null;
+    zoom?: number | null;
+    state?: string | null;
+    water_type?: string | null;
+    status?: string | null;
+  }) => get<GeometryCollection>(`/map/geometries${qs(params)}`),
+
+  stationClusters: (params: { bbox?: string | null; zoom: number; state?: string | null }) =>
+    get<ClusterResponse>(`/map/station-clusters${qs(params)}`),
+
+  stateBoundaries: (zoom?: number | null) =>
+    get<BoundaryCollection>(`/boundaries/states${qs({ zoom })}`),
+
+  districtBoundaries: (params: { state?: string | null; bbox?: string | null; zoom?: number | null }) =>
+    get<BoundaryCollection>(`/boundaries/districts${qs(params)}`),
+
+  waterCoverage: () => get<WaterCoverage>("/water-coverage"),
+
+  waterSearch: (q: string, limit = 25) => get<SearchResponse>(`/search${qs({ q, limit })}`),
 
   waterStandards: () => get<StandardsSummary>("/water-standards"),
   waterQualityReport: () => get<WaterQualityReport>("/water-quality-report"),

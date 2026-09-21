@@ -12,8 +12,8 @@
  * must produce "no measurement exists", not a number.
  */
 
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 import {
   Ban,
@@ -38,22 +38,26 @@ import type { WaterStatus } from "@/lib/waterTypes";
 const EXAMPLES = [
   "What is the latest available status of Mithi River?",
   "Show polluted rivers near Mumbai",
-  "Which rivers in Maharashtra have elevated BOD?",
+  "Lakes near Bengaluru",
+  "Which rivers are within 20 km of Pune?",
+  "High-concern water bodies in Maharashtra",
+  "Monitoring stations near Chennai",
   "Has the Godavari improved over time?",
-  "Compare Mithi River and Mahim Creek",
   "How much mercury is in Mithi River right now?",
 ];
 
 function mapHref(action: MapAction): string {
   const params = new URLSearchParams();
-  params.set("highlight", action.water_body_slugs.slice(0, 40).join(","));
+  const slugs = action.water_body_slugs ?? [];
+  if (slugs.length) params.set("highlight", slugs.slice(0, 40).join(","));
   if (action.bbox) params.set("bbox", action.bbox.map((n) => n.toFixed(4)).join(","));
   if (action.focus) params.set("focus", action.focus);
   return `/app/map?${params.toString()}`;
 }
 
 export default function WaterAI() {
-  const [question, setQuestion] = useState("");
+  const [params] = useSearchParams();
+  const [question, setQuestion] = useState(params.get("q") ?? "");
   const ask = useMutation({ mutationFn: (q: string) => api.waterAsk(q) });
 
   const submit = (q: string) => {
@@ -62,6 +66,12 @@ export default function WaterAI() {
     setQuestion(text);
     ask.mutate(text);
   };
+
+  // Questions typed into the map search arrive as ?q= and are asked at once.
+  const initial = params.get("q");
+  useEffect(() => {
+    if (initial && initial.trim().length >= 3) ask.mutate(initial.trim());
+  }, [initial]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -147,8 +157,10 @@ function AnswerView({ answer }: { answer: WaterAnswer }) {
             className="btn btn-primary btn-sm"
             onClick={() => navigate(mapHref(answer.map_action as MapAction))}
           >
-            <MapPin size={13} /> Show {answer.map_action.water_body_slugs.length} on
-            the map
+            <MapPin size={13} />{" "}
+            {answer.map_action.water_body_slugs?.length
+              ? `Show ${answer.map_action.water_body_slugs.length} on the map`
+              : "Show on the map"}
           </button>
         )}
 
@@ -292,7 +304,7 @@ function SectionBody({ section }: { section: Record<string, unknown> }) {
               <tr>
                 <th>Indicator</th>
                 <th>Value</th>
-                <th>Against class C</th>
+                <th>Against the reference</th>
                 <th>Measured</th>
               </tr>
             </thead>
@@ -310,6 +322,55 @@ function SectionBody({ section }: { section: Record<string, unknown> }) {
             </tbody>
           </table>
         )}
+        {section.evidence_layers ? (
+          <EvidenceLayers layers={section.evidence_layers as EvidenceLayerMap} />
+        ) : null}
+      </div>
+    );
+  }
+
+  if (kind === "stations") {
+    const items =
+      (section.items as {
+        id: number;
+        name: string;
+        water_body: string | null;
+        water_body_slug: string | null;
+        distance_km: number;
+        latest_observed_at: string | null;
+        cite: number;
+      }[]) ?? [];
+    return (
+      <div className="answer-block">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Monitoring station</th>
+              <th>Water body</th>
+              <th>Distance</th>
+              <th>Latest observation</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item) => (
+              <tr key={item.id}>
+                <td>
+                  <Link to={`/app/stations/${item.id}`}>{item.name}</Link>{" "}
+                  <sup>[{item.cite}]</sup>
+                </td>
+                <td>
+                  {item.water_body_slug ? (
+                    <Link to={`/app/water/${item.water_body_slug}`}>{item.water_body}</Link>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td className="mono">{item.distance_km} km</td>
+                <td>{formatDay(item.latest_observed_at)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     );
   }
@@ -445,5 +506,80 @@ function CitationItem({ citation }: { citation: WaterCitation }) {
         </a>
       ) : null}
     </li>
+  );
+}
+
+type EvidenceLayerMap = {
+  MEASURED: { count: number; latest: string | null; source: string };
+  REFERENCE_COMPARISON: {
+    standard: string | null;
+    basis: string | null;
+    unavailable_reason: string | null;
+  };
+  SOURCE_CLASSIFICATION: { source: string; priority: string | null; assessment_year: number | null }[];
+  DERIVED_STATUS: { label: string | null; as_of: string | null };
+  SATELLITE_OBSERVED: { label: string; value: number; date: string } | null;
+};
+
+/** The answer split by kind of evidence, so none is read as another. */
+function EvidenceLayers({ layers }: { layers: EvidenceLayerMap }) {
+  const ref = layers.REFERENCE_COMPARISON;
+  return (
+    <dl className="evidence-layers">
+      <div>
+        <dt>
+          <WaterEvidenceBadge type="MEASURED" />
+        </dt>
+        <dd>
+          {layers.MEASURED.count} indicator{layers.MEASURED.count === 1 ? "" : "s"}, latest{" "}
+          {formatDay(layers.MEASURED.latest)} · {layers.MEASURED.source}
+        </dd>
+      </div>
+      <div>
+        <dt>
+          <WaterEvidenceBadge type="REFERENCE_COMPARISON" />
+        </dt>
+        <dd>
+          {ref.standard
+            ? `${ref.standard} (${(ref.basis ?? "").toLowerCase()})`
+            : `Reference comparison unavailable. ${ref.unavailable_reason ?? ""}`}
+        </dd>
+      </div>
+      <div>
+        <dt>
+          <WaterEvidenceBadge type="SOURCE_CLASSIFICATION" />
+        </dt>
+        <dd>
+          {layers.SOURCE_CLASSIFICATION.length
+            ? layers.SOURCE_CLASSIFICATION.map(
+                (c) =>
+                  `${c.source}${c.priority ? `, priority ${c.priority}` : ""}${
+                    c.assessment_year ? ` (${c.assessment_year})` : ""
+                  }`,
+              ).join("; ")
+            : "None published for this water body in the platform's data."}
+        </dd>
+      </div>
+      <div>
+        <dt>
+          <WaterEvidenceBadge type="DERIVED_STATUS" />
+        </dt>
+        <dd>
+          {layers.DERIVED_STATUS.label ?? "Not assessed"}, as of{" "}
+          {formatDay(layers.DERIVED_STATUS.as_of)} — not a statement about today.
+        </dd>
+      </div>
+      {layers.SATELLITE_OBSERVED && (
+        <div>
+          <dt>
+            <WaterEvidenceBadge type="SATELLITE_OBSERVED" />
+          </dt>
+          <dd>
+            {layers.SATELLITE_OBSERVED.label}: {layers.SATELLITE_OBSERVED.value.toFixed(3)} (index,
+            no unit) on {formatDay(layers.SATELLITE_OBSERVED.date)}. Not a measurement.
+          </dd>
+        </div>
+      )}
+    </dl>
   );
 }

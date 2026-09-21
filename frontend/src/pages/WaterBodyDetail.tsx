@@ -5,12 +5,12 @@
  * measured, what did it show, how has it changed, and where did every number
  * come from.
  *
- * The two-status treatment is the heart of it. "Right now" is answered
- * honestly — for most Indian water bodies that means "no recent data",
- * because the newest CPCB publication is from 2021. "When last measured" is
- * answered fully, with the date attached to every claim. Collapsing the two
- * would either overstate what is known about today or discard a real,
- * checkable finding about the past.
+ * The two-status treatment is the heart of it. "Current data availability"
+ * is answered honestly — for most Indian water bodies the current condition
+ * cannot be established, because the source extracts are years old. "Latest
+ * measured status" is answered fully, with the date and the reference
+ * standard attached. Collapsing the two would either overstate what is known
+ * about today or discard a real, checkable finding about the past.
  */
 
 import { useState } from "react";
@@ -26,8 +26,9 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { MapContainer, CircleMarker, TileLayer } from "react-leaflet";
-import { ArrowLeft, Database, ExternalLink, Info, MapPin } from "lucide-react";
+import { MapContainer, CircleMarker, GeoJSON, TileLayer, Tooltip } from "react-leaflet";
+import type { GeoJsonObject } from "geojson";
+import { ArrowLeft, Database, Info, MapPin } from "lucide-react";
 import { api } from "@/lib/api";
 import {
   ErrorState,
@@ -36,23 +37,39 @@ import {
   SectionCard,
 } from "@/components/ui";
 import {
-  FreshnessNote,
+  AvailabilityPanel,
+  DataQualityPanel,
+  ImageryPanel,
+  ReferencePanel,
+  SourcesPanel,
+} from "@/components/waterPanels";
+import type { StationSummary, WaterBodyDetail as Detail } from "@/lib/waterTypes";
+import {
   LatestAvailableStatus,
   MatchConfidenceNote,
   ParameterCard,
   StatusExplanation,
-  WaterStatusBadge,
   WaterTypeTag,
   formatDay,
 } from "@/components/water";
 
+const RELATION_LABEL: Record<string, string> = {
+  within_geometry: "Inside the outline",
+  on_geometry: "On the mapped shape",
+  near_geometry: "Near the mapped shape",
+  name_match_only: "Named for it, but not near the mapped shape",
+  name_match: "Matched by name (no shape to test against)",
+};
+
 export default function WaterBodyDetail() {
   const { slug = "" } = useParams();
+  const [reference, setReference] = useState<string | null>(null);
 
   const detail = useQuery({
-    queryKey: ["water-body", slug],
-    queryFn: () => api.waterBody(slug),
+    queryKey: ["water-body", slug, reference],
+    queryFn: () => api.waterBody(slug, reference),
     enabled: Boolean(slug),
+    placeholderData: (previous) => previous,
   });
 
   if (detail.isLoading) {
@@ -110,12 +127,11 @@ export default function WaterBodyDetail() {
 
       {/* -- Status ---------------------------------------------------- */}
       <div className="wb-status-grid">
-        <SectionCard title="Right now">
-          <WaterStatusBadge status={body.status_detail.status} />
-          <FreshnessNote detail={body.status_detail} />
+        <SectionCard title="Current data availability">
+          <AvailabilityPanel availability={body.availability} />
         </SectionCard>
 
-        <SectionCard title="When last measured">
+        <SectionCard title="Latest measured status">
           {body.latest_available_status ? (
             <LatestAvailableStatus
               detail={body.latest_available_status}
@@ -126,6 +142,21 @@ export default function WaterBodyDetail() {
               No measurement has ever been recorded for this water body.
             </p>
           )}
+        </SectionCard>
+      </div>
+
+      <div className="wb-status-grid">
+        <SectionCard
+          title="Reference standard"
+          description="Which standard the values are compared against, and why."
+        >
+          <ReferencePanel reference={body.reference} chosen={reference} onChoose={setReference} />
+        </SectionCard>
+        <SectionCard
+          title="Data quality"
+          description="From objective metadata only; each factor and the rule are shown."
+        >
+          <DataQualityPanel quality={body.data_quality} />
         </SectionCard>
       </div>
 
@@ -179,6 +210,8 @@ export default function WaterBodyDetail() {
               <thead>
                 <tr>
                   <th>Station</th>
+                  <th>Sampling position</th>
+                  <th>Relation to shape</th>
                   <th>District</th>
                   <th className="num">Observations</th>
                   <th>Latest</th>
@@ -189,6 +222,17 @@ export default function WaterBodyDetail() {
                   <tr key={station.id}>
                     <td>
                       <Link to={`/app/stations/${station.id}`}>{station.name}</Link>
+                    </td>
+                    <td>{station.position_descriptor ?? "—"}</td>
+                    <td>
+                      {RELATION_LABEL[station.relationship_type ?? "name_match"] ??
+                        station.relationship_type}
+                      {station.geometry_distance_m != null && station.geometry_distance_m > 0 && (
+                        <span className="muted-note">
+                          {" "}
+                          ({(station.geometry_distance_m / 1000).toFixed(2)} km)
+                        </span>
+                      )}
                     </td>
                     <td>{station.district ?? "—"}</td>
                     <td className="num">{station.observation_count}</td>
@@ -201,111 +245,126 @@ export default function WaterBodyDetail() {
         )}
       </SectionCard>
 
-      {/* -- Location -------------------------------------------------- */}
-      {body.latitude != null && body.longitude != null && (
-        <SectionCard
-          title="Location"
-          description="Centroid is the mean position of this water body's monitoring stations, not a surveyed centre."
-        >
-          <div className="wb-map">
-            <MapContainer
-              center={[body.latitude, body.longitude]}
-              zoom={11}
-              scrollWheelZoom={false}
-              style={{ height: 280, borderRadius: 12 }}
-            >
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-              <CircleMarker
-                center={[body.latitude, body.longitude]}
-                radius={9}
-                pathOptions={{
-                  color: "#ffffff",
-                  weight: 2,
-                  fillColor: "#0369a1",
-                  fillOpacity: 0.9,
-                }}
-              />
-              {body.stations
-                .filter((s) => s.latitude != null && s.longitude != null)
-                .map((s) => (
-                  <CircleMarker
-                    key={s.id}
-                    center={[s.latitude as number, s.longitude as number]}
-                    radius={4}
-                    pathOptions={{
-                      color: "#1e40af",
-                      weight: 1,
-                      fillColor: "#60a5fa",
-                      fillOpacity: 0.9,
-                    }}
-                  />
-                ))}
-            </MapContainer>
-          </div>
+      {/* -- Map ------------------------------------------------------- */}
+      <SectionCard
+        title="Map"
+        description={
+          body.geometry
+            ? `Shape from ${body.geometry.provenance.source} (${body.geometry.provenance.confidence} confidence).`
+            : body.geometry_status_text ||
+              "No shape is available; the point is the mean position of the stations."
+        }
+      >
+        <DetailMap body={body} />
+        {body.geometry && (
           <p className="muted-note">
-            <MapPin size={12} /> {body.latitude.toFixed(4)},{" "}
-            {body.longitude.toFixed(4)}
+            {body.geometry.provenance.clipped_note} {body.geometry.provenance.licence}. OSM
+            elements: {body.geometry.provenance.source_ids.slice(0, 6).join(", ")}
+            {body.geometry.provenance.source_ids.length > 6 ? "…" : ""}. Matched{" "}
+            {formatDay(body.geometry.provenance.retrieved_at)}.
           </p>
-        </SectionCard>
-      )}
+        )}
+        {body.latitude != null && body.longitude != null && !body.geometry && (
+          <p className="muted-note">
+            <MapPin size={12} /> {body.latitude.toFixed(4)}, {body.longitude.toFixed(4)} (station
+            mean, not a surveyed centre)
+          </p>
+        )}
+      </SectionCard>
+
+      {/* -- Imagery --------------------------------------------------- */}
+      <SectionCard title="Satellite evidence" description="Visual evidence, not measurement.">
+        <ImageryPanel images={body.imagery} note={body.imagery_note} />
+      </SectionCard>
 
       {/* -- Sources --------------------------------------------------- */}
       <SectionCard
         title="Sources"
-        description="Where every number on this page came from."
+        description="Where every number, shape and label on this page came from."
         actions={<Database size={15} className="text-muted" />}
       >
-        {body.sources.map((source) => (
-          <div className="source-card" key={source.key}>
-            <div className="source-head">
-              <strong>{source.name}</strong>
-              {source.url && (
-                <a href={source.url} target="_blank" rel="noreferrer noopener">
-                  Open dataset <ExternalLink size={11} />
-                </a>
-              )}
-            </div>
-            <dl className="source-facts">
-              <div>
-                <dt>Organisation</dt>
-                <dd>{source.organisation}</dd>
-              </div>
-              <div>
-                <dt>Dataset</dt>
-                <dd>{source.dataset ?? "—"}</dd>
-              </div>
-              <div>
-                <dt>Licence</dt>
-                <dd>{source.licence ?? "—"}</dd>
-              </div>
-              <div>
-                <dt>Expected cadence</dt>
-                <dd>{source.expected_cadence}</dd>
-              </div>
-              <div>
-                <dt>Observations</dt>
-                <dd>{source.observation_count.toLocaleString()}</dd>
-              </div>
-              <div>
-                <dt>Latest observation</dt>
-                <dd>{formatDay(source.latest_observed_at)}</dd>
-              </div>
-              <div>
-                <dt>Retrieved by this platform</dt>
-                <dd>{formatDay(source.retrieved_at)}</dd>
-              </div>
-            </dl>
-          </div>
-        ))}
+        <SourcesPanel entries={body.sources_panel} />
       </SectionCard>
     </>
   );
 }
 
 /* ------------------------------------------------------------------ */
+
+/** The water body's matched shape, in water blue, with its stations on it. */
+function DetailMap({ body }: { body: Detail }) {
+  const located = body.stations.filter(
+    (s): s is StationSummary & { latitude: number; longitude: number } =>
+      s.latitude != null && s.longitude != null,
+  );
+  const bounds: [[number, number], [number, number]] | null = body.geometry
+    ? [
+        [body.geometry.bbox[1], body.geometry.bbox[0]],
+        [body.geometry.bbox[3], body.geometry.bbox[2]],
+      ]
+    : located.length > 1
+      ? [
+          [Math.min(...located.map((s) => s.latitude)), Math.min(...located.map((s) => s.longitude))],
+          [Math.max(...located.map((s) => s.latitude)), Math.max(...located.map((s) => s.longitude))],
+        ]
+      : null;
+  const centre: [number, number] | null =
+    body.latitude != null && body.longitude != null ? [body.latitude, body.longitude] : null;
+  if (!bounds && !centre) {
+    return <p className="muted-note">No position is recorded for this water body.</p>;
+  }
+  const isLine = body.geometry?.geometry_type.includes("Line");
+  return (
+    <div className="detail-map">
+      <MapContainer
+        {...(bounds ? { bounds, boundsOptions: { padding: [24, 24] } } : { center: centre!, zoom: 11 })}
+        scrollWheelZoom={false}
+        style={{ height: "100%", width: "100%" }}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        {body.geometry && (
+          <GeoJSON
+            data={body.geometry.geometry as unknown as GeoJsonObject}
+            style={() =>
+              isLine
+                ? { color: "#1d6fb8", weight: 4, opacity: 0.95 }
+                : { color: "#1d6fb8", weight: 1.5, fillColor: "#3b8fd9", fillOpacity: 0.45 }
+            }
+          />
+        )}
+        {!body.geometry && centre && (
+          <CircleMarker
+            center={centre}
+            radius={9}
+            pathOptions={{ color: "#ffffff", weight: 2, fillColor: "#0369a1", fillOpacity: 0.9 }}
+          />
+        )}
+        {located.map((s) => (
+          <CircleMarker
+            key={s.id}
+            center={[s.latitude, s.longitude]}
+            radius={5}
+            pathOptions={{
+              color: "#0c4a6e",
+              weight: 1.5,
+              fillColor: s.relationship_type === "name_match_only" ? "#f59e0b" : "#ffffff",
+              fillOpacity: 1,
+            }}
+          >
+            <Tooltip direction="top" offset={[0, -4]}>
+              <strong>{s.name}</strong>
+              <br />
+              {RELATION_LABEL[s.relationship_type ?? "name_match"] ?? s.relationship_type}
+            </Tooltip>
+          </CircleMarker>
+        ))}
+      </MapContainer>
+    </div>
+  );
+}
 
 /** A gap longer than this between samples is drawn as a break, not a line. */
 const GAP_MS = 120 * 86_400_000;

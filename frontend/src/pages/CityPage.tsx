@@ -1,17 +1,16 @@
 /**
  * City / district page.
  *
- * Districts double as the platform's city unit. Indian monitoring data is
- * keyed to districts, and the places people actually search for — Mumbai,
- * Pune, Bengaluru — are districts in that data. Inventing a separate city
- * table would mean inventing city boundaries the source never supplied, so
- * the page is honest about being a district view.
+ * A curated city is an explicit grouping of whole districts (Greater Mumbai
+ * is the Mumbai and Mumbai Suburban districts), written down with a note on
+ * what the grouping means. A slug that is not a curated city shows the
+ * district of that name. Either way the page says which it is.
  */
 
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { MapContainer, CircleMarker, TileLayer, Tooltip } from "react-leaflet";
-import { ArrowLeft, Info } from "lucide-react";
+import { ArrowLeft, Info, MapPin } from "lucide-react";
 import { api } from "@/lib/api";
 import {
   ErrorState,
@@ -41,8 +40,8 @@ export default function CityPage() {
       <ErrorState
         error={city.error}
         onRetry={() => city.refetch()}
-        emptyTitle="District not found"
-        emptyHint="No district with this identifier exists in the ingested data."
+        emptyTitle="City or district not found"
+        emptyHint="No curated city or district with this identifier exists in the data."
       />
     );
   }
@@ -50,6 +49,7 @@ export default function CityPage() {
   const data = city.data;
   if (!data) return null;
 
+  const isCity = data.kind === "city";
   const located = data.water_bodies.filter(
     (b) => b.latitude != null && b.longitude != null,
   );
@@ -58,13 +58,53 @@ export default function CityPage() {
     <>
       <PageHeader
         title={data.name}
-        subtitle={`District · ${data.state}`}
+        subtitle={`${isCity ? "City" : "District"}${data.state ? ` · ${data.state}` : ""}`}
         actions={
-          <Link className="btn btn-outline btn-sm" to={`/app/state/${data.state_slug}`}>
-            <ArrowLeft size={13} /> {data.state}
-          </Link>
+          <>
+            <Link className="btn btn-outline btn-sm" to={`/app/map?city=${data.slug}`}>
+              <MapPin size={13} /> View on map
+            </Link>
+            {data.state_slug && (
+              <Link className="btn btn-outline btn-sm" to={`/app/state/${data.state_slug}`}>
+                <ArrowLeft size={13} /> {data.state}
+              </Link>
+            )}
+          </>
         }
       />
+
+      {isCity && (
+        <SectionCard title="What this city means here">
+          <p>{data.definition}</p>
+          {data.districts && data.districts.length > 0 && (
+            <p className="muted-note">
+              CPCB districts included:{" "}
+              {data.districts.map((d, i) => (
+                <span key={d.slug}>
+                  {i > 0 && ", "}
+                  <Link to={`/app/city/${d.slug}`}>{d.name}</Link>
+                </span>
+              ))}
+            </p>
+          )}
+          <p className="muted-note">Extent: {data.position_source}</p>
+          {data.latest_observed_at && (
+            <p className="muted-note">
+              Latest available observation in this city: {formatDay(data.latest_observed_at)}.
+              The current condition cannot be established from this dataset.
+            </p>
+          )}
+        </SectionCard>
+      )}
+
+      {data.empty_reason && (
+        <SectionCard>
+          <p className="muted-note">
+            <Info size={13} aria-hidden /> {data.empty_reason} This is an absence of monitoring
+            data, not evidence about water quality.
+          </p>
+        </SectionCard>
+      )}
 
       <div className="stat-row">
         <StatCard label="Water bodies" value={data.water_body_count} />
@@ -83,7 +123,7 @@ export default function CityPage() {
       {data.latitude != null && data.longitude != null && located.length > 0 && (
         <SectionCard
           title="Map"
-          description="District centre is the mean position of its monitoring stations — the source publishes no district boundary."
+          description="Water bodies are placed at the mean position of their monitoring stations."
         >
           <MapContainer
             center={[data.latitude, data.longitude]}

@@ -737,7 +737,7 @@ def layer_catalogue() -> dict:
                         "label": "CPCB monitoring stations",
                         "kind": "clusters",
                         "endpoint": "/api/v1/map/station-clusters",
-                        "default": True,
+                        "default": False,
                         "attribution": "Stations: CPCB via National Water Data Portal",
                     },
                     {

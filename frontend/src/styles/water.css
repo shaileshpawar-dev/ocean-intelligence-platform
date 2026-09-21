@@ -1597,3 +1597,345 @@
     flex-wrap: wrap;
   }
 }
+
+/* =========================================================================
+   Phase 2: geospatial map, layer control, evidence panels
+   ========================================================================= */
+
+/* The detail panel docks beside the map on desktop instead of covering it. */
+@media (min-width: 861px) {
+  .wmap-shell.has-panel .wmap-canvas {
+    width: calc(100% - 380px);
+  }
+
+  .wmap-shell.has-panel .wmap-controls,
+  .wmap-shell.has-panel .wmap-filters,
+  .wmap-shell.has-panel .wmap-count {
+    right: calc(380px + 14px);
+  }
+
+  /* Search sits between the zoom buttons and the controls column so the
+     docked panel never pushes it underneath them. */
+  .wmap-shell.has-panel .wmap-search-wrap {
+    left: 60px;
+    transform: none;
+    width: min(460px, calc(100% - 380px - 60px - 150px));
+  }
+
+  .wmap-shell.has-panel .wmap-panel {
+    box-shadow: none;
+  }
+}
+
+.wmap-layers {
+  gap: 10px;
+  max-height: calc(100% - 140px);
+  overflow-y: auto;
+}
+
+.wmap-layer-group {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.wmap-layer-group legend {
+  margin-bottom: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.wmap-layer-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.wmap-layer-row input {
+  margin-top: 2px;
+}
+
+.wmap-cluster span {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 3px solid;
+  background: rgb(255 255 255 / 92%);
+  color: #0c4a6e;
+  font-size: 0.72rem;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgb(8 47 73 / 25%);
+}
+
+.wmap-legend-line {
+  width: 14px;
+  height: 4px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.wmap-empty {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 900;
+  max-width: 340px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 20px rgb(8 47 73 / 12%);
+  text-align: center;
+  pointer-events: none;
+}
+
+.wmap-empty p {
+  margin: 0 0 4px;
+}
+
+.wmap-search-ask {
+  background: var(--surface-accent);
+}
+
+.wmap-search-ask .hit-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* -- Availability ------------------------------------------------------ */
+.availability {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-sunken);
+}
+
+.availability-stale {
+  border-color: rgb(148 163 184 / 60%);
+}
+
+.availability-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 4px;
+  font-size: 0.82rem;
+}
+
+.availability-label {
+  color: var(--text-muted);
+}
+
+.availability-row strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-align: right;
+}
+
+/* -- Data quality ------------------------------------------------------ */
+.dq {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.dq-ok { color: #047857; border-color: rgb(4 120 87 / 35%); background: rgb(4 120 87 / 8%); }
+.dq-warn { color: #b45309; border-color: rgb(180 83 9 / 35%); background: rgb(180 83 9 / 8%); }
+.dq-bad { color: #b91c1c; border-color: rgb(185 28 28 / 35%); background: rgb(185 28 28 / 8%); }
+.dq-unknown { color: #475569; border-color: rgb(71 85 105 / 35%); background: rgb(71 85 105 / 8%); }
+
+.dq-factors {
+  list-style: none;
+  margin: 10px 0;
+  padding: 0;
+  font-size: 0.82rem;
+}
+
+.dq-factors li {
+  display: flex;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.dq-meets > span:first-child { color: #047857; }
+.dq-misses > span:first-child { color: #b91c1c; }
+
+/* -- Reference, sources, imagery ---------------------------------------- */
+.reference-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.reference-source {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.reference-choose {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.reference-choose select {
+  margin-left: 4px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-primary);
+}
+
+.sources-table td {
+  vertical-align: top;
+}
+
+.imagery {
+  display: grid;
+  gap: 12px;
+}
+
+.imagery-item {
+  display: grid;
+  grid-template-columns: 256px 1fr;
+  gap: 12px;
+  margin: 0;
+}
+
+.imagery-item img {
+  width: 256px;
+  height: auto;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.imagery-item figcaption {
+  display: grid;
+  gap: 6px;
+  font-size: 0.82rem;
+}
+
+.imagery-proxy {
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--surface-sunken);
+}
+
+.evidence-layers {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 0;
+  font-size: 0.82rem;
+}
+
+.evidence-layers > div {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.evidence-layers dd {
+  margin: 0;
+}
+
+.status-limitations {
+  margin: 8px 0;
+  padding-left: 18px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.param-desirable {
+  color: #b45309;
+}
+
+.standards-order {
+  margin: 8px 0;
+  padding-left: 22px;
+  font-size: 0.86rem;
+}
+
+.standards-note {
+  display: flex;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.standard-block {
+  margin: 16px 0 22px;
+}
+
+.standard-title {
+  margin: 0 0 4px;
+  font-size: 0.98rem;
+}
+
+.standard-source {
+  margin: 8px 0 2px;
+  font-size: 0.8rem;
+}
+
+.detail-map {
+  height: 340px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+@media (max-width: 860px) {
+  .imagery-item {
+    grid-template-columns: 1fr;
+  }
+
+  .imagery-item img {
+    width: 100%;
+  }
+
+  .evidence-layers > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .wmap-layers {
+    max-height: 55vh;
+  }
+
+  .detail-map {
+    height: 260px;
+  }
+}
+
+:root[data-theme="dark"] .wmap-cluster span {
+  background: rgb(13 30 43 / 92%);
+  color: #e0f2fe;
+}
+
+:root[data-theme="dark"] .wmap-empty,
+:root[data-theme="dark"] .wmap-layers {
+  background: var(--surface-raised);
+}
+
+:root[data-theme="dark"] .dq-ok { color: #6ee7b7; }
+:root[data-theme="dark"] .dq-warn { color: #fcd34d; }
+:root[data-theme="dark"] .dq-bad { color: #fca5a5; }
+:root[data-theme="dark"] .dq-unknown { color: #cbd5e1; }

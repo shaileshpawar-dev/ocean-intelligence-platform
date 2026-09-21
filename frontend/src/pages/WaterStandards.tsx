@@ -1,22 +1,30 @@
 /**
  * Reference standards.
  *
- * This page exists so that "why is this river marked polluted?" has a public,
- * checkable answer. Every threshold the status engine applies is listed here
- * with the document it came from and a link to that document. A platform that
- * classifies water quality without showing its criteria is asking to be taken
- * on trust, which is precisely what this one refuses to do.
+ * This page exists so that "why is this river marked high concern?" has a
+ * public, checkable answer. Every threshold the status engine can apply is
+ * listed with the document it came from, and the order in which a standard is
+ * chosen for a water body is stated — including the case where none is.
  */
 
 import { useQuery } from "@tanstack/react-query";
 import { ExternalLink, Info, Scale } from "lucide-react";
 import { api } from "@/lib/api";
+import type { StandardDefinition, StandardThreshold } from "@/lib/waterTypes";
 import {
   ErrorState,
   LoadingSkeleton,
   PageHeader,
   SectionCard,
 } from "@/components/ui";
+
+function limitText(t: StandardThreshold): string {
+  const unit = t.unit ? ` ${t.unit}` : "";
+  if (t.type === "range") return `${t.min} – ${t.max}${unit}`;
+  if (t.type === "minimum") return `at least ${t.min}${unit}`;
+  if (t.type === "maximum") return `at most ${t.max}${unit}`;
+  return "categorical";
+}
 
 export default function WaterStandards() {
   const standards = useQuery({
@@ -26,143 +34,130 @@ export default function WaterStandards() {
 
   if (standards.isLoading) return <LoadingSkeleton rows={4} height={90} />;
   if (standards.isError) {
-    return (
-      <ErrorState error={standards.error} onRetry={() => standards.refetch()} />
-    );
+    return <ErrorState error={standards.error} onRetry={() => standards.refetch()} />;
   }
-
   const data = standards.data;
   if (!data) return null;
+
+  const national = data.standards.find(
+    (s) => s.code === data.national_assessment.standard_code,
+  );
+  const others = data.standards.filter((s) => s.code !== data.national_assessment.standard_code);
 
   return (
     <>
       <PageHeader
         title="Reference standards"
-        subtitle="The criteria this platform applies, and where each one comes from."
+        subtitle="The criteria this platform can apply, where each comes from, and how one is chosen."
         actions={<Scale size={16} className="text-muted" />}
       />
 
-      <SectionCard title="Designated best use">
+      <SectionCard title="How a standard is chosen">
         <p className="muted-note">
-          "Is this river polluted?" has no answer until someone says{" "}
-          <em>polluted for what</em>. Water unfit to drink untreated may be
-          perfectly fit for irrigation. CPCB encodes exactly that idea in five
-          designated-use classes, each with its own limits. This platform
-          defaults to <strong>class {data.default_use}</strong> —{" "}
-          {data.default_use_label} — because it matches the use most monitored
-          Indian river stretches are actually put to, and its BOD limit
-          coincides with the national polluted-stretch threshold.
+          "Is this water polluted?" has no answer until someone says <em>polluted for what</em>.
+          No standard is applied by default. For each water body the first applicable rule
+          below decides; when none applies the platform shows the measurements and says
+          "Reference comparison unavailable" rather than borrowing a standard.
         </p>
-
-        <div className="use-classes">
-          {Object.entries(data.classes).map(([code, label]) => (
-            <div
-              className={`use-class ${code === data.default_use ? "is-default" : ""}`}
-              key={code}
-            >
-              <span className="use-code">Class {code}</span>
-              <span className="use-label">{label}</span>
-              {code === data.default_use && (
-                <span className="use-default-tag">platform default</span>
-              )}
-            </div>
+        <ol className="standards-order">
+          {data.selection_order.map((step) => (
+            <li key={step.basis}>{step.label}</li>
           ))}
-        </div>
+        </ol>
+        <p className="standards-note">
+          <Info size={13} aria-hidden /> {data.national_assessment.reason} Applies to:{" "}
+          {data.national_assessment.applies_to.join(", ").replace(/_/g, " ")}.
+        </p>
       </SectionCard>
 
-      {Object.entries(data.thresholds_by_use).map(([use, limits]) => (
-        <SectionCard
-          key={use}
-          title={`Class ${use} — ${data.classes[use]}`}
-          description={`${limits.length} parameter${limits.length === 1 ? "" : "s"} governed. Parameters absent from this list are not judged under this class.`}
-        >
-          {limits.length === 0 ? (
-            <p className="muted-note">This class specifies no numeric limits.</p>
-          ) : (
-            <div className="table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Parameter</th>
-                    <th>Minimum</th>
-                    <th>Maximum</th>
-                    <th>Unit</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {limits.map((limit) => (
-                    <tr key={limit.parameter}>
-                      <td>{limit.describes}</td>
-                      <td>{limit.min ?? "—"}</td>
-                      <td>{limit.max ?? "—"}</td>
-                      <td>{limit.unit ?? "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+      {national && (
+        <SectionCard title="National assessment reference (rivers)">
+          <StandardTable standard={national} />
         </SectionCard>
-      ))}
+      )}
 
-      <SectionCard
-        title="Polluted river stretches"
-        description="The national criterion used to identify and prioritise polluted locations."
-      >
+      <SectionCard title="CPCB designated best use classes">
         <p className="muted-note">
-          A monitoring location whose biochemical oxygen demand exceeds{" "}
-          <strong>{data.polluted_stretch.bod_threshold_mg_l} mg/L</strong> is
-          treated as polluted. Two or more such locations in continuous
-          sequence on the same river constitute a Polluted River Stretch.
+          Applied only when a designated use is recorded for a water body by an authoritative
+          source, or when you choose one on a water body's page.
         </p>
-
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Priority</th>
-                <th>BOD range</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.polluted_stretch.bands.map((band) => (
-                <tr key={band.priority}>
-                  <td>
-                    <strong>Priority {band.priority}</strong>
-                  </td>
-                  <td>{band.describes}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <a
-          className="btn btn-outline btn-sm"
-          href={data.polluted_stretch.source_url}
-          target="_blank"
-          rel="noreferrer noopener"
-        >
-          {data.polluted_stretch.source} <ExternalLink size={12} />
-        </a>
-      </SectionCard>
-
-      <SectionCard title="Sources">
-        <ul className="source-links">
-          {data.sources.map((source) => (
-            <li key={source.url}>
-              <a href={source.url} target="_blank" rel="noreferrer noopener">
-                {source.name} <ExternalLink size={11} />
-              </a>
-            </li>
-          ))}
-        </ul>
-        {data.notes.map((note) => (
-          <p className="muted-note" key={note}>
-            <Info size={12} /> {note}
-          </p>
+        {others.map((standard) => (
+          <StandardTable key={standard.code} standard={standard} />
         ))}
       </SectionCard>
+
+      <SectionCard title="CPCB polluted-river-stretch priorities (context only)">
+        <p className="muted-note">
+          CPCB groups the stretches it identifies as polluted into five priorities by BOD.
+          The platform labels a water body a polluted stretch only when an official
+          classification is imported for it; it never assigns these priorities itself.
+        </p>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Priority</th>
+              <th>BOD range</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.polluted_stretch_bands.map((band) => (
+              <tr key={band.priority}>
+                <td>{band.priority}</td>
+                <td>{band.describes}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </SectionCard>
+
+      <SectionCard title="Notes">
+        <ul className="standards-notes">
+          {data.notes.map((n) => (
+            <li key={n}>{n}</li>
+          ))}
+        </ul>
+      </SectionCard>
     </>
+  );
+}
+
+function StandardTable({ standard }: { standard: StandardDefinition }) {
+  return (
+    <div className="standard-block">
+      <h3 className="standard-title">
+        {standard.name}{" "}
+        <span className="mono muted-note">{standard.code}</span>
+      </h3>
+      {standard.category && <p className="muted-note">{standard.category}</p>}
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>Parameter</th>
+            <th>Limit</th>
+            <th>Desirable</th>
+            <th>Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          {standard.thresholds.map((t) => (
+            <tr key={t.parameter}>
+              <td>{t.label}</td>
+              <td className="mono">{limitText(t)}</td>
+              <td className="mono">
+                {t.desirable != null ? `${t.desirable}${t.unit ? ` ${t.unit}` : ""}` : "—"}
+              </td>
+              <td className="muted-note">{t.note ?? ""}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="standard-source">
+        {standard.legal_basis} · {standard.issuing_body} ·{" "}
+        <a href={standard.source_url} target="_blank" rel="noreferrer noopener">
+          Source document <ExternalLink size={11} aria-hidden />
+        </a>
+      </p>
+      <p className="standard-verified muted-note">{standard.verified_note}</p>
+    </div>
   );
 }

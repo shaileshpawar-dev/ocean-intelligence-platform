@@ -23,6 +23,7 @@ import {
   SectionCard,
 } from "@/components/ui";
 import { StatCard, formatDay } from "@/components/water";
+import type { WaterCoverage } from "@/lib/waterTypes";
 
 const FLAG_META: Record<string, { label: string; tone: string; hint: string }> = {
   ok: {
@@ -50,6 +51,10 @@ export default function DataSources() {
   const quality = useQuery({
     queryKey: ["water-quality-report"],
     queryFn: api.waterQualityReport,
+  });
+  const coverage = useQuery({
+    queryKey: ["water-coverage"],
+    queryFn: api.waterCoverage,
   });
 
   if (overview.isLoading || quality.isLoading) {
@@ -205,6 +210,65 @@ export default function DataSources() {
           </SectionCard>
         </>
       )}
+
+      {coverage.data && <CoverageSection coverage={coverage.data} />}
     </>
+  );
+}
+
+/** What the database holds, per state — computed counts, nothing estimated. */
+function CoverageSection({ coverage }: { coverage: WaterCoverage }) {
+  const t = coverage.totals;
+  return (
+    <SectionCard
+      title="Dataset coverage"
+      description={`Counted from the database on ${formatDay(coverage.generated_at)}. The latest date differs by state.`}
+    >
+      <div className="stat-row">
+        <StatCard
+          label="States / UTs with data"
+          value={`${t.states_loaded} of ${t.states_available_in_source}`}
+        />
+        <StatCard label="Water bodies" value={t.water_bodies.toLocaleString()} />
+        <StatCard label="Stations" value={t.stations.toLocaleString()} />
+        <StatCard label="Observations" value={t.observations.toLocaleString()} />
+        <StatCard label="Matched shapes" value={t.geometries.toLocaleString()} />
+      </div>
+      {t.states_without_data.length > 0 && (
+        <p className="muted-note">
+          <Info size={12} /> No data loaded for: {t.states_without_data.join(", ")}.
+        </p>
+      )}
+      <div className="table-wrap">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>State / UT</th>
+              <th className="num">Water bodies</th>
+              <th className="num">Stations</th>
+              <th className="num">Observations</th>
+              <th>First</th>
+              <th>Latest</th>
+              <th>Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            {coverage.states.map((row) => (
+              <tr key={row.code}>
+                <td>
+                  {row.name} <span className="mono muted-note">{row.code}</span>
+                </td>
+                <td className="num">{row.water_bodies.toLocaleString()}</td>
+                <td className="num">{row.stations.toLocaleString()}</td>
+                <td className="num">{row.observations.toLocaleString()}</td>
+                <td>{row.date_min ? formatDay(row.date_min) : "—"}</td>
+                <td>{row.date_max ? formatDay(row.date_max) : "—"}</td>
+                <td className="muted-note">{row.note}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </SectionCard>
   );
 }

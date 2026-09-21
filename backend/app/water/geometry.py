@@ -569,6 +569,7 @@ def prefetch(
     *,
     state_code: str | None = None,
     slugs: list[str] | None = None,
+    water_types: list[str] | None = None,
     limit: int | None = None,
     retry_statuses: tuple[str, ...] = ("not_attempted", "source_error"),
     pause_seconds: float = 6.0,
@@ -578,8 +579,9 @@ def prefetch(
     """Fetch geometry for many bodies politely (one request at a time)."""
     from app.models.water import State
 
+    types = [t for t in (water_types or list(TYPE_POLICY)) if t in TYPE_POLICY]
     query = select(WaterBody).where(
-        WaterBody.water_type.in_(list(TYPE_POLICY)),
+        WaterBody.water_type.in_(types),
         WaterBody.geometry_status.in_(retry_statuses),
     )
     if slugs:

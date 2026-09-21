@@ -942,6 +942,7 @@ def map_water_bodies(
                 if b.latest_observed_at
                 else None
             ),
+            "has_geometry": b.geometry_status == "matched",
         }
         for b in rows
     ]

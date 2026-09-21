@@ -20,10 +20,14 @@ export type WaterStatus =
   | "HIGH_CONCERN"
   | "POLLUTED_STRETCH"
   | "INSUFFICIENT_DATA"
-  | "NO_RECENT_DATA";
+  | "NO_RECENT_DATA"
+  | "NO_APPLICABLE_REFERENCE";
 
 export type WaterEvidenceType =
   | "MEASURED"
+  | "REFERENCE_COMPARISON"
+  | "SOURCE_CLASSIFICATION"
+  | "DERIVED_STATUS"
   | "SATELLITE_OBSERVED"
   | "IMAGE_DETECTED"
   | "REPORTED"
@@ -53,7 +57,8 @@ export type Compliance =
   | "exceeds"
   | "below"
   | "no_standard"
-  | "not_measured";
+  | "not_measured"
+  | "no_reference";
 
 export interface WaterBodySummary {
   id: number;
@@ -87,27 +92,75 @@ export interface Freshness {
   summary: string;
 }
 
+/** How a reference standard was chosen for a water body — or why none was. */
+export interface ReferenceSelection {
+  available: boolean;
+  basis:
+    | "user_selected"
+    | "water_body_designated_use"
+    | "station_classification"
+    | "national_assessment_category"
+    | "none";
+  basis_label: string;
+  reason: string;
+  standard_code: string | null;
+  standard_name: string | null;
+  category: string | null;
+  legal_basis: string | null;
+  issuing_body: string | null;
+  effective_date: string | null;
+  source_url: string | null;
+  verified_note: string | null;
+}
+
 export interface ComparisonResult {
   parameter: string;
   label: string;
   value: number | null;
   unit: string | null;
-  designated_use: string;
-  designated_use_label: string;
   compliance: Compliance;
   failed: boolean;
+  evidence_type: "REFERENCE_COMPARISON";
   exceedance_factor: number | null;
+  above_desirable: boolean;
+  threshold_type: "minimum" | "maximum" | "range" | null;
   limit_min: number | null;
   limit_max: number | null;
+  desirable: number | null;
+  standard_code: string | null;
+  standard_name: string | null;
   standard_source: string | null;
   standard_url: string | null;
+  designated_use: string | null;
   explanation: string;
+}
+
+export interface SourceClassificationItem {
+  evidence_type: "SOURCE_CLASSIFICATION";
+  source: string;
+  classification_type: string;
+  assessment_year: number | null;
+  priority: string | null;
+  stretch_name: string | null;
+  source_reference: string;
 }
 
 export interface StatusDetail {
   status: WaterStatus;
   label: string;
-  designated_use: string;
+  evidence_type?: "DERIVED_STATUS";
+  reference: ReferenceSelection;
+  source_classifications: SourceClassificationItem[];
+  measurements?: {
+    parameter: string;
+    label: string;
+    value: number | null;
+    unit: string | null;
+    observed_at: string;
+    evidence_type: "MEASURED";
+  }[];
+  limitations?: string[];
+  designated_use: string | null;
   designated_use_label: string;
   describes_present_state: boolean;
   freshness: Freshness;
@@ -154,6 +207,9 @@ export interface StationSummary {
   water_body_slug: string | null;
   observation_count: number;
   latest_observed_at: string | null;
+  position_descriptor?: string | null;
+  relationship_type?: string | null;
+  geometry_distance_m?: number | null;
 }
 
 export interface WaterSource {
@@ -169,6 +225,94 @@ export interface WaterSource {
   retrieved_at: string | null;
 }
 
+export type GeoJsonGeometry =
+  | { type: "Point"; coordinates: number[] }
+  | { type: "LineString"; coordinates: number[][] }
+  | { type: "MultiLineString"; coordinates: number[][][] }
+  | { type: "Polygon"; coordinates: number[][][] }
+  | { type: "MultiPolygon"; coordinates: number[][][][] };
+
+export interface GeometryProvenance {
+  source: string;
+  source_ids: string[];
+  licence: string | null;
+  retrieved_at: string | null;
+  version: string | null;
+  confidence: "high" | "medium";
+  match_method: string;
+  match_notes: string[];
+  feature_count: number;
+  clipped: boolean;
+  clipped_note: string | null;
+}
+
+export interface WaterGeometry {
+  geometry: GeoJsonGeometry;
+  geometry_type: GeoJsonGeometry["type"];
+  bbox: [number, number, number, number];
+  provenance: GeometryProvenance;
+}
+
+export type DataQualityLevel = "HIGH" | "MODERATE" | "LIMITED" | "INSUFFICIENT";
+
+export interface DataQuality {
+  level: DataQualityLevel;
+  factors: { factor: string; value: string | number; meets: boolean; rule: string }[];
+  rule: string;
+  excludes: string;
+}
+
+export interface Availability {
+  latest_available_observation: string | null;
+  age_days: number | null;
+  expected_cadence: string | null;
+  describes_present_state: boolean;
+  current_condition: string;
+  summary: string | null;
+}
+
+export interface SourcePanelEntry {
+  role: string;
+  name: string | null;
+  organisation: string | null;
+  url: string | null;
+  licence: string | null;
+  latest: string | number | null;
+  retrieved_at: string | null;
+  records: number | null;
+}
+
+export interface SatelliteProxy {
+  name: string;
+  label: string;
+  evidence_type: "SATELLITE_OBSERVED";
+  median: number;
+  mean: number;
+  pixels: number;
+  unit: null;
+  calibrated: false;
+  caveat: string;
+}
+
+export interface WaterImageEvidence {
+  image_id: string;
+  evidence_type: "SATELLITE" | "OFFICIAL_PHOTO" | "FIELD_PHOTO" | "REPORT_IMAGE" | "REFERENCE";
+  source: string;
+  provider: string | null;
+  sensor: string | null;
+  scene_id: string | null;
+  acquisition_date: string | null;
+  thumbnail_url: string | null;
+  full_image_url: string | null;
+  bbox: [number, number, number, number];
+  licence: string | null;
+  retrieved_at: string | null;
+  water_fraction: number | null;
+  cloud_fraction: number | null;
+  proxy: SatelliteProxy | null;
+  scenes_tried: { scene_id: string; date: string; rejected?: string; accepted?: boolean }[];
+}
+
 export interface WaterBodyDetail extends Omit<WaterBodySummary, "latest_available_status"> {
   basin: string | null;
   sub_basin: string | null;
@@ -176,8 +320,18 @@ export interface WaterBodyDetail extends Omit<WaterBodySummary, "latest_availabl
   status_detail: StatusDetail;
   latest_available_status: StatusDetail | null;
   parameters: WaterParameterReading[];
+  reference: ReferenceSelection;
+  designated_use_recorded: string | null;
   stations: StationSummary[];
   sources: WaterSource[];
+  geometry: WaterGeometry | null;
+  geometry_status: string;
+  geometry_status_text: string;
+  data_quality: DataQuality;
+  availability: Availability;
+  sources_panel: SourcePanelEntry[];
+  imagery: WaterImageEvidence[];
+  imagery_note: string;
 }
 
 export interface StationDetail extends StationSummary {
@@ -235,10 +389,131 @@ export interface MapFeature {
   station_count: number;
   observation_count: number;
   latest_observed_at: string | null;
+  has_geometry?: boolean;
+}
+
+export interface GeometryFeature {
+  type: "Feature";
+  geometry: GeoJsonGeometry;
+  properties: {
+    slug: string;
+    name: string;
+    water_type: WaterBodyType;
+    geometry_type: string;
+    latest_available_status: WaterStatus | null;
+    status: WaterStatus | null;
+    confidence: string;
+    source: string;
+    clipped: boolean;
+  };
+}
+
+export interface GeometryCollection {
+  type: "FeatureCollection";
+  features: GeometryFeature[];
+  count: number;
+  truncated: boolean;
+  attribution: string;
+}
+
+export interface BoundaryFeature {
+  type: "Feature";
+  geometry: GeoJsonGeometry;
+  properties: {
+    name: string;
+    level: "state" | "district";
+    parent: string | null;
+    state_code: string | null;
+    state_slug: string | null;
+    has_water_data: boolean;
+    centroid: [number, number];
+    bbox: [number, number, number, number];
+  };
+}
+
+export interface BoundaryCollection {
+  type: "FeatureCollection";
+  features: BoundaryFeature[];
+  count: number;
+  source: string;
+  licence: string;
+  vintage: string;
+  disclaimer: string;
+}
+
+export type ClusterItem =
+  | {
+      kind: "cluster";
+      count: number;
+      latitude: number;
+      longitude: number;
+      worst_latest_available_status: WaterStatus | null;
+      status_counts: Record<string, number>;
+    }
+  | {
+      kind: "station";
+      id: number;
+      name: string;
+      latitude: number;
+      longitude: number;
+      water_body_slug?: string | null;
+      latest_available_status: WaterStatus | null;
+      latest_observed_at: string | null;
+    };
+
+export interface ClusterResponse {
+  zoom: number;
+  clustered: boolean;
+  items: ClusterItem[];
+}
+
+export interface MapLayerDef {
+  key: string;
+  label: string;
+  kind: "geojson" | "wms" | "clusters" | "points" | "style" | "detail_only";
+  endpoint?: string;
+  default: boolean;
+  min_zoom?: number;
+  attribution?: string;
+  note?: string;
+  wms?: {
+    url: string;
+    layers: string;
+    format: string;
+    transparent: boolean;
+    version: string;
+    verified: string;
+  };
+}
+
+export interface MapLayerCatalogue {
+  groups: { key: string; label: string; layers: MapLayerDef[] }[];
+}
+
+export interface CitySummary {
+  name: string;
+  slug: string;
+  state: string | null;
+  state_slug: string | null;
+  aliases: string[];
+  latitude: number | null;
+  longitude: number | null;
+  bbox: [number, number, number, number] | null;
+  definition: string;
+  position_source: string;
+}
+
+export interface SearchResponse {
+  query: string;
+  count: number;
+  items: SearchHit[];
+  ask_suggested: boolean;
+  intent: string | null;
 }
 
 export interface SearchHit {
-  type: "water_body" | "state" | "district" | "station";
+  type: "water_body" | "state" | "district" | "station" | "city";
+  bbox?: [number, number, number, number] | null;
   title: string;
   subtitle: string;
   slug: string;
@@ -277,10 +552,20 @@ export interface StateDetail extends StateSummary {
 }
 
 export interface DistrictDetail {
+  kind?: "district" | "city";
+  /** City fields, present when kind === "city". */
+  definition?: string;
+  position_source?: string;
+  aliases?: string[];
+  bbox?: [number, number, number, number] | null;
+  districts?: { name: string; slug: string }[];
+  latest_available_status_counts?: Record<string, number>;
+  latest_observed_at?: string | null;
+  empty_reason?: string | null;
   name: string;
   slug: string;
-  state: string;
-  state_slug: string;
+  state: string | null;
+  state_slug: string | null;
   latitude: number | null;
   longitude: number | null;
   water_body_count: number;
@@ -320,32 +605,35 @@ export interface WaterOverview {
   } | null;
 }
 
+export interface StandardThreshold {
+  parameter: string;
+  label: string;
+  type: "minimum" | "maximum" | "range" | "categorical";
+  min: number | null;
+  max: number | null;
+  desirable: number | null;
+  unit: string | null;
+  note: string | null;
+}
+
+export interface StandardDefinition {
+  code: string;
+  name: string;
+  category: string | null;
+  issuing_body: string;
+  legal_basis: string;
+  source_url: string;
+  verified_note: string;
+  version?: string | null;
+  effective_date?: string | null;
+  thresholds: StandardThreshold[];
+}
+
 export interface StandardsSummary {
-  default_use: string;
-  default_use_label: string;
-  classes: Record<string, string>;
-  thresholds_by_use: Record<
-    string,
-    {
-      parameter: string;
-      min: number | null;
-      max: number | null;
-      unit: string | null;
-      describes: string;
-    }[]
-  >;
-  polluted_stretch: {
-    bod_threshold_mg_l: number;
-    bands: {
-      priority: string;
-      min: number;
-      max: number | null;
-      describes: string;
-    }[];
-    source: string;
-    source_url: string;
-  };
-  sources: { name: string; url: string }[];
+  selection_order: { basis: string; label: string }[];
+  national_assessment: { applies_to: string[]; standard_code: string; reason: string };
+  standards: StandardDefinition[];
+  polluted_stretch_bands: { priority: string; min: number; max: number | null; describes: string }[];
   notes: string[];
 }
 
@@ -373,7 +661,7 @@ export type WaterAnswerStatus = "grounded" | "partial" | "no_evidence";
 
 export interface WaterCitation {
   position: number;
-  kind: "observation" | "status" | "document" | "water_body";
+  kind: "observation" | "status" | "document" | "water_body" | "station" | "satellite";
   title: string;
   detail: string;
   evidence_type: WaterEvidenceType;
@@ -389,9 +677,9 @@ export interface WaterCitation {
 }
 
 export interface MapAction {
-  type: "highlight";
-  water_body_slugs: string[];
-  focus: string | null;
+  type: "highlight" | "fit";
+  water_body_slugs?: string[];
+  focus?: string | null;
   bbox: [number, number, number, number] | null;
   href: string;
 }
@@ -415,6 +703,7 @@ export interface WaterAnswer {
   map_action: MapAction | null;
   resolution: {
     water_bodies: string[];
+    cities?: string[];
     districts: string[];
     states: string[];
     parameters: string[];
@@ -426,4 +715,45 @@ export interface WaterAnswer {
   llm_used: boolean;
   notes: string[];
   answered_at: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* Coverage                                                            */
+/* ------------------------------------------------------------------ */
+
+export interface WaterCoverage {
+  generated_at: string;
+  provider: string;
+  totals: {
+    states_available_in_source: number;
+    states_loaded: number;
+    states_without_data: string[];
+    districts: number;
+    cities: number;
+    water_bodies: number;
+    water_bodies_by_type: Record<string, number>;
+    stations: number;
+    stations_with_coordinates: number;
+    observations: number;
+    date_min: string | null;
+    date_max: string | null;
+    geometries: number;
+    geometry_status: Record<string, number>;
+    boundaries: Record<string, number>;
+  };
+  states: {
+    code: string;
+    name: string;
+    in_source: boolean;
+    source_resources: number;
+    loaded: boolean;
+    districts: number;
+    water_bodies: number;
+    water_bodies_by_type: Record<string, number>;
+    stations: number;
+    observations: number;
+    date_min: string | null;
+    date_max: string | null;
+    note: string;
+  }[];
 }

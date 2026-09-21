@@ -101,12 +101,19 @@ def _coverage(markdown: str | None) -> int:
     return 0
 
 
-def _fetch_geometry(state: str | None, slugs: list[str] | None, limit: int | None) -> int:
+def _fetch_geometry(
+    state: str | None,
+    slugs: list[str] | None,
+    limit: int | None,
+    water_types: list[str] | None = None,
+) -> int:
     from app.water.geometry import prefetch
 
     init_db()
     with SessionLocal() as db:
-        counts = prefetch(db, state_code=state, slugs=slugs, limit=limit)
+        counts = prefetch(
+            db, state_code=state, slugs=slugs, limit=limit, water_types=water_types
+        )
     print(json.dumps(counts, indent=2))
     return 0
 
@@ -253,6 +260,7 @@ def main(argv: list[str] | None = None) -> int:
     geometry.add_argument("--state", help="Only this state code.")
     geometry.add_argument("--slug", nargs="+", help="Only these water bodies.")
     geometry.add_argument("--limit", type=int, help="At most this many bodies.")
+    geometry.add_argument("--type", nargs="+", help="Only these water types.")
     coverage = sub.add_parser("coverage", help="Report what the database holds.")
     coverage.add_argument("--markdown", help="Write DATASET_COVERAGE.md to this path.")
 
@@ -272,7 +280,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "fetch-imagery":
         return _fetch_imagery(args.slug, args.limit)
     if args.command == "fetch-geometry":
-        return _fetch_geometry(args.state, args.slug, args.limit)
+        return _fetch_geometry(args.state, args.slug, args.limit, args.type)
     if args.command == "coverage":
         return _coverage(args.markdown)
     return _health()

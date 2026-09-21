@@ -20,6 +20,7 @@ import {
   CalendarClock,
   CircleHelp,
   Droplets,
+  Scale,
   FlaskConical,
   Info,
   MapPin,
@@ -51,7 +52,7 @@ export const STATUS_META: Record<
     label: "Within reference",
     tone: "ok",
     icon: ShieldCheck,
-    description: "Every evaluable parameter satisfies the selected standard.",
+    description: "Every evaluable parameter satisfies the reference standard applied.",
   },
   ELEVATED: {
     label: "Elevated",
@@ -70,7 +71,7 @@ export const STATUS_META: Record<
     tone: "critical",
     icon: ShieldAlert,
     description:
-      "Meets CPCB's national criterion for a polluted river location (BOD above 3 mg/L).",
+      "Listed by an official source (CPCB) as a polluted river stretch. Never assigned from observations alone.",
   },
   INSUFFICIENT_DATA: {
     label: "Insufficient data",
@@ -85,6 +86,13 @@ export const STATUS_META: Record<
     icon: CalendarClock,
     description:
       "The latest observation is too old to describe this water body's present state.",
+  },
+  NO_APPLICABLE_REFERENCE: {
+    label: "No applicable reference",
+    tone: "unknown",
+    icon: Scale,
+    description:
+      "Measured, but no standard is established as applying to this water body, so no judgement is made.",
   },
 };
 
@@ -120,7 +128,7 @@ export function WaterStatusBadge({
  * The historical verdict, never shown without its date.
  *
  * This is the component that makes years-old official data useful without
- * becoming dishonest: "as of 02 Dec 2021, BOD was above the class C limit" is
+ * becoming dishonest: "as of 02 Dec 2021, BOD was above the bathing-water limit" is
  * a true and checkable statement, where the same sentence in the present
  * tense would not be.
  */
@@ -137,11 +145,18 @@ export function LatestAvailableStatus({
     <div className="latest-status">
       <div className="latest-status-head">
         <WaterStatusBadge status={detail.status} />
-        {detail.priority_band && (
-          <span className="priority-band" title={detail.priority_description ?? ""}>
-            CPCB priority {detail.priority_band}
-          </span>
-        )}
+        {(detail.source_classifications ?? [])
+          .filter((c) => c.priority)
+          .slice(0, 1)
+          .map((c) => (
+            <span
+              key={c.source_reference}
+              className="priority-band"
+              title={`${c.source}${c.assessment_year ? `, ${c.assessment_year}` : ""}`}
+            >
+              {c.source} priority {c.priority}
+            </span>
+          ))}
       </div>
       <p className="latest-status-asof">
         <CalendarClock size={13} aria-hidden />
@@ -166,6 +181,21 @@ const EVIDENCE_META: Record<
     label: "Measured",
     tone: "measured",
     hint: "Laboratory or field instrument measurement of the named quantity.",
+  },
+  REFERENCE_COMPARISON: {
+    label: "Reference comparison",
+    tone: "inferred",
+    hint: "A measured value compared with a published standard, which is named.",
+  },
+  SOURCE_CLASSIFICATION: {
+    label: "Official classification",
+    tone: "reported",
+    hint: "A classification published by an official source, shown as published.",
+  },
+  DERIVED_STATUS: {
+    label: "Derived status",
+    tone: "inferred",
+    hint: "A band derived by fixed rules from the measurements and reference, with every input listed.",
   },
   SATELLITE_OBSERVED: {
     label: "Satellite-derived",
@@ -247,9 +277,9 @@ export function WaterTypeTag({ type }: { type: WaterBodyType }) {
 /**
  * One measured parameter.
  *
- * A parameter the standard does not cover shows "no applicable limit" rather
- * than a tick: Class C sets a limit for total coliform but not faecal
- * coliform, and rendering the latter as compliant would be an invention.
+ * A parameter the applied standard does not cover shows "sets no limit"
+ * rather than a tick: rendering an ungoverned value as compliant would be an
+ * invention.
  */
 export function ParameterCard({ reading }: { reading: WaterParameterReading }) {
   const c = reading.comparison;
@@ -296,12 +326,22 @@ export function ParameterCard({ reading }: { reading: WaterParameterReading }) {
   );
 }
 
+function standardShort(c: ComparisonResult): string {
+  return c.standard_name ?? "the reference";
+}
+
 export function ComplianceLine({ comparison }: { comparison: ComparisonResult }) {
+  if (comparison.compliance === "no_reference") {
+    return (
+      <p className="param-compliance param-compliance-unknown">
+        <Minus size={11} aria-hidden /> Shown as measured; no applicable reference
+      </p>
+    );
+  }
   if (comparison.compliance === "no_standard") {
     return (
       <p className="param-compliance param-compliance-unknown">
-        <Minus size={11} aria-hidden /> No limit under class{" "}
-        {comparison.designated_use}
+        <Minus size={11} aria-hidden /> {standardShort(comparison)} sets no limit
       </p>
     );
   }
@@ -317,8 +357,8 @@ export function ComplianceLine({ comparison }: { comparison: ComparisonResult })
       <p className="param-compliance param-compliance-bad">
         <TrendingUp size={11} aria-hidden />
         {comparison.compliance === "exceeds"
-          ? `Above the class ${comparison.designated_use} limit of ${comparison.limit_max}`
-          : `Below the class ${comparison.designated_use} minimum of ${comparison.limit_min}`}
+          ? `Above the limit of ${comparison.limit_max} (${standardShort(comparison)})`
+          : `Below the minimum of ${comparison.limit_min} (${standardShort(comparison)})`}
         {comparison.exceedance_factor && comparison.exceedance_factor >= 1.5
           ? ` (${comparison.exceedance_factor.toFixed(1)}×)`
           : ""}
@@ -327,8 +367,10 @@ export function ComplianceLine({ comparison }: { comparison: ComparisonResult })
   }
   return (
     <p className="param-compliance param-compliance-ok">
-      <ShieldCheck size={11} aria-hidden /> Within the class{" "}
-      {comparison.designated_use} limit
+      <ShieldCheck size={11} aria-hidden /> Within the limit ({standardShort(comparison)})
+      {comparison.above_desirable && comparison.desirable != null && (
+        <span className="param-desirable"> · above the desirable level of {comparison.desirable}</span>
+      )}
     </p>
   );
 }
@@ -372,9 +414,19 @@ export function StatusExplanation({ detail }: { detail: StatusDetail }) {
         </p>
       )}
 
+      {(detail.limitations ?? []).length > 0 && (
+        <ul className="status-limitations">
+          {(detail.limitations ?? []).map((l) => (
+            <li key={l}>{l}</li>
+          ))}
+        </ul>
+      )}
+
       <p className="status-engine">
-        Determined by {detail.engine_version} against{" "}
-        {detail.designated_use_label} (class {detail.designated_use}).
+        Determined by {detail.engine_version}
+        {detail.reference?.standard_name
+          ? ` against ${detail.reference.standard_name} (${detail.reference.basis_label.toLowerCase()}).`
+          : " with no applicable reference standard."}
       </p>
     </div>
   );
