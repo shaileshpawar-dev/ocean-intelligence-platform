@@ -175,3 +175,16 @@ class TestGeographyApi:
         assert t["geometries"] == 1
         assert t["boundaries"] == {"state": 3, "district": 3}
         assert t["cities"] >= 1
+
+    def test_search_finds_city_first_and_routes_questions(self, geo_client):
+        body = geo_client.get("/api/v1/search?q=Mumbai").json()
+        assert body["items"][0]["type"] == "city"
+        assert body["items"][0]["href"] == "/app/city/mumbai-mh"
+        assert body["ask_suggested"] is False
+        alias = geo_client.get("/api/v1/search?q=Bombay").json()
+        assert alias["items"][0]["title"] == "Mumbai"
+        mithi = geo_client.get("/api/v1/search?q=Mithi").json()
+        assert mithi["items"][0]["slug"] == "mithi-river"
+        question = geo_client.get("/api/v1/search?q=polluted rivers near Mumbai").json()
+        assert question["ask_suggested"] is True
+        assert question["intent"] == "nearby"

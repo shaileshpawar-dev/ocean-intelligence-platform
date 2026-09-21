@@ -1149,6 +1149,32 @@ def search(db: Session, query: str, *, limit: int = SEARCH_LIMIT) -> list[dict]:
             }
         )
 
+    from app.models.water_geo import City
+
+    key = normalise_name(text)
+    for city in db.scalars(select(City)):
+        names = [city.name, *(city.aliases or [])]
+        if not any(key in normalise_name(n) for n in names):
+            continue
+        state = db.get(State, city.state_id) if city.state_id else None
+        results.append(
+            {
+                "type": "city",
+                "title": city.name,
+                "subtitle": f"City · {state.name}" if state else "City",
+                "slug": city.slug,
+                "href": f"/app/city/{city.slug}",
+                "latitude": city.centroid_lat,
+                "longitude": city.centroid_lon,
+                "bbox": (
+                    [city.min_lat, city.min_lon, city.max_lat, city.max_lon]
+                    if city.min_lat is not None
+                    else None
+                ),
+                "rank": 11_000,
+            }
+        )
+
     for state in db.scalars(
         select(State).where(func.lower(State.name).like(needle)).limit(5)
     ):

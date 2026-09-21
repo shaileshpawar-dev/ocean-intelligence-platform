@@ -416,9 +416,25 @@ def search(
     q: str = Query(..., min_length=2, description="Free-text query."),
     limit: int = Query(25, ge=1, le=50),
 ) -> dict:
-    """Search water bodies, states, districts and stations at once."""
+    """Search water bodies, cities, states, districts and stations at once.
+
+    ``ask_suggested`` is true when the text reads as a question ("polluted
+    rivers near Mumbai") rather than a name, so the client can send it to
+    the grounded question endpoint instead of listing name matches.
+    """
+    from app.water.rag import Intent, classify_intent
+
     items = ws.search(db, q, limit=limit)
-    return {"query": q, "count": len(items), "items": items}
+    words = q.split()
+    intent = classify_intent(q)
+    ask = len(words) >= 3 and intent is not Intent.UNKNOWN
+    return {
+        "query": q,
+        "count": len(items),
+        "items": items,
+        "ask_suggested": ask,
+        "intent": str(intent) if ask else None,
+    }
 
 
 # ---------------------------------------------------------------------------
