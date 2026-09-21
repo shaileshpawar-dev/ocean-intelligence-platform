@@ -8,6 +8,8 @@
     python -m app.water.cli import-boundaries [--offline]
     python -m app.water.cli import-cities
     python -m app.water.cli coverage [--markdown PATH]
+    python -m app.water.cli import-classifications --file prs.csv --year 2025 \
+        --reference "CPCB PRS report 2025, Annexure I"
     python -m app.water.cli fetch-geometry [--state MH] [--slug mithi-river] [--limit N]
 
 This is the manual sync the platform uses in place of a scheduler. CPCB
@@ -108,6 +110,27 @@ def _fetch_geometry(state: str | None, slugs: list[str] | None, limit: int | Non
     return 0
 
 
+def _import_classifications(path: str, source: str, year: int, reference: str) -> int:
+    from pathlib import Path
+
+    from app.services.water_service import refresh_cached_statuses
+    from app.water.classifications import import_prs_csv
+
+    init_db()
+    with SessionLocal() as db:
+        report = import_prs_csv(
+            db,
+            Path(path),
+            source=source,
+            assessment_year=year,
+            source_reference=reference,
+        )
+        summary = report.to_dict()
+        summary["statuses_refreshed"] = refresh_cached_statuses(db)
+    print(json.dumps(summary, indent=2))
+    return 0 if not report.rejected else 1
+
+
 def _health() -> int:
     from app.water.providers import all_providers
 
@@ -178,6 +201,18 @@ def main(argv: list[str] | None = None) -> int:
         "--offline", action="store_true", help="Use cached files only; never download."
     )
     sub.add_parser("import-cities", help="Rebuild cities from the curated definitions.")
+    classifications = sub.add_parser(
+        "import-classifications",
+        help="Import an official polluted-river-stretch table (CSV).",
+    )
+    classifications.add_argument("--file", required=True)
+    classifications.add_argument(
+        "--source", default="Central Pollution Control Board (PRS assessment)"
+    )
+    classifications.add_argument("--year", type=int, required=True)
+    classifications.add_argument(
+        "--reference", required=True, help="Where the table was taken from."
+    )
     geometry = sub.add_parser(
         "fetch-geometry", help="Match OSM geometry to water bodies (Overpass)."
     )
@@ -198,6 +233,8 @@ def main(argv: list[str] | None = None) -> int:
         return _import_boundaries(args.offline)
     if args.command == "import-cities":
         return _import_cities()
+    if args.command == "import-classifications":
+        return _import_classifications(args.file, args.source, args.year, args.reference)
     if args.command == "fetch-geometry":
         return _fetch_geometry(args.state, args.slug, args.limit)
     if args.command == "coverage":
