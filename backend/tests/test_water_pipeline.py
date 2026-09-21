@@ -111,7 +111,37 @@ FIXTURE_ROWS = [
         longitude=73.79,
         district="Nashik",
     ),
+    # A river named with its keyword in one state...
+    _row(
+        "YAMUNA RIVER AT MATHURA",
+        "bod",
+        9.0,
+        SAMPLED,
+        latitude=27.49,
+        longitude=77.67,
+        state_name="Uttar Pradesh",
+        state_code="UP",
+        district="Mathura",
+    ),
 ]
+
+# ...and without it in another state's resource. Per-resource propagation
+# cannot connect these; the corpus-wide reconcile pass must.
+SECOND_RESOURCE_ROWS = [
+    _row(
+        "YAMUNA AT NIZAMUDDIN BRIDGE",
+        "bod",
+        25.0,
+        SAMPLED,
+        latitude=28.59,
+        longitude=77.26,
+        state_name="Delhi",
+        state_code="DL",
+        district="South",
+    ),
+]
+
+ALL_ROWS = FIXTURE_ROWS + SECOND_RESOURCE_ROWS
 
 
 class FakeProvider(WaterDataProvider):
@@ -129,12 +159,15 @@ class FakeProvider(WaterDataProvider):
         )
 
     def plans(self, *, states: list[str] | None = None) -> list[FetchPlan]:
-        return [FetchPlan(identifier="fixture", description="fixture", state_code="MH")]
+        return [
+            FetchPlan(identifier="fixture", description="fixture", state_code="MH"),
+            FetchPlan(identifier="second", description="second", state_code="DL"),
+        ]
 
     def fetch(self, plan: FetchPlan) -> Iterator[ObservationRow]:
         if self.fail:
             raise ProviderUnavailableError("simulated outage")
-        yield from FIXTURE_ROWS
+        yield from FIXTURE_ROWS if plan.identifier == "fixture" else SECOND_RESOURCE_ROWS
 
 
 @pytest.fixture
@@ -157,7 +190,7 @@ class TestIngestion:
     def test_rows_are_ingested_and_matched(self, water_db):
         db, summary = water_db
         assert summary["status"] == "success"
-        assert summary["records_inserted"] == len(FIXTURE_ROWS)
+        assert summary["records_inserted"] == len(ALL_ROWS)
         names = {b.name for b in db.query(WaterBody).all()}
         assert "Mithi River" in names
         assert "Godavari River" in names
@@ -166,8 +199,8 @@ class TestIngestion:
         db, _ = water_db
         again = ingest_provider(db, "cpcb_nwdp")
         assert again["records_inserted"] == 0
-        assert again["records_duplicate"] == len(FIXTURE_ROWS)
-        assert db.query(WaterQualityObservation).count() == len(FIXTURE_ROWS)
+        assert again["records_duplicate"] == len(ALL_ROWS)
+        assert db.query(WaterQualityObservation).count() == len(ALL_ROWS)
 
     def test_implausible_value_is_kept_and_flagged(self, water_db):
         db, _ = water_db
@@ -193,8 +226,24 @@ class TestIngestion:
     def test_run_is_logged(self, water_db):
         db, summary = water_db
         run = db.query(IngestionRun).filter_by(run_id=summary["run_id"]).one()
-        assert run.records_seen == len(FIXTURE_ROWS)
+        assert run.records_seen == len(ALL_ROWS)
         assert run.finished_at is not None
+
+    def test_same_river_across_resources_is_one_water_body(self, water_db):
+        """Delhi's 'YAMUNA AT ...' must join UP's 'YAMUNA RIVER ...'."""
+        db, _ = water_db
+        yamunas = db.query(WaterBody).filter(WaterBody.normalized_name == "YAMUNA").all()
+        assert len(yamunas) == 1
+        assert yamunas[0].name == "Yamuna River"
+        assert yamunas[0].station_count == 2
+
+    def test_reingestion_does_not_recreate_merged_bodies(self, water_db):
+        db, _ = water_db
+        again = ingest_provider(db, "cpcb_nwdp")
+        assert again["water_bodies_created"] == 0
+        assert (
+            db.query(WaterBody).filter(WaterBody.normalized_name == "YAMUNA").count() == 1
+        )
 
     def test_provider_outage_is_recorded_not_hidden(self, db, monkeypatch):
         FakeProvider.fail = True
@@ -294,6 +343,13 @@ class TestWaterApi:
         assert items[0]["type"] == "water_body"
         assert items[0]["href"] == "/app/water/mithi-river"
 
+    def test_state_filter_includes_rivers_first_seen_elsewhere(self, client):
+        """The Yamuna was created from a UP station; it must still be in Delhi."""
+        items = client.get("/api/v1/water-bodies", params={"state": "DL"}).json()["items"]
+        assert "Yamuna River" in {i["name"] for i in items}
+        state = client.get("/api/v1/states/delhi").json()
+        assert state["water_body_count"] == 1
+
     def test_unknown_water_body_is_404(self, client):
         assert client.get("/api/v1/water-bodies/atlantis").status_code == 404
 
@@ -376,6 +432,18 @@ class TestWaterQuestionAnswering:
         assert stages[-1] == "REPORT"
         assert len(stages) < 20
         assert result["llm_used"] is False
+
+    def test_rivers_in_a_state_include_cross_state_rivers(self, water_db):
+        db, _ = water_db
+        result = answer(db, "Which rivers in Delhi have elevated BOD?")
+        assert result["status"] == "grounded"
+        assert [c["title"] for c in result["citations"]] == ["Yamuna River"]
+
+    def test_official_place_rename_resolves(self, water_db):
+        from app.water.matching import expand_place_aliases
+
+        assert "BANGALORE" in expand_place_aliases("LAKES NEAR BENGALURU")
+        assert expand_place_aliases("NOTHING HERE") == "NOTHING HERE"
 
     def test_intent_classification(self):
         assert classify_intent("compare A and B") == "compare"

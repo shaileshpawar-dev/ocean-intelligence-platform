@@ -56,6 +56,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         bootstrap(db)
         ingest_seed_corpus(db)
 
+    # Optional: rebuild water data from the real source when the database
+    # starts empty (WATER_BOOTSTRAP_STATES). Runs in the background.
+    from app.water.cli import bootstrap_in_background
+
+    bootstrap_in_background()
+
     yield
     logger.info("shutdown")
 

@@ -58,6 +58,14 @@ class Settings(BaseSettings):
     gee_service_account: str | None = None
     google_application_credentials: str | None = None
 
+    # -- India water intelligence -----------------------------------------
+    # Comma-separated state codes (e.g. "MH,DL") to ingest from CPCB/NWDP at
+    # start-up when the water tables are empty. Empty disables it. Exists for
+    # ephemeral deployments: a container whose SQLite file is lost on restart
+    # rebuilds its water data from the real source instead of serving an empty
+    # map. It runs in a background thread so health checks pass immediately.
+    water_bootstrap_states: str = ""
+
     # -- Vision ------------------------------------------------------------
     detector_backend: Literal["yolo", "mock"] = "mock"
     yolo_model_path: str | None = None

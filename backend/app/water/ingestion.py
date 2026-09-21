@@ -37,7 +37,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.logging import get_logger
-from app.models.enums import QualityFlag, WaterEvidenceType
+from app.models.enums import QualityFlag, WaterBodyType, WaterEvidenceType
 from app.models.water import (
     DataSource,
     District,
@@ -45,6 +45,8 @@ from app.models.water import (
     MonitoringStation,
     State,
     WaterBody,
+    WaterBodyStatusHistory,
+    WaterEvidence,
     WaterQualityObservation,
 )
 from app.water.matching import (
@@ -207,6 +209,22 @@ class _Registry:
             if key[2]:
                 stmt = stmt.where(WaterBody.state_id == (state.id if state else None))
             found = self.db.scalar(stmt)
+
+        if found is None and match.method == "unclassified":
+            # An untyped name that an earlier run already typed ("YAMUNA AT X"
+            # once "YAMUNA RIVER" is known) attaches to that body directly,
+            # instead of creating a duplicate for the reconcile pass to undo.
+            for typed in self.db.scalars(
+                select(WaterBody).where(
+                    WaterBody.normalized_name == match.normalized_name,
+                    WaterBody.water_type != WaterBodyType.OTHER,
+                )
+            ):
+                if is_plausible_merge(
+                    latitude, longitude, typed.centroid_lat, typed.centroid_lon
+                ):
+                    found = typed
+                    break
 
         if found is not None and not is_plausible_merge(
             latitude, longitude, found.centroid_lat, found.centroid_lon
@@ -419,6 +437,9 @@ def ingest_provider(
         plans_done += 1
         db.commit()
 
+    reconciled = _reconcile_untyped(db)
+    touched_bodies |= reconciled["touched"]
+    touched_bodies -= reconciled["deleted"]
     _recompute_denormalised(db, touched_bodies, touched_stations)
     _recompute_district_centroids(db)
 
@@ -431,6 +452,8 @@ def ingest_provider(
         "failed" if errors and plans_done == 0 else ("partial" if errors else "success")
     )
     run.detail = {
+        "bodies_merged": reconciled["merged"],
+        "bodies_retyped": reconciled["retyped"],
         "plans_total": len(plans),
         "plans_completed": plans_done,
         "states": states or "all",
@@ -567,6 +590,117 @@ def _ingest_plan(
     db.flush()
     counts["inserted"] = len(pending)
     return counts
+
+
+def _reconcile_untyped(db: Session) -> dict:
+    """Resolve untyped water bodies against the whole corpus.
+
+    Type propagation inside a single resource cannot see across resources:
+    Delhi's ``YAMUNA AT <place>`` stations never meet Uttar Pradesh's
+    ``YAMUNA RIVER <place>``, so the same river ended up as two water bodies,
+    one of them untyped. This pass runs after every plan, over everything
+    stored, and for each untyped body whose name matches a body typed by an
+    explicit keyword:
+
+    * if a same-named typed body is geographically plausible, the untyped
+      body's stations and observations are moved onto it and the untyped
+      record is deleted -- one river, one record;
+    * otherwise its type is upgraded in place, marked ``type_propagated``
+      with the lower confidence that method carries.
+
+    Names claimed by conflicting types are left alone rather than resolved by
+    vote, exactly as in the per-resource pass.
+    """
+    typed: dict[str, list[WaterBody]] = defaultdict(list)
+    for body in db.scalars(
+        select(WaterBody).where(
+            WaterBody.match_method.in_(("station_name_parse", "source_field")),
+            WaterBody.water_type != WaterBodyType.OTHER,
+        )
+    ):
+        typed[body.normalized_name].append(body)
+
+    merged = retyped = 0
+    touched: set[int] = set()
+    deleted: set[int] = set()
+
+    untyped = db.scalars(
+        select(WaterBody).where(WaterBody.match_method == "unclassified")
+    ).all()
+
+    for body in untyped:
+        candidates = typed.get(body.normalized_name) or []
+        types = {str(c.water_type) for c in candidates}
+        if len(types) != 1:
+            continue
+
+        plausible = [
+            c
+            for c in candidates
+            if is_plausible_merge(
+                body.centroid_lat, body.centroid_lon, c.centroid_lat, c.centroid_lon
+            )
+        ]
+        if plausible:
+            target = min(
+                plausible,
+                key=lambda c: (
+                    haversine_km(
+                        body.centroid_lat,
+                        body.centroid_lon,
+                        c.centroid_lat,
+                        c.centroid_lon,
+                    )
+                    if None
+                    not in (
+                        body.centroid_lat,
+                        body.centroid_lon,
+                        c.centroid_lat,
+                        c.centroid_lon,
+                    )
+                    else 0.0
+                ),
+            )
+            for model in (MonitoringStation, WaterQualityObservation, WaterEvidence):
+                db.query(model).filter(model.water_body_id == body.id).update(
+                    {model.water_body_id: target.id}, synchronize_session=False
+                )
+            db.query(WaterBodyStatusHistory).filter(
+                WaterBodyStatusHistory.water_body_id == body.id
+            ).delete(synchronize_session=False)
+            aliases = list(target.aliases or [])
+            if body.name not in aliases and body.name != target.name:
+                aliases.append(body.name)
+            target.aliases = aliases
+            db.delete(body)
+            touched.add(target.id)
+            deleted.add(body.id)
+            merged += 1
+        else:
+            learned = {body.normalized_name: candidates[0].water_type}
+            upgraded = apply_propagation(
+                MatchResult(
+                    name=body.name,
+                    normalized_name=body.normalized_name,
+                    water_type=WaterBodyType.OTHER,
+                    method="unclassified",
+                    confidence=body.match_confidence,
+                ),
+                learned,
+            )
+            body.water_type = upgraded.water_type
+            body.name = upgraded.name
+            body.match_method = upgraded.method
+            body.match_confidence = upgraded.confidence
+            touched.add(body.id)
+            retyped += 1
+
+    db.commit()
+    if merged or retyped:
+        logger.info(
+            "water_bodies_reconciled", extra={"merged": merged, "retyped": retyped}
+        )
+    return {"merged": merged, "retyped": retyped, "touched": touched, "deleted": deleted}
 
 
 def _recompute_denormalised(

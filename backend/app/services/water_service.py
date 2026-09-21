@@ -43,7 +43,7 @@ from app.models.water import (
     WaterQualityObservation,
 )
 from app.water.freshness import Cadence
-from app.water.matching import haversine_km, normalise_name
+from app.water.matching import PLACE_ALIASES, haversine_km, normalise_name
 from app.water.parameters import BY_KEY
 from app.water.standards import DEFAULT_USE, DesignatedUse
 from app.water.status import Measurement, StatusResult, evaluate, status_rank
@@ -197,19 +197,46 @@ class WaterBodyFilters:
     """(min_lat, min_lon, max_lat, max_lon)."""
 
 
+def bodies_in_state(state: str) -> Select:
+    """IDs of water bodies with at least one station in ``state``."""
+    return (
+        select(MonitoringStation.water_body_id)
+        .join(State, State.id == MonitoringStation.state_id)
+        .where(
+            MonitoringStation.water_body_id.is_not(None),
+            or_(
+                func.lower(State.slug) == state.lower(),
+                func.upper(State.code) == state.upper(),
+            ),
+        )
+        .distinct()
+    )
+
+
+def bodies_in_district(district: str) -> Select:
+    """IDs of water bodies with at least one station in ``district``."""
+    return (
+        select(MonitoringStation.water_body_id)
+        .join(District, District.id == MonitoringStation.district_id)
+        .where(
+            MonitoringStation.water_body_id.is_not(None),
+            func.lower(District.slug) == district.lower(),
+        )
+        .distinct()
+    )
+
+
 def _apply_filters(stmt: Select, filters: WaterBodyFilters) -> Select:
     """Translate filters into SQL predicates."""
+    # Geography filters match on where a water body's *stations* are, not on
+    # the single state recorded on the body. A river is keyed nationally and
+    # records the state of whichever station created it; filtering on that
+    # alone made the Yamuna vanish from Delhi because it was first seen in
+    # Uttar Pradesh.
     if filters.state:
-        stmt = stmt.join(State, WaterBody.state_id == State.id).where(
-            or_(
-                func.lower(State.slug) == filters.state.lower(),
-                func.upper(State.code) == filters.state.upper(),
-            )
-        )
+        stmt = stmt.where(WaterBody.id.in_(bodies_in_state(filters.state)))
     if filters.district:
-        stmt = stmt.join(District, WaterBody.district_id == District.id).where(
-            func.lower(District.slug) == filters.district.lower()
-        )
+        stmt = stmt.where(WaterBody.id.in_(bodies_in_district(filters.district)))
     if filters.water_type:
         stmt = stmt.where(WaterBody.water_type == filters.water_type)
     if filters.status:
@@ -825,6 +852,64 @@ def water_bodies_near(
     return out[:limit]
 
 
+def water_bodies_near_districts(
+    db: Session,
+    district_ids: list[int],
+    radius_km: float,
+    *,
+    limit: int = 100,
+) -> list[dict]:
+    """Water bodies within ``radius_km`` of any station in the given districts.
+
+    "Near Bengaluru" is not "near one point". The source publishes no district
+    boundary, and a district centroid computed from scattered stations can sit
+    well away from the city -- averaging Bangalore Urban and Bangalore Rural
+    put the centre 56 km from Bellandur Lake. So the district is represented
+    by its own monitoring stations, and a water body qualifies if it is within
+    the radius of any of them. ``distance_km`` is to the nearest such station.
+    """
+    points = [
+        (lat, lon)
+        for lat, lon in db.execute(
+            select(MonitoringStation.latitude, MonitoringStation.longitude).where(
+                MonitoringStation.district_id.in_(district_ids),
+                MonitoringStation.latitude.is_not(None),
+                MonitoringStation.longitude.is_not(None),
+                MonitoringStation.geo_quality == "ok",
+            )
+        )
+    ]
+    if not points:
+        return []
+
+    lat_pad = radius_km / 110.574
+    mid_lat = sum(p[0] for p in points) / len(points)
+    lon_pad = radius_km / max(111.320 * math.cos(math.radians(mid_lat)), 0.01)
+    min_lat = min(p[0] for p in points) - lat_pad
+    max_lat = max(p[0] for p in points) + lat_pad
+    min_lon = min(p[1] for p in points) - lon_pad
+    max_lon = max(p[1] for p in points) + lon_pad
+
+    candidates = db.scalars(
+        select(WaterBody).where(
+            WaterBody.centroid_lat.between(min_lat, max_lat),
+            WaterBody.centroid_lon.between(min_lon, max_lon),
+        )
+    ).all()
+
+    out: list[dict] = []
+    for body in candidates:
+        nearest = min(
+            haversine_km(lat, lon, body.centroid_lat, body.centroid_lon)
+            for lat, lon in points
+        )
+        if nearest <= radius_km:
+            out.append({**summarise_body(db, body), "distance_km": round(nearest, 2)})
+
+    out.sort(key=lambda b: b["distance_km"])
+    return out[:limit]
+
+
 # ---------------------------------------------------------------------------
 # Search
 # ---------------------------------------------------------------------------
@@ -888,10 +973,15 @@ def search(db: Session, query: str, *, limit: int = SEARCH_LIMIT) -> list[dict]:
             }
         )
 
+    # A district can be searched by its official alternative name, so
+    # "Bengaluru" finds the source's "Bangalore Urban".
+    place_terms = [needle] + [
+        f"%{alt.lower()}%" for alt in PLACE_ALIASES.get(normalise_name(text), ())
+    ]
     for district, state_name in db.execute(
         select(District, State.name)
         .join(State, State.id == District.state_id)
-        .where(func.lower(District.name).like(needle))
+        .where(or_(*(func.lower(District.name).like(t) for t in place_terms)))
         .limit(8)
     ):
         results.append(
@@ -953,36 +1043,29 @@ def status_distribution(
     column = WaterBody.cached_historical_status if historical else WaterBody.cached_status
     stmt = select(column, func.count(WaterBody.id))
     if state:
-        stmt = stmt.join(State, WaterBody.state_id == State.id).where(
-            or_(
-                func.lower(State.slug) == state.lower(),
-                func.upper(State.code) == state.upper(),
-            )
-        )
+        stmt = stmt.where(WaterBody.id.in_(bodies_in_state(state)))
     rows = db.execute(stmt.group_by(column)).all()
     return {(status or "UNKNOWN"): count for status, count in rows}
 
 
 def list_states(db: Session) -> list[dict]:
     """States with counts, for the India page."""
+    # Counted through stations so a river crossing several states is counted
+    # in each state it is monitored in.
     rows = db.execute(
         select(
             State,
-            func.count(func.distinct(WaterBody.id)),
-            func.max(WaterBody.latest_observed_at),
+            func.count(func.distinct(MonitoringStation.water_body_id)),
+            func.count(func.distinct(MonitoringStation.id)),
+            func.max(MonitoringStation.latest_observed_at),
         )
-        .outerjoin(WaterBody, WaterBody.state_id == State.id)
+        .outerjoin(MonitoringStation, MonitoringStation.state_id == State.id)
         .group_by(State.id)
         .order_by(State.name)
     ).all()
 
     out = []
-    for state, body_count, latest in rows:
-        stations = db.scalar(
-            select(func.count(MonitoringStation.id)).where(
-                MonitoringStation.state_id == state.id
-            )
-        )
+    for state, body_count, stations, latest in rows:
         out.append(
             {
                 "code": state.code,
@@ -1009,7 +1092,9 @@ def state_detail(db: Session, slug: str) -> dict | None:
     if state is None:
         return None
 
-    bodies = db.scalars(select(WaterBody).where(WaterBody.state_id == state.id)).all()
+    bodies = db.scalars(
+        select(WaterBody).where(WaterBody.id.in_(bodies_in_state(state.slug)))
+    ).all()
     by_type: dict[str, int] = defaultdict(int)
     for body in bodies:
         by_type[str(body.water_type)] += 1
@@ -1019,24 +1104,33 @@ def state_detail(db: Session, slug: str) -> dict | None:
             MonitoringStation.state_id == state.id
         )
     )
+    # Observations taken at stations in this state -- not every observation
+    # of every river that happens to touch it.
     observations = db.scalar(
         select(func.count(WaterQualityObservation.id))
-        .join(WaterBody, WaterBody.id == WaterQualityObservation.water_body_id)
-        .where(WaterBody.state_id == state.id)
+        .join(
+            MonitoringStation,
+            MonitoringStation.id == WaterQualityObservation.station_id,
+        )
+        .where(MonitoringStation.state_id == state.id)
     )
 
     districts = db.execute(
-        select(District, func.count(func.distinct(WaterBody.id)))
-        .outerjoin(WaterBody, WaterBody.district_id == District.id)
+        select(District, func.count(func.distinct(MonitoringStation.water_body_id)))
+        .outerjoin(MonitoringStation, MonitoringStation.district_id == District.id)
         .where(District.state_id == state.id)
         .group_by(District.id)
         .order_by(District.name)
     ).all()
 
+    # Rank by what the last measurement found. Ranking by the present-tense
+    # status would sort on a column that is "no recent data" for every row.
     ranked = sorted(
         bodies,
         key=lambda b: (
-            -status_rank(WaterStatus(b.cached_status)) if b.cached_status else 0,
+            -status_rank(WaterStatus(b.cached_historical_status))
+            if b.cached_historical_status
+            else 0,
             -b.observation_count,
         ),
     )
@@ -1078,9 +1172,17 @@ def district_detail(db: Session, slug: str) -> dict | None:
         return None
     district, state = row
 
+    in_district = (
+        select(MonitoringStation.water_body_id)
+        .where(
+            MonitoringStation.district_id == district.id,
+            MonitoringStation.water_body_id.is_not(None),
+        )
+        .distinct()
+    )
     bodies = db.scalars(
         select(WaterBody)
-        .where(WaterBody.district_id == district.id)
+        .where(WaterBody.id.in_(in_district))
         .order_by(WaterBody.observation_count.desc())
     ).all()
     stations = db.scalars(

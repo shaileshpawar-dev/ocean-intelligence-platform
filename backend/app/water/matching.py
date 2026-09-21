@@ -200,6 +200,66 @@ TRAILING_NOISE = {
 }
 
 
+# Official renamings of Indian cities and districts. The CPCB extracts use a
+# mix of old and new names ("Bangalore Urban", "Belgaum", "Mysore"), while
+# people search with whichever they know. Each pair is a documented official
+# rename, not a guess; nothing here maps one place onto a different place.
+PLACE_ALIASES: dict[str, tuple[str, ...]] = {
+    "BENGALURU": ("BANGALORE",),
+    "BANGALORE": ("BENGALURU",),
+    "MUMBAI": ("BOMBAY",),
+    "BOMBAY": ("MUMBAI",),
+    "CHENNAI": ("MADRAS",),
+    "MADRAS": ("CHENNAI",),
+    "KOLKATA": ("CALCUTTA",),
+    "CALCUTTA": ("KOLKATA",),
+    "BELAGAVI": ("BELGAUM",),
+    "BELGAUM": ("BELAGAVI",),
+    "MYSURU": ("MYSORE",),
+    "MYSORE": ("MYSURU",),
+    "SHIVAMOGGA": ("SHIMOGA",),
+    "SHIMOGA": ("SHIVAMOGGA",),
+    "KALABURAGI": ("GULBARGA",),
+    "GULBARGA": ("KALABURAGI",),
+    "VIJAYAPURA": ("BIJAPUR",),
+    "BIJAPUR": ("VIJAYAPURA",),
+    "BALLARI": ("BELLARY",),
+    "BELLARY": ("BALLARI",),
+    "TUMAKURU": ("TUMKUR",),
+    "TUMKUR": ("TUMAKURU",),
+    "GURUGRAM": ("GURGAON",),
+    "GURGAON": ("GURUGRAM",),
+    "PRAYAGRAJ": ("ALLAHABAD",),
+    "ALLAHABAD": ("PRAYAGRAJ",),
+    "PUDUCHERRY": ("PONDICHERRY",),
+    "PONDICHERRY": ("PUDUCHERRY",),
+    "THIRUVANANTHAPURAM": ("TRIVANDRUM",),
+    "TRIVANDRUM": ("THIRUVANANTHAPURAM",),
+    "KOCHI": ("COCHIN",),
+    "COCHIN": ("KOCHI",),
+    "VADODARA": ("BARODA",),
+    "BARODA": ("VADODARA",),
+    "PUNE": ("POONA",),
+    "POONA": ("PUNE",),
+}
+
+
+def expand_place_aliases(text: str) -> str:
+    """Append the official alternative name of any place mentioned.
+
+    Operates on normalised (upper-case) text and only ever adds words, so a
+    question that already uses the source's spelling is unchanged.
+    """
+    padded = f" {text} "
+    extra = [
+        alt
+        for name, alts in PLACE_ALIASES.items()
+        if f" {name} " in padded
+        for alt in alts
+    ]
+    return f"{text} {' '.join(extra)}".strip() if extra else text
+
+
 def _strip_accents(text: str) -> str:
     """Fold accented characters to ASCII for stable matching."""
     return "".join(

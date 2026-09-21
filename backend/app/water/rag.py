@@ -42,7 +42,7 @@ from sqlalchemy.orm import Session
 
 from app.models.water import District, State, WaterBody
 from app.services import water_service as ws
-from app.water.matching import normalise_name
+from app.water.matching import expand_place_aliases, normalise_name
 from app.water.parameters import BY_KEY, PARAMETERS
 
 PIPELINE_VERSION = "water-rag-1.0.0"
@@ -307,7 +307,8 @@ def classify_intent(question: str) -> Intent:
 
 
 def _question_tokens(question: str) -> str:
-    return f" {normalise_name(question)} "
+    # "Bengaluru" must find the source's "Bangalore Urban".
+    return f" {expand_place_aliases(normalise_name(question))} "
 
 
 def _find_parameters(question: str) -> list[str]:
@@ -408,6 +409,25 @@ def _day(iso: str | None) -> str:
     if not iso:
         return "an unknown date"
     return datetime.fromisoformat(iso).strftime("%d %b %Y")
+
+
+def _filter_by_breach(db: Session, bodies: list[dict], parameter: str) -> list[dict]:
+    """Keep only bodies whose latest measurement of ``parameter`` breached.
+
+    Bodies where the parameter was never measured are dropped, not kept: they
+    cannot be said to have breached anything, and they cannot be said to be
+    compliant either.
+    """
+    kept = []
+    for summary in bodies:
+        body = db.get(WaterBody, summary["id"])
+        reading = next(
+            (r for r in ws.latest_parameters(db, body) if r["parameter"] == parameter),
+            None,
+        )
+        if reading and reading["comparison"]["failed"]:
+            kept.append(summary)
+    return kept
 
 
 def _band_words(status: str | None) -> str:
@@ -782,22 +802,43 @@ def _answer_nearby(
         )
 
     radius = resolution.radius_km or DEFAULT_RADIUS_KM
-    found = tracer.call(
-        "OBSERVE",
-        "water_bodies_near",
-        ws.water_bodies_near,
-        db=db,
-        latitude=centre[0],
-        longitude=centre[1],
-        radius_km=radius,
-        limit=100,
-    )
+    place_phrase = f"any monitoring station in {place}" if resolution.districts else place
+    if resolution.districts:
+        # A district is represented by its own stations, not one averaged
+        # point: see water_service.water_bodies_near_districts.
+        found = tracer.call(
+            "OBSERVE",
+            "water_bodies_near_districts",
+            ws.water_bodies_near_districts,
+            db=db,
+            district_ids=[d.id for d, _ in resolution.districts],
+            radius_km=radius,
+            limit=100,
+        )
+    else:
+        found = tracer.call(
+            "OBSERVE",
+            "water_bodies_near",
+            ws.water_bodies_near,
+            db=db,
+            latitude=centre[0],
+            longitude=centre[1],
+            radius_km=radius,
+            limit=100,
+        )
     if resolution.wants_polluted:
         found = [b for b in found if b.get("latest_available_status") in POLLUTED_BANDS]
     if resolution.water_types:
         found = [b for b in found if b.get("water_type") in resolution.water_types]
     if resolution.parameters:
-        tracer.call("ANALYZE", "filter_by_parameter", lambda: resolution.parameters)
+        found = tracer.call(
+            "ANALYZE",
+            "filter_by_measured_breach",
+            _filter_by_breach,
+            db=db,
+            bodies=found,
+            parameter=resolution.parameters[0],
+        )
 
     citations = [
         Citation(
@@ -831,7 +872,7 @@ def _answer_nearby(
             status=AnswerStatus.NO_EVIDENCE,
             headline=(
                 f"No monitored water bodies {qualifier}were found within "
-                f"{radius:g} km of {place}."
+                f"{radius:g} km of {place_phrase}."
             ),
             limitations=[
                 "Absence from this list means no matching monitored water body, "
@@ -845,7 +886,7 @@ def _answer_nearby(
         status=AnswerStatus.GROUNDED,
         headline=(
             f"{len(found)} monitored water bod{'y' if len(found) == 1 else 'ies'} "
-            f"{qualifier}within {radius:g} km of {place}."
+            f"{qualifier}within {radius:g} km of {place_phrase}."
         ),
         sections=[
             {
@@ -870,8 +911,14 @@ def _answer_nearby(
         limitations=[
             "Statuses are as of each water body's most recent measurement; the "
             "newest CPCB data is from 2021, so none describes the present.",
-            "Distances are measured to the mean position of each water body's "
-            "monitoring stations.",
+            (
+                "A district is represented by its own monitoring stations; each "
+                "distance is from the nearest of them to the water body's "
+                "station-mean position. The source publishes no district boundary."
+                if resolution.districts
+                else "Distances are measured to the mean position of each water "
+                "body's monitoring stations."
+            ),
         ],
         map_action=_map_action(found),
     )
