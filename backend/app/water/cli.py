@@ -4,6 +4,10 @@
     python -m app.water.cli ingest --all
     python -m app.water.cli refresh-status
     python -m app.water.cli health
+    python -m app.water.cli seed-standards
+    python -m app.water.cli import-boundaries [--offline]
+    python -m app.water.cli import-cities
+    python -m app.water.cli coverage [--markdown PATH]
 
 This is the manual sync the platform uses in place of a scheduler. CPCB
 publishes monthly at best, and the extracts on the portal currently lag by
@@ -32,6 +36,9 @@ def _ingest(states: list[str] | None) -> int:
 
     init_db()
     with SessionLocal() as db:
+        from app.water.reference_seed import seed_reference_standards
+
+        seed_reference_standards(db)
         summary = ingest_provider(db, "cpcb_nwdp", states=states)
         summary["statuses_refreshed"] = refresh_cached_statuses(db)
     print(json.dumps(summary, indent=2, default=str))
@@ -44,6 +51,49 @@ def _refresh() -> int:
     init_db()
     with SessionLocal() as db:
         print(f"Refreshed {refresh_cached_statuses(db)} water-body statuses.")
+    return 0
+
+
+def _seed_standards() -> int:
+    from app.water.reference_seed import seed_reference_standards
+
+    init_db()
+    with SessionLocal() as db:
+        print(f"Seeded {seed_reference_standards(db)} reference standards.")
+    return 0
+
+
+def _import_boundaries(offline: bool) -> int:
+    from app.water.boundaries import import_boundaries
+
+    init_db()
+    with SessionLocal() as db:
+        print(json.dumps(import_boundaries(db, offline=offline), indent=2))
+    return 0
+
+
+def _import_cities() -> int:
+    from app.water.cities import import_cities
+
+    init_db()
+    with SessionLocal() as db:
+        print(json.dumps(import_cities(db), indent=2))
+    return 0
+
+
+def _coverage(markdown: str | None) -> int:
+    from pathlib import Path
+
+    from app.water.coverage import coverage_report, render_markdown
+
+    init_db()
+    with SessionLocal() as db:
+        report = coverage_report(db)
+    if markdown:
+        Path(markdown).write_text(render_markdown(report), encoding="utf-8")
+        print(f"Wrote {markdown}")
+    else:
+        print(json.dumps(report["totals"], indent=2))
     return 0
 
 
@@ -109,12 +159,30 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("refresh-status", help="Recompute cached water-body statuses.")
     sub.add_parser("health", help="Probe every registered provider.")
+    sub.add_parser("seed-standards", help="Write the reference catalogue to the DB.")
+    boundaries = sub.add_parser(
+        "import-boundaries", help="Import geoBoundaries state and district polygons."
+    )
+    boundaries.add_argument(
+        "--offline", action="store_true", help="Use cached files only; never download."
+    )
+    sub.add_parser("import-cities", help="Rebuild cities from the curated definitions.")
+    coverage = sub.add_parser("coverage", help="Report what the database holds.")
+    coverage.add_argument("--markdown", help="Write DATASET_COVERAGE.md to this path.")
 
     args = parser.parse_args(argv)
     if args.command == "ingest":
         return _ingest(None if args.all else [s.upper() for s in args.states])
     if args.command == "refresh-status":
         return _refresh()
+    if args.command == "seed-standards":
+        return _seed_standards()
+    if args.command == "import-boundaries":
+        return _import_boundaries(args.offline)
+    if args.command == "import-cities":
+        return _import_cities()
+    if args.command == "coverage":
+        return _coverage(args.markdown)
     return _health()
 
 
