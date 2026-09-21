@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import make_provenance
 from app.core.database import get_db
+from app.services import geo_service as gs
 from app.services import water_service as ws
 from app.water.parameters import registry_summary
 from app.water.standards import standards_summary
@@ -155,6 +156,24 @@ def water_body_trend(
     return trend
 
 
+@router.get("/water-bodies/{slug}/geometry", summary="Geometry with provenance")
+def water_body_geometry(db: DbSession, slug: str) -> dict:
+    """The matched geometry, or why there is none."""
+    from sqlalchemy import select
+
+    from app.models.water import WaterBody
+
+    body = db.scalar(select(WaterBody).where(WaterBody.slug == slug))
+    if body is None:
+        raise HTTPException(status_code=404, detail=f"No water body '{slug}'.")
+    return {
+        "slug": slug,
+        "geometry_status": body.geometry_status,
+        "geometry_status_text": gs.GEOMETRY_STATUS_TEXT.get(body.geometry_status, ""),
+        "geometry": gs.water_body_geometry(db, body),
+    }
+
+
 @router.get("/water-bodies/{slug}/stations", summary="Stations on a water body")
 def water_body_stations(db: DbSession, slug: str) -> dict:
     """Monitoring stations attached to this water body."""
@@ -277,9 +296,75 @@ def map_near(
     }
 
 
+@router.get("/map/geometries", summary="Map features: water-body geometry")
+def map_geometries(
+    db: DbSession,
+    bbox: str | None = None,
+    zoom: int | None = Query(None, ge=0, le=22),
+    state: str | None = None,
+    water_type: str | None = None,
+    status: str | None = None,
+    limit: int = Query(gs.GEOMETRY_LIMIT, ge=1, le=gs.GEOMETRY_LIMIT),
+) -> dict:
+    """Rivers as lines and lakes as polygons, where a geometry was matched.
+
+    Simplified for ``zoom`` for display only. Water bodies without a matched
+    geometry are not drawn as shapes; they stay as points on the point layer.
+    """
+    return gs.map_geometries(
+        db,
+        bbox=_parse_bbox(bbox),
+        zoom=zoom,
+        state=state,
+        water_type=water_type,
+        status=status,
+        limit=limit,
+    )
+
+
+@router.get("/map/station-clusters", summary="Map features: clustered stations")
+def map_station_clusters(
+    db: DbSession,
+    bbox: str | None = None,
+    zoom: int = Query(5, ge=0, le=22),
+    state: str | None = None,
+) -> dict:
+    """Stations clustered server-side on a grid sized to ``zoom``."""
+    return gs.station_clusters(db, bbox=_parse_bbox(bbox), zoom=zoom, state=state)
+
+
+@router.get("/map/layers", summary="Map layer catalogue")
+def map_layers() -> dict:
+    """Layer groups, sources and attributions, so the client hardcodes none."""
+    return gs.layer_catalogue()
+
+
 # ---------------------------------------------------------------------------
 # Geography
 # ---------------------------------------------------------------------------
+@router.get("/boundaries/states", summary="State and UT boundaries")
+def state_boundaries(db: DbSession, zoom: int | None = Query(None, ge=0, le=22)) -> dict:
+    """All state / UT polygons, simplified for ``zoom``."""
+    return gs.boundaries(db, level="state", zoom=zoom)
+
+
+@router.get("/boundaries/districts", summary="District boundaries")
+def district_boundaries(
+    db: DbSession,
+    state: str | None = None,
+    bbox: str | None = None,
+    zoom: int | None = Query(None, ge=0, le=22),
+) -> dict:
+    """District polygons for one state or a viewport (one is required)."""
+    if not state and not bbox:
+        raise HTTPException(
+            status_code=422, detail="Pass a state or a bbox; all 735 at once is too much."
+        )
+    return gs.boundaries(
+        db, level="district", state=state, bbox=_parse_bbox(bbox), zoom=zoom
+    )
+
+
 @router.get("/states", summary="States with coverage counts")
 def list_states(db: DbSession) -> dict:
     """Every state present in the ingested data."""
@@ -296,15 +381,27 @@ def state_detail(db: DbSession, slug: str) -> dict:
     return detail
 
 
+@router.get("/cities", summary="Curated cities")
+def list_cities(db: DbSession) -> dict:
+    """Cities, each an explicit, documented grouping of districts."""
+    items = gs.list_cities(db)
+    return {"count": len(items), "items": items}
+
+
 @router.get("/cities/{slug}", summary="City or district detail")
 def district_detail(db: DbSession, slug: str) -> dict:
-    """Water bodies and stations within one district.
+    """A curated city, or else a district with that slug.
 
-    Districts double as the platform's city unit: Indian monitoring data is
-    keyed to districts, and the places people search for -- Mumbai, Pune,
-    Bengaluru -- are districts in that data.
+    Cities are named groupings of whole districts (Greater Mumbai is the
+    Mumbai and Mumbai Suburban districts). A slug that is not a curated city
+    falls back to the district of that name, as in Phase 1.
     """
+    city = gs.city_detail(db, slug)
+    if city is not None:
+        return city
     detail = ws.district_detail(db, slug)
+    if detail is not None:
+        detail = {**detail, "kind": "district"}
     if detail is None:
         raise HTTPException(status_code=404, detail=f"No district '{slug}'.")
     return detail
@@ -331,6 +428,14 @@ def search(
 def water_overview(db: DbSession) -> dict:
     """Counters for the dashboard, every one a count of ingested records."""
     return ws.overview(db)
+
+
+@router.get("/water-coverage", summary="What the database holds")
+def water_coverage(db: DbSession) -> dict:
+    """Counts per state, computed from the tables; nothing estimated."""
+    from app.water.coverage import coverage_report
+
+    return coverage_report(db)
 
 
 @router.get("/water-standards", summary="Reference standards in force")

@@ -127,6 +127,8 @@ class ReferenceSelection:
             "standard_name": s.name if s else None,
             "category": s.category if s else None,
             "legal_basis": s.legal_basis if s else None,
+            "issuing_body": s.issuing_body if s else None,
+            "effective_date": s.effective_date if s else None,
             "source_url": s.source_url if s else None,
             "verified_note": s.verified_note if s else None,
         }

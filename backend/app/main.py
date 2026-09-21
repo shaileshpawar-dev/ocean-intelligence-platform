@@ -13,6 +13,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -86,6 +87,9 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
+# Map GeoJSON (boundaries, river lines) compresses about 4x; small JSON
+# responses under the threshold are sent as-is.
+app.add_middleware(GZipMiddleware, minimum_size=2048)
 
 
 @app.middleware("http")

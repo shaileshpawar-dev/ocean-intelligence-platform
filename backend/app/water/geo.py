@@ -260,3 +260,60 @@ def merge_boxes(boxes: list[BBox]) -> list[BBox]:
                 out.append(box)
         merged = out
     return merged
+
+
+def _thin(points: list, tolerance: float, closed: bool) -> list:
+    if len(points) <= 2:
+        return points
+    kept = [points[0]]
+    for p in points[1:-1]:
+        last = kept[-1]
+        if abs(p[0] - last[0]) > tolerance or abs(p[1] - last[1]) > tolerance:
+            kept.append(p)
+    kept.append(points[-1])
+    if closed and len(kept) < 4:
+        return points  # never collapse a ring below a valid polygon
+    return kept
+
+
+def simplify(geometry: dict, tolerance: float) -> dict:
+    """Radial-distance thinning for display at a given zoom.
+
+    Drops vertices closer than ``tolerance`` degrees to the previous kept
+    one. Endpoints and ring closure are always kept, so lines stay connected
+    and polygons stay valid. Display only -- stored geometry is untouched.
+    """
+    if tolerance <= 0:
+        return geometry
+    kind = geometry["type"]
+    c = geometry["coordinates"]
+    if kind == "LineString":
+        coords = _thin(c, tolerance, False)
+    elif kind == "MultiLineString":
+        coords = [_thin(line, tolerance, False) for line in c]
+    elif kind == "Polygon":
+        coords = [_thin(ring, tolerance, True) for ring in c]
+    elif kind == "MultiPolygon":
+        coords = [[_thin(ring, tolerance, True) for ring in poly] for poly in c]
+    else:
+        return geometry
+    return {"type": kind, "coordinates": coords}
+
+
+def tolerance_for_zoom(zoom: int | None) -> float:
+    """About one screen pixel at ``zoom`` in degrees (0 when unknown)."""
+    if zoom is None:
+        return 0.0
+    return 360.0 / (256 * 2 ** max(0, min(zoom, 22)))
+
+
+def display_geometry(geometry: dict, zoom: int | None) -> dict:
+    """Simplify and round a geometry for display at ``zoom``.
+
+    Precision follows the pixel size: 3 decimals (~110 m) is finer than a
+    pixel at national zoom, 5 (~1 m) is enough at street level.
+    """
+    if zoom is None:
+        return geometry
+    places = 3 if zoom <= 7 else 4 if zoom <= 11 else 5
+    return round_geometry(simplify(geometry, tolerance_for_zoom(zoom)), places)

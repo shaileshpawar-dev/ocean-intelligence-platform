@@ -144,10 +144,26 @@ class TestOsmMatching:
         body = WaterBody(name="Mithi River", aliases=["Mithi Nallah"])
         assert name_cores(body) == ["MITHI"]
 
+    def test_platform_qualifier_is_not_searched_for(self):
+        """Regression: "Ganga River (Bihar)" searched OSM for "ganga bihar"."""
+        body = WaterBody(name="Ganga River (Bihar)", aliases=[])
+        assert name_cores(body) == ["GANGA", "GANGES"]
+
+    def test_spelling_variants_are_searched(self):
+        body = WaterBody(name="Cauvery River", aliases=[])
+        assert "KAVERI" in name_cores(body)
+
+    def test_multi_word_names_are_not_space_escaped(self):
+        """Regression: re.escape turned spaces into backslash-space."""
+        q = build_query(POLICIES["polygon"], ["RANI TALAB"], [(0, 0, 1, 1)])
+        assert "rani talab" in q
+        assert r"rani\ talab" not in q
+
     def test_query_is_windowed_and_name_filtered(self):
         q = build_query(POLICIES["line"], ["MITHI"], [(72.8, 19.0, 72.9, 19.1)])
         assert "(19.00000,72.80000,19.10000,72.90000)" in q
-        assert '"name"~"^(mithi)' in q
+        assert '~"^(name|name:en|alt_name' in q
+        assert '"~"^(mithi)(' in q
         assert "out tags geom" in q
 
     def test_relation_rings_are_assembled(self):

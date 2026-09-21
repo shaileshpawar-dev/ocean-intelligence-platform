@@ -44,14 +44,15 @@ from app.models.enums import WaterBodyType
 from app.models.water import MonitoringStation, WaterBody
 from app.models.water_geo import WaterBodyGeometry
 from app.water import geo
-from app.water.matching import TYPE_KEYWORDS, normalise_name
+from app.water.matching import CANONICAL_SPELLINGS, TYPE_KEYWORDS, normalise_name
 
 logger = get_logger(__name__)
 
-OVERPASS_URLS = (
-    "https://overpass-api.de/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter",
-)
+OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+# Public mirrors (kumi.systems, mail.ru, private.coffee) were unreachable when
+# this was written (2026-09-22), so the main instance is retried instead.
+OVERPASS_ATTEMPTS = 2
+RETRY_PAUSE_SECONDS = 10.0
 OSM_SOURCE = "OpenStreetMap (Overpass API)"
 OSM_LICENCE = "ODbL 1.0 — © OpenStreetMap contributors"
 USER_AGENT = "OceanAI-IndiaWaterIntelligence/2.0 (geometry matching; low volume)"
@@ -126,19 +127,57 @@ class GeometryOutcome:
     station_distances_km: dict[int, float] = field(default_factory=dict)
 
 
+# Names OSM uses for rivers whose CPCB spelling differs: the canonical
+# spellings the identity layer settled on, inverted, plus English exonyms that
+# appear in OSM ``name`` / ``name:en`` tags.
+SEARCH_VARIANTS: dict[str, tuple[str, ...]] = {
+    "GANGA": ("GANGES",),
+    "SATLUJ": ("SUTLEJ",),
+    "YAMUNA": ("JAMUNA",),
+    "JHELUM": ("JEHLUM",),
+    "SONE": ("SON",),
+    "KOSI": ("KOSHI",),
+    "GHAGHRA": ("GHAGRA", "GHAGHARA"),
+    "GOMTI": ("GOMATI",),
+    "TEESTA": ("TISTA",),
+    "SUBARNAREKHA": ("SUBARNREKHA", "SUVARNAREKHA"),
+}
+for _variant, _canonical in CANONICAL_SPELLINGS.items():
+    SEARCH_VARIANTS[_canonical] = (*SEARCH_VARIANTS.get(_canonical, ()), _variant)
+
+# OSM keys that carry a name a CPCB label might correspond to. In India the
+# plain ``name`` is often in a local script, with the Latin form elsewhere.
+NAME_KEYS = "^(name|name:en|alt_name|official_name|int_name|old_name)$"
+
+_QUALIFIER = re.compile(r"\([^)]*\)")
+_REGEX_SPECIAL = re.compile(r"([.^$*+?()\[\]{}|\\])")
+
+
 def name_cores(body: WaterBody) -> list[str]:
-    """Distinctive name tokens, e.g. ``MITHI`` for ``Mithi River``."""
+    """Distinctive name tokens, e.g. ``MITHI`` for ``Mithi River``.
+
+    Parenthesised qualifiers the platform adds to tell same-named bodies
+    apart -- ``Ganga River (Bihar)`` -- are not part of the name in OSM.
+    """
     cores: list[str] = []
     for name in [body.name, *(body.aliases or [])]:
-        tokens = [t for t in normalise_name(name).split() if t not in _TYPE_WORDS]
+        plain = _QUALIFIER.sub(" ", name or "")
+        tokens = [t for t in normalise_name(plain).split() if t not in _TYPE_WORDS]
         core = " ".join(tokens)
-        if len(core) >= 3 and core not in cores:
-            cores.append(core)
+        for candidate in (core, *SEARCH_VARIANTS.get(core, ())):
+            if len(candidate) >= 3 and candidate not in cores:
+                cores.append(candidate)
     return cores
 
 
+def _escape(text: str) -> str:
+    # Overpass regexes are POSIX ERE: escape metacharacters only. Python's
+    # re.escape also escapes spaces, which ERE does not define.
+    return _REGEX_SPECIAL.sub(r"\\\1", text)
+
+
 def _name_regex(cores: list[str]) -> str:
-    alternatives = "|".join(re.escape(c.lower()) for c in cores)
+    alternatives = "|".join(_escape(c.lower()) for c in cores)
     return f"^({alternatives}){_NAME_SUFFIX}$"
 
 
@@ -151,12 +190,16 @@ def build_query(policy: MatchPolicy, cores: list[str], windows: list[geo.BBox]) 
         if policy.kind in ("line", "both"):
             clauses.append(
                 f'way["waterway"~"^(river|stream|canal|drain|tidal_channel)$"]'
-                f'["name"~"{regex}",i]{box};'
+                f'[~"{NAME_KEYS}"~"{regex}",i]{box};'
             )
         if policy.kind in ("polygon", "both"):
-            clauses.append(f'way["natural"="water"]["name"~"{regex}",i]{box};')
-            clauses.append(f'relation["natural"="water"]["name"~"{regex}",i]{box};')
-            clauses.append(f'way["landuse"="reservoir"]["name"~"{regex}",i]{box};')
+            clauses.append(f'way["natural"="water"][~"{NAME_KEYS}"~"{regex}",i]{box};')
+            clauses.append(
+                f'relation["natural"="water"][~"{NAME_KEYS}"~"{regex}",i]{box};'
+            )
+            clauses.append(
+                f'way["landuse"="reservoir"][~"{NAME_KEYS}"~"{regex}",i]{box};'
+            )
     return f"[out:json][timeout:50];({''.join(clauses)});out tags geom;"
 
 
@@ -190,19 +233,20 @@ def _post_with_deadline(url: str, query: str) -> dict:
 
 
 def overpass_fetch(query: str) -> dict:
-    """POST a query to the public Overpass API, falling back to a mirror.
+    """POST a query to the public Overpass API.
 
-    The public instances return 429/504 under load. Each endpoint gets one
-    attempt bounded by :data:`REQUEST_DEADLINE_SECONDS`; the body is then
+    The public instance returns 429/504 under load. Each attempt is bounded
+    by :data:`REQUEST_DEADLINE_SECONDS`; after the last one the body is
     recorded as ``source_error`` and retried on a later prefetch.
     """
     last: Exception | None = None
-    for url in OVERPASS_URLS:
+    for attempt in range(OVERPASS_ATTEMPTS):
+        if attempt:
+            time.sleep(RETRY_PAUSE_SECONDS)
         try:
-            return _post_with_deadline(url, query)
+            return _post_with_deadline(OVERPASS_URL, query)
         except (httpx.HTTPError, ValueError) as exc:
             last = exc
-            time.sleep(2)
     assert last is not None
     raise last
 
@@ -321,12 +365,14 @@ def match_geometry(
             "The name has no distinctive part to search for once type words are removed.",
         )
 
-    windows = [
-        geo.expand_bbox(
-            (s.longitude, s.latitude, s.longitude, s.latitude), policy.window_km
-        )
-        for s in located
-    ]
+    windows = geo.merge_boxes(
+        [
+            geo.expand_bbox(
+                (s.longitude, s.latitude, s.longitude, s.latitude), policy.window_km
+            )
+            for s in located
+        ]
+    )
     try:
         payload = fetch(build_query(policy, cores, windows))
     except (httpx.HTTPError, ValueError) as exc:
@@ -351,7 +397,7 @@ def match_geometry(
 
     # Rivers: keep only the windows around stations (monitored reaches).
     if policy.kind == "line":
-        clip_boxes = geo.merge_boxes(windows)
+        clip_boxes = windows
         clipped: list[tuple[str, dict]] = []
         for key, g in features:
             pieces = [p for w in clip_boxes if (p := geo.clip_lines(g, w)) is not None]

@@ -29,8 +29,27 @@ def _source_states(provider_key: str) -> dict[str, dict]:
     from app.water.providers import get_provider
 
     provider = get_provider(provider_key)
+    if not hasattr(provider, "catalogue"):
+        # Providers without a resource catalogue: what they would fetch is
+        # what they publish.
+        states: dict[str, dict] = {}
+        for plan in provider.plans():
+            code = (plan.state_code or "").upper()
+            entry = states.setdefault(
+                code,
+                {
+                    "code": code,
+                    "name": code,
+                    "resources": 0,
+                    "active_resources": 0,
+                    "fetchable_resources": 0,
+                },
+            )
+            for key in ("resources", "active_resources", "fetchable_resources"):
+                entry[key] += 1
+        return states
     catalogue = provider.catalogue()
-    states: dict[str, dict] = {}
+    states = {}
     for resource in catalogue["resources"]:
         code = resource["state_code"]
         entry = states.setdefault(

@@ -503,6 +503,29 @@ def get_water_body_detail(
         "designated_use_recorded": body.designated_use,
         "stations": summarise_stations(db, list(stations)),
         "sources": sources_for_body(db, body),
+        **_geography(db, body, status),
+    }
+
+
+def _geography(db: Session, body: WaterBody, status: StatusResult) -> dict:
+    """Phase 2 layers: geometry, data quality, availability, sources panel."""
+    from app.services import geo_service as gs
+
+    status_dict = status.to_dict()
+    geometry = gs.water_body_geometry(db, body)
+    partial = {
+        "geometry": geometry,
+        "sources": sources_for_body(db, body),
+        "reference": reference_for(body).to_dict(),
+        "latest_available_status": None,
+    }
+    return {
+        "geometry": geometry,
+        "geometry_status": body.geometry_status,
+        "geometry_status_text": gs.GEOMETRY_STATUS_TEXT.get(body.geometry_status, ""),
+        "data_quality": gs.data_quality(db, body, status_dict),
+        "availability": gs.availability(body, status_dict),
+        "sources_panel": gs.sources_panel(db, body, partial),
     }
 
 
@@ -600,6 +623,9 @@ def summarise_station(
         "latitude": station.latitude,
         "longitude": station.longitude,
         "geo_quality": station.geo_quality,
+        "position_descriptor": station.position_descriptor,
+        "relationship_type": station.relationship_type,
+        "geometry_distance_m": station.geometry_distance_m,
         "agency": station.agency,
         "district": district.name if district else None,
         "water_body": body.name if body else None,

@@ -8,6 +8,7 @@
     python -m app.water.cli import-boundaries [--offline]
     python -m app.water.cli import-cities
     python -m app.water.cli coverage [--markdown PATH]
+    python -m app.water.cli fetch-geometry [--state MH] [--slug mithi-river] [--limit N]
 
 This is the manual sync the platform uses in place of a scheduler. CPCB
 publishes monthly at best, and the extracts on the portal currently lag by
@@ -97,6 +98,16 @@ def _coverage(markdown: str | None) -> int:
     return 0
 
 
+def _fetch_geometry(state: str | None, slugs: list[str] | None, limit: int | None) -> int:
+    from app.water.geometry import prefetch
+
+    init_db()
+    with SessionLocal() as db:
+        counts = prefetch(db, state_code=state, slugs=slugs, limit=limit)
+    print(json.dumps(counts, indent=2))
+    return 0
+
+
 def _health() -> int:
     from app.water.providers import all_providers
 
@@ -167,6 +178,12 @@ def main(argv: list[str] | None = None) -> int:
         "--offline", action="store_true", help="Use cached files only; never download."
     )
     sub.add_parser("import-cities", help="Rebuild cities from the curated definitions.")
+    geometry = sub.add_parser(
+        "fetch-geometry", help="Match OSM geometry to water bodies (Overpass)."
+    )
+    geometry.add_argument("--state", help="Only this state code.")
+    geometry.add_argument("--slug", nargs="+", help="Only these water bodies.")
+    geometry.add_argument("--limit", type=int, help="At most this many bodies.")
     coverage = sub.add_parser("coverage", help="Report what the database holds.")
     coverage.add_argument("--markdown", help="Write DATASET_COVERAGE.md to this path.")
 
@@ -181,6 +198,8 @@ def main(argv: list[str] | None = None) -> int:
         return _import_boundaries(args.offline)
     if args.command == "import-cities":
         return _import_cities()
+    if args.command == "fetch-geometry":
+        return _fetch_geometry(args.state, args.slug, args.limit)
     if args.command == "coverage":
         return _coverage(args.markdown)
     return _health()
