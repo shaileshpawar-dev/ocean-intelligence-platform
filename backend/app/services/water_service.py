@@ -285,13 +285,101 @@ def list_water_bodies(
         .offset(offset)
     ).all()
 
-    return [summarise_body(db, b) for b in rows], total
+    return summarise_bodies(db, list(rows)), total
 
 
-def summarise_body(db: Session, body: WaterBody, *, include_state: bool = True) -> dict:
+class Lookups:
+    """Strongly held state, district and water-body rows for bulk summaries.
+
+    ``summarise_*`` used ``db.get`` per row. The session's identity map holds
+    *weak* references, so objects loaded in advance are garbage-collected
+    before they are needed and every ``get`` becomes a SELECT again -- 2,356
+    of them for the national station map (2.2 s). Holding the rows here keeps
+    that to at most three ``IN`` queries.
+    """
+
+    def __init__(self) -> None:
+        """Start empty; ``preload`` fills the maps."""
+        self.states: dict[int, State] = {}
+        self.districts: dict[int, District] = {}
+        self.bodies: dict[int, WaterBody] = {}
+
+    def state(self, db: Session, key: int | None) -> State | None:
+        """Held row, falling back to a lookup."""
+        if not key:
+            return None
+        return self.states.get(key) or db.get(State, key)
+
+    def district(self, db: Session, key: int | None) -> District | None:
+        """Held row, falling back to a lookup."""
+        if not key:
+            return None
+        return self.districts.get(key) or db.get(District, key)
+
+    def body(self, db: Session, key: int | None) -> WaterBody | None:
+        """Held row, falling back to a lookup."""
+        if not key:
+            return None
+        return self.bodies.get(key) or db.get(WaterBody, key)
+
+
+def _load(db: Session, model: Any, ids: set[int]) -> dict[int, Any]:
+    out: dict[int, Any] = {}
+    id_list = list(ids)
+    for start in range(0, len(id_list), 900):  # stay under SQLite's variable cap
+        chunk = id_list[start : start + 900]
+        out.update(
+            {row.id: row for row in db.scalars(select(model).where(model.id.in_(chunk)))}
+        )
+    return out
+
+
+def preload(
+    db: Session,
+    *,
+    bodies: list[WaterBody] | None = None,
+    stations: list[MonitoringStation] | None = None,
+) -> Lookups:
+    """Fetch every related state, district and water body up front."""
+    bodies = bodies or []
+    stations = stations or []
+    lookups = Lookups()
+    lookups.states = _load(db, State, {b.state_id for b in bodies if b.state_id})
+    lookups.districts = _load(
+        db,
+        District,
+        {b.district_id for b in bodies if b.district_id}
+        | {s.district_id for s in stations if s.district_id},
+    )
+    lookups.bodies = _load(
+        db, WaterBody, {s.water_body_id for s in stations if s.water_body_id}
+    )
+    return lookups
+
+
+def summarise_bodies(db: Session, bodies: list[WaterBody], **kwargs: Any) -> list[dict]:
+    """Summarise many water bodies without a query per row."""
+    lookups = preload(db, bodies=bodies)
+    return [summarise_body(db, b, lookups=lookups, **kwargs) for b in bodies]
+
+
+def summarise_stations(db: Session, stations: list[MonitoringStation]) -> list[dict]:
+    """Summarise many stations without a query per row."""
+    lookups = preload(db, stations=stations)
+    return [summarise_station(db, s, lookups=lookups) for s in stations]
+
+
+def summarise_body(
+    db: Session,
+    body: WaterBody,
+    *,
+    include_state: bool = True,
+    lookups: Lookups | None = None,
+) -> dict:
     """Compact representation for lists, maps and search results."""
-    state = db.get(State, body.state_id) if body.state_id else None
-    district = db.get(District, body.district_id) if body.district_id else None
+    lookups = lookups or Lookups()
+    state = lookups.state(db, body.state_id)
+    district = lookups.district(db, body.district_id)
     return {
         "id": body.id,
         "slug": body.slug,
@@ -363,7 +451,7 @@ def get_water_body_detail(
             else None
         ),
         "parameters": latest_parameters(db, body, use=use),
-        "stations": [summarise_station(db, s) for s in stations],
+        "stations": summarise_stations(db, list(stations)),
         "sources": sources_for_body(db, body),
     }
 
@@ -446,10 +534,13 @@ def latest_parameters(
     )
 
 
-def summarise_station(db: Session, station: MonitoringStation) -> dict:
+def summarise_station(
+    db: Session, station: MonitoringStation, *, lookups: Lookups | None = None
+) -> dict:
     """Compact station record for maps and detail pages."""
-    body = db.get(WaterBody, station.water_body_id) if station.water_body_id else None
-    district = db.get(District, station.district_id) if station.district_id else None
+    lookups = lookups or Lookups()
+    body = lookups.body(db, station.water_body_id)
+    district = lookups.district(db, station.district_id)
     return {
         "id": station.id,
         "code": station.station_code,
@@ -801,7 +892,7 @@ def map_stations(
     rows = db.scalars(
         stmt.order_by(MonitoringStation.observation_count.desc()).limit(limit)
     ).all()
-    return [summarise_station(db, s) for s in rows]
+    return summarise_stations(db, list(rows))
 
 
 # ---------------------------------------------------------------------------
@@ -841,12 +932,18 @@ def water_bodies_near(
         stmt = stmt.where(WaterBody.cached_status == status)
 
     candidates = db.scalars(stmt.limit(limit * 10)).all()
+    lookups = preload(db, bodies=list(candidates))
 
     out: list[dict] = []
     for body in candidates:
         distance = haversine_km(latitude, longitude, body.centroid_lat, body.centroid_lon)
         if distance <= radius_km:
-            out.append({**summarise_body(db, body), "distance_km": round(distance, 2)})
+            out.append(
+                {
+                    **summarise_body(db, body, lookups=lookups),
+                    "distance_km": round(distance, 2),
+                }
+            )
 
     out.sort(key=lambda b: b["distance_km"])
     return out[:limit]
@@ -896,6 +993,7 @@ def water_bodies_near_districts(
             WaterBody.centroid_lon.between(min_lon, max_lon),
         )
     ).all()
+    lookups = preload(db, bodies=list(candidates))
 
     out: list[dict] = []
     for body in candidates:
@@ -904,7 +1002,12 @@ def water_bodies_near_districts(
             for lat, lon in points
         )
         if nearest <= radius_km:
-            out.append({**summarise_body(db, body), "distance_km": round(nearest, 2)})
+            out.append(
+                {
+                    **summarise_body(db, body, lookups=lookups),
+                    "distance_km": round(nearest, 2),
+                }
+            )
 
     out.sort(key=lambda b: b["distance_km"])
     return out[:limit]
@@ -1166,7 +1269,7 @@ def state_detail(db: Session, slug: str) -> dict | None:
             }
             for d, c in districts
         ],
-        "notable": [summarise_body(db, b, include_state=False) for b in ranked[:12]],
+        "notable": summarise_bodies(db, ranked[:12], include_state=False),
     }
 
 
@@ -1214,8 +1317,8 @@ def district_detail(db: Session, slug: str) -> dict | None:
         "water_body_count": len(bodies),
         "station_count": len(stations),
         "by_type": dict(sorted(by_type.items(), key=lambda kv: -kv[1])),
-        "water_bodies": [summarise_body(db, b) for b in bodies[:60]],
-        "stations": [summarise_station(db, s) for s in stations[:60]],
+        "water_bodies": summarise_bodies(db, list(bodies[:60])),
+        "stations": summarise_stations(db, list(stations[:60])),
     }
 
 
