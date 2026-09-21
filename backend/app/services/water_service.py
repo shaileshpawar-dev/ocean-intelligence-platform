@@ -138,7 +138,21 @@ def compute_status(
         # passes and the parameter comparisons run, producing the verdict
         # that was true on that date. The caller labels it with the date.
         newest = max(m.observed_at for m in measurements)
-        return evaluate(measurements, use=use, cadence=_cadence_for(db), now=newest)
+        result = evaluate(measurements, use=use, cadence=_cadence_for(db), now=newest)
+        # With the clock stopped at the sample date the freshness sentence
+        # would read "0 days ago": true of that frozen clock, false for the
+        # reader. Replace it with a statement of what was actually done.
+        stale_line = result.freshness.summary()
+        result.reasons = [
+            (
+                f"Assessed as at the observation date, {newest:%d %b %Y}. "
+                "This describes that sample, not the water body today."
+            )
+            if reason == stale_line
+            else reason
+            for reason in result.reasons
+        ]
+        return result
 
     return evaluate(measurements, use=use, cadence=_cadence_for(db))
 
@@ -926,9 +940,18 @@ def search(db: Session, query: str, *, limit: int = SEARCH_LIMIT) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Geography roll-ups
 # ---------------------------------------------------------------------------
-def status_distribution(db: Session, *, state: str | None = None) -> dict[str, int]:
-    """How many water bodies sit in each status band."""
-    stmt = select(WaterBody.cached_status, func.count(WaterBody.id))
+def status_distribution(
+    db: Session, *, state: str | None = None, historical: bool = False
+) -> dict[str, int]:
+    """How many water bodies sit in each status band.
+
+    ``historical=False`` counts present-tense statuses; ``historical=True``
+    counts what each body's most recent measurement found. The two must never
+    share a label: a chart titled "when last measured" fed from present-tense
+    data shows every body as "no recent data" and contradicts its own heading.
+    """
+    column = WaterBody.cached_historical_status if historical else WaterBody.cached_status
+    stmt = select(column, func.count(WaterBody.id))
     if state:
         stmt = stmt.join(State, WaterBody.state_id == State.id).where(
             or_(
@@ -936,7 +959,7 @@ def status_distribution(db: Session, *, state: str | None = None) -> dict[str, i
                 func.upper(State.code) == state.upper(),
             )
         )
-    rows = db.execute(stmt.group_by(WaterBody.cached_status)).all()
+    rows = db.execute(stmt.group_by(column)).all()
     return {(status or "UNKNOWN"): count for status, count in rows}
 
 
@@ -1027,6 +1050,9 @@ def state_detail(db: Session, slug: str) -> dict | None:
         "observation_count": observations or 0,
         "by_type": dict(sorted(by_type.items(), key=lambda kv: -kv[1])),
         "status_distribution": status_distribution(db, state=state.slug),
+        "historical_status_distribution": status_distribution(
+            db, state=state.slug, historical=True
+        ),
         "districts": [
             {
                 "name": d.name,
@@ -1111,6 +1137,7 @@ def overview(db: Session) -> dict:
         "districts_covered": db.scalar(select(func.count(District.id))) or 0,
         "latest_observation_at": _as_utc(latest).isoformat() if latest else None,
         "status_distribution": distribution,
+        "historical_status_distribution": status_distribution(db, historical=True),
         "without_recent_data": distribution.get(str(WaterStatus.NO_RECENT_DATA), 0),
         "sources": [
             {

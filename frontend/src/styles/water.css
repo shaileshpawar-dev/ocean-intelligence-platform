@@ -1,0 +1,1325 @@
+/* =========================================================================
+   India Water Intelligence styles.
+
+   Built on the existing sky-blue token set rather than a parallel palette, so
+   the water pages and the marine pages remain one product. Three rules run
+   through the whole file:
+
+   1. Water stays blue. Status colour appears only on badges, markers and
+      small indicators, never as a wash over the map or the page. A map where
+      everything is red or green stops reading as a map.
+   2. Colour is never the only signal. Every status has an icon and a text
+      label; `.wstatus` is a pill containing both.
+   3. "Unknown" is grey, never green. Absence of data must never be styled
+      like a clean result.
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   Status pills
+   ------------------------------------------------------------------------- */
+.wstatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.2;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.wstatus-sm {
+  padding: 2px 8px;
+  font-size: 0.72rem;
+}
+
+.wstatus-ok {
+  background: var(--success-bg);
+  color: #0e7a4a;
+  border-color: var(--success-border);
+}
+
+.wstatus-warn {
+  background: var(--warning-bg);
+  color: #a45709;
+  border-color: var(--warning-border);
+}
+
+.wstatus-bad {
+  background: var(--danger-bg);
+  color: #b3211c;
+  border-color: var(--danger-border);
+}
+
+/* Reserved for the national polluted-stretch criterion, which is a stronger
+   statement than "high concern" and earns a distinct, darker treatment. */
+.wstatus-critical {
+  background: #fdf0f0;
+  color: #8a1512;
+  border-color: #f5b9b7;
+}
+
+.wstatus-unknown {
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
+.priority-band {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #fdf0f0;
+  color: #8a1512;
+  border: 1px solid #f5b9b7;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+/* -------------------------------------------------------------------------
+   "When last measured" block
+   ------------------------------------------------------------------------- */
+.latest-status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.latest-status-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* The date is not decoration: it is what keeps the historical verdict
+   honest, so it is given real weight rather than being a faint caption. */
+.latest-status-asof {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.latest-status-asof svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--text-muted);
+}
+
+/* -------------------------------------------------------------------------
+   Evidence badges
+   ------------------------------------------------------------------------- */
+.wevidence {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 5px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  border: 1px solid;
+}
+
+.wevidence-measured {
+  background: #eef6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+
+.wevidence-satellite {
+  background: #f5f3ff;
+  color: #6d28d9;
+  border-color: #ddd6fe;
+}
+
+.wevidence-detected {
+  background: #ecfeff;
+  color: #0e7490;
+  border-color: #a5f3fc;
+}
+
+.wevidence-reported,
+.wevidence-retrieved {
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  border-color: var(--border);
+}
+
+.wevidence-inferred,
+.wevidence-forecast {
+  background: var(--warning-bg);
+  color: #a45709;
+  border-color: var(--warning-border);
+}
+
+/* -------------------------------------------------------------------------
+   Water type tags
+   ------------------------------------------------------------------------- */
+.wtype {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--brand-50);
+  color: var(--text-brand);
+  border: 1px solid var(--brand-200);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.wtype-glyph {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.wtype-other {
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.chip-warn {
+  background: var(--warning-bg);
+  border-color: var(--warning-border);
+  color: #a45709;
+}
+
+/* -------------------------------------------------------------------------
+   Parameter cards
+   ------------------------------------------------------------------------- */
+.param-family {
+  margin-bottom: 20px;
+}
+
+.param-family-title {
+  margin: 0 0 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.param-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 12px;
+}
+
+.param-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+}
+
+.param-ok {
+  border-left-color: var(--success);
+}
+
+.param-bad {
+  border-left-color: var(--danger);
+}
+
+.param-unknown {
+  border-left-color: var(--border-strong);
+}
+
+.param-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.param-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.param-value {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.param-value strong {
+  font-size: 1.45rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.param-unit {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* Not measured must not look like a value. */
+.param-missing {
+  font-size: 0.9rem;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.param-direction {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.param-compliance {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.param-compliance-ok {
+  color: #0e7a4a;
+}
+
+.param-compliance-bad {
+  color: #b3211c;
+  font-weight: 600;
+}
+
+.param-compliance-unknown {
+  color: var(--text-muted);
+}
+
+.param-foot {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 8px;
+}
+
+.param-station {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* -------------------------------------------------------------------------
+   Status explanation
+   ------------------------------------------------------------------------- */
+.status-why {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.status-reasons {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.status-reasons li::marker {
+  color: var(--brand-400);
+}
+
+.status-standards h4 {
+  margin: 0 0 6px;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.status-standards ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.status-missing,
+.status-engine {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.match-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* -------------------------------------------------------------------------
+   Freshness
+   ------------------------------------------------------------------------- */
+.freshness {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  margin-top: 10px;
+  border: 1px solid;
+}
+
+.freshness-ok {
+  background: var(--brand-50);
+  border-color: var(--brand-200);
+}
+
+.freshness-stale {
+  background: var(--warning-bg);
+  border-color: var(--warning-border);
+}
+
+.freshness svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--text-secondary);
+}
+
+.freshness-summary {
+  margin: 0 0 4px;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.freshness-meta {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* -------------------------------------------------------------------------
+   Stat cards
+   ------------------------------------------------------------------------- */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.wstat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.wstat-warn {
+  border-color: var(--warning-border);
+  background: var(--warning-bg);
+}
+
+.wstat-ok {
+  border-color: var(--success-border);
+  background: var(--success-bg);
+}
+
+.wstat-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.wstat-value {
+  font-size: 1.65rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.wstat-hint {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* -------------------------------------------------------------------------
+   The map
+   ------------------------------------------------------------------------- */
+
+/* Full-bleed: the map is the page, not a widget on it. */
+.content-full {
+  padding: 0 !important;
+  max-width: none !important;
+}
+
+.wmap-shell {
+  position: relative;
+  width: 100%;
+  height: calc(100vh - var(--topbar-h, 60px));
+  min-height: 520px;
+}
+
+.wmap-canvas {
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.wmap-search-wrap {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  width: min(520px, calc(100% - 28px));
+}
+
+.wmap-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: 0 6px 20px rgb(8 47 73 / 12%);
+}
+
+.wmap-search-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.wmap-search input {
+  flex: 1;
+  padding: 12px 38px 12px 38px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.wmap-search input:focus {
+  outline: 2px solid var(--brand-400);
+  outline-offset: -1px;
+}
+
+.wmap-search-clear {
+  position: absolute;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.wmap-search-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: 360px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgb(8 47 73 / 16%);
+  padding: 6px;
+}
+
+.wmap-search-hit {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wmap-search-hit:hover,
+.wmap-search-hit:focus-visible {
+  background: var(--brand-50);
+}
+
+.hit-title {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.hit-sub {
+  grid-column: 1;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+.wmap-controls {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wmap-ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 13px;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgb(8 47 73 / 10%);
+}
+
+.wmap-ctl.is-active {
+  background: var(--brand-600);
+  border-color: var(--brand-600);
+  color: #fff;
+}
+
+.wmap-filters {
+  position: absolute;
+  top: 62px;
+  right: 14px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 260px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 30px rgb(8 47 73 / 16%);
+}
+
+.wmap-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.wmap-filter-group label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.wmap-filter-group select,
+.trend-select {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.wmap-filter-reset {
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.wmap-legend {
+  position: absolute;
+  bottom: 22px;
+  left: 14px;
+  z-index: 1000;
+  width: 230px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 20px rgb(8 47 73 / 12%);
+}
+
+.wmap-legend-title {
+  margin: 0 0 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.wmap-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.wmap-legend-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1.5px solid #fff;
+  box-shadow: 0 0 0 1px rgb(8 47 73 / 20%);
+  flex-shrink: 0;
+}
+
+.wmap-legend-note {
+  margin: 8px 0 0;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 8px;
+}
+
+.wmap-count {
+  position: absolute;
+  bottom: 22px;
+  right: 14px;
+  z-index: 1000;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  box-shadow: 0 3px 10px rgb(8 47 73 / 10%);
+}
+
+.wmap-error {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1000;
+  max-width: 420px;
+}
+
+.wmap-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1200;
+  width: min(380px, 100%);
+  padding: 22px;
+  overflow-y: auto;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  box-shadow: -8px 0 28px rgb(8 47 73 / 12%);
+}
+
+.wmap-panel-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.wmap-panel-title {
+  margin: 0 34px 10px 0;
+  font-size: 1.15rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.wmap-panel-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.wmap-panel-place {
+  margin: 0 0 16px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.wmap-panel-block {
+  padding: 12px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.wmap-panel-label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.wmap-panel-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.wmap-panel-facts > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.wmap-panel-facts dt {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.wmap-panel-facts dd {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.tooltip-date {
+  color: #64748b;
+  font-size: 0.72rem;
+}
+
+.spin {
+  animation: wspin 1s linear infinite;
+}
+
+@keyframes wspin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* -------------------------------------------------------------------------
+   Water body detail
+   ------------------------------------------------------------------------- */
+.wb-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.wb-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.wb-map {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.trend-chart {
+  margin-bottom: 14px;
+}
+
+.trend-facts,
+.source-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.trend-facts > div,
+.source-facts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.trend-facts dt,
+.source-facts dt {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.trend-facts dd,
+.source-facts dd {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--text);
+}
+
+.source-card,
+.provider-card {
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-sunken);
+  margin-bottom: 12px;
+}
+
+.source-head,
+.provider-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.source-head a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+}
+
+.provider-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 0;
+  font-size: 0.8rem;
+  color: #b3211c;
+}
+
+.source-links {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  font-size: 0.86rem;
+}
+
+.source-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* -------------------------------------------------------------------------
+   India / state / city
+   ------------------------------------------------------------------------- */
+.two-col {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.currency-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--brand-50);
+  border: 1px solid var(--brand-200);
+}
+
+.currency-note svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--brand-700);
+}
+
+.currency-note p {
+  margin: 0 0 6px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.dist-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dist-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.dist-label {
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+}
+
+.dist-count {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.dist-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.dist-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+
+.dist-ok {
+  background: var(--success);
+}
+.dist-warn {
+  background: var(--warning);
+}
+.dist-bad {
+  background: var(--danger);
+}
+.dist-critical {
+  background: #8a1512;
+}
+.dist-unknown {
+  background: var(--border-strong);
+}
+
+.state-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.state-list a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.86rem;
+}
+
+.state-list a:hover {
+  background: var(--brand-50);
+}
+
+.district-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.district-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.district-card:hover {
+  border-color: var(--brand-300);
+  background: var(--brand-50);
+}
+
+.district-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+/* -------------------------------------------------------------------------
+   Standards and quality
+   ------------------------------------------------------------------------- */
+.use-classes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.use-class {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.use-class.is-default {
+  border-color: var(--brand-400);
+  background: var(--brand-50);
+}
+
+.use-code {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.use-label {
+  font-size: 0.86rem;
+  color: var(--text);
+}
+
+.use-default-tag {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 1px 7px;
+  border-radius: 5px;
+  background: var(--brand-600);
+  color: #fff;
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.quality-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.quality-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.quality-ok {
+  border-color: var(--success-border);
+}
+.quality-warn {
+  border-color: var(--warning-border);
+}
+.quality-bad {
+  border-color: var(--danger-border);
+}
+
+.quality-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.quality-value {
+  font-size: 1.5rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.quality-pct {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+/* -------------------------------------------------------------------------
+   Responsive
+   ------------------------------------------------------------------------- */
+@media (max-width: 860px) {
+  .wmap-legend {
+    display: none;
+  }
+
+  /* On a phone the panel becomes a bottom sheet: a 380px side panel would
+     cover the map entirely, which defeats the point of selecting a feature
+     on it. */
+  .wmap-panel {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-height: 62%;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -8px 28px rgb(8 47 73 / 16%);
+  }
+
+  /* On a phone the search takes the full top row, so the controls and
+     Leaflet's zoom buttons move below it instead of sitting underneath. */
+  .wmap-search-wrap {
+    top: 10px;
+    width: calc(100% - 20px);
+  }
+
+  .wmap-controls {
+    top: 64px;
+    right: 10px;
+    flex-direction: row;
+  }
+
+  .wmap-shell .leaflet-top {
+    top: 56px;
+  }
+
+  .wmap-filters {
+    top: 110px;
+    right: 10px;
+  }
+
+  .wmap-filters {
+    width: calc(100vw - 20px);
+  }
+
+  .param-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* -------------------------------------------------------------------------
+   Dark mode
+   ------------------------------------------------------------------------- */
+:root[data-theme="dark"] .wstatus-ok {
+  background: rgb(22 163 74 / 15%);
+  color: #6ee7b7;
+  border-color: rgb(22 163 74 / 35%);
+}
+
+:root[data-theme="dark"] .wstatus-warn {
+  background: rgb(217 119 6 / 15%);
+  color: #fcd34d;
+  border-color: rgb(217 119 6 / 35%);
+}
+
+:root[data-theme="dark"] .wstatus-bad,
+:root[data-theme="dark"] .wstatus-critical {
+  background: rgb(220 38 38 / 15%);
+  color: #fca5a5;
+  border-color: rgb(220 38 38 / 35%);
+}
+
+:root[data-theme="dark"] .priority-band {
+  background: rgb(220 38 38 / 15%);
+  color: #fca5a5;
+  border-color: rgb(220 38 38 / 35%);
+}
+
+:root[data-theme="dark"] .wevidence-measured {
+  background: rgb(37 99 235 / 15%);
+  color: #93c5fd;
+  border-color: rgb(37 99 235 / 35%);
+}
+
+:root[data-theme="dark"] .wmap-search,
+:root[data-theme="dark"] .wmap-ctl,
+:root[data-theme="dark"] .wmap-legend,
+:root[data-theme="dark"] .wmap-count,
+:root[data-theme="dark"] .wmap-filters,
+:root[data-theme="dark"] .wmap-search-results {
+  background: var(--surface-raised);
+}
+
+:root[data-theme="dark"] .param-compliance-ok {
+  color: #6ee7b7;
+}
+
+:root[data-theme="dark"] .param-compliance-bad {
+  color: #fca5a5;
+}

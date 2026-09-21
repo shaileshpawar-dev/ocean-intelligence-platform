@@ -33,6 +33,24 @@ import type {
   RiskAssessment,
   Zone,
 } from "./types";
+import type {
+  AvailableParameter,
+  DistrictDetail,
+  ListEnvelope,
+  MapFeature,
+  ParameterTrend,
+  SearchHit,
+  StandardsSummary,
+  StateDetail,
+  StateSummary,
+  StationDetail,
+  StationSummary,
+  WaterBodyDetail,
+  WaterBodySummary,
+  WaterOverview,
+  WaterQualityReport,
+  WaterSource,
+} from "./waterTypes";
 
 const BASE =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ??
@@ -253,4 +271,77 @@ export const api = {
     ),
   generateReport: (eventId: string) =>
     post<ReportDetail>("/reports/generate", { event_id: eventId }),
+
+  /* -- India water intelligence ----------------------------------------
+     Every endpoint below is backed by CPCB observations ingested from the
+     National Water Informatics Centre. None of it is generated or seeded. */
+
+  waterOverview: () => get<WaterOverview>("/water-overview"),
+
+  waterBodies: (params: {
+    state?: string | null;
+    district?: string | null;
+    water_type?: string | null;
+    status?: string | null;
+    q?: string | null;
+    bbox?: string | null;
+    limit?: number;
+    offset?: number;
+  } = {}) =>
+    get<ListEnvelope<WaterBodySummary>>(`/water-bodies${qs(params)}`),
+
+  waterBody: (slug: string, designatedUse?: string | null) =>
+    get<WaterBodyDetail>(
+      `/water-bodies/${encodeURIComponent(slug)}${qs({ designated_use: designatedUse })}`,
+    ),
+
+  waterBodyParameters: (slug: string) =>
+    get<{ count: number; items: AvailableParameter[] }>(
+      `/water-bodies/${encodeURIComponent(slug)}/parameters`,
+    ),
+
+  waterTrend: (slug: string, parameter: string, days?: number | null) =>
+    get<ParameterTrend>(
+      `/water-bodies/${encodeURIComponent(slug)}/trend${qs({ parameter, days })}`,
+    ),
+
+  waterBodySources: (slug: string) =>
+    get<{ count: number; items: WaterSource[] }>(
+      `/water-bodies/${encodeURIComponent(slug)}/sources`,
+    ),
+
+  station: (stationId: number) => get<StationDetail>(`/stations/${stationId}`),
+
+  stations: (params: { state?: string | null; bbox?: string | null; limit?: number } = {}) =>
+    get<ListEnvelope<StationSummary>>(`/stations${qs(params)}`),
+
+  mapWaterBodies: (params: {
+    bbox?: string | null;
+    state?: string | null;
+    water_type?: string | null;
+    status?: string | null;
+    limit?: number;
+  } = {}) => get<{ count: number; items: MapFeature[] }>(`/map/water-bodies${qs(params)}`),
+
+  mapStations: (params: { bbox?: string | null; state?: string | null; limit?: number } = {}) =>
+    get<{ count: number; items: StationSummary[] }>(`/map/stations${qs(params)}`),
+
+  waterNear: (lat: number, lon: number, radiusKm = 25, extra: {
+    water_type?: string | null;
+    status?: string | null;
+    limit?: number;
+  } = {}) =>
+    get<ListEnvelope<WaterBodySummary> & { radius_km: number }>(
+      `/map/near${qs({ lat, lon, radius_km: radiusKm, ...extra })}`,
+    ),
+
+  states: () => get<{ count: number; items: StateSummary[] }>("/states"),
+  state: (slug: string) => get<StateDetail>(`/states/${encodeURIComponent(slug)}`),
+  city: (slug: string) => get<DistrictDetail>(`/cities/${encodeURIComponent(slug)}`),
+
+  waterSearch: (q: string, limit = 25) =>
+    get<{ query: string; count: number; items: SearchHit[] }>(`/search${qs({ q, limit })}`),
+
+  waterStandards: () => get<StandardsSummary>("/water-standards"),
+  waterQualityReport: () => get<WaterQualityReport>("/water-quality-report"),
 };

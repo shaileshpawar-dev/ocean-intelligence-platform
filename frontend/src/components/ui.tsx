@@ -351,9 +351,16 @@ export function EmptyState({
 export function ErrorState({
   error,
   onRetry,
+  emptyTitle,
+  emptyHint,
 }: {
   error: unknown;
   onRetry?: () => void;
+  /** Heading to use when the failure is a 404 rather than a fault. */
+  emptyTitle?: string;
+  /** Explanation to use for a 404. "Not found" and "broken" deserve
+   *  different words: one is a normal outcome, the other is a bug. */
+  emptyHint?: string;
 }) {
   const message =
     error && typeof error === "object" && "friendly" in error
@@ -363,14 +370,26 @@ export function ErrorState({
     error && typeof error === "object" && "isInsufficientData" in error
       ? Boolean((error as { isInsufficientData: boolean }).isInsufficientData)
       : false;
+  const missing =
+    error && typeof error === "object" && "isEmpty" in error
+      ? Boolean((error as { isEmpty: boolean }).isEmpty)
+      : false;
+
+  const notFound = missing && Boolean(emptyTitle);
 
   return (
     <div className="state-block">
-      <span className={`state-icon ${insufficient ? "warn" : "error"}`}>
-        {insufficient ? <Info size={20} /> : <ServerCrash size={20} />}
+      <span className={`state-icon ${insufficient || notFound ? "warn" : "error"}`}>
+        {insufficient || notFound ? <Info size={20} /> : <ServerCrash size={20} />}
       </span>
-      <h3>{insufficient ? "Insufficient data" : "Data unavailable"}</h3>
-      <p>{message}</p>
+      <h3>
+        {notFound
+          ? emptyTitle
+          : insufficient
+            ? "Insufficient data"
+            : "Data unavailable"}
+      </h3>
+      <p>{notFound ? emptyHint : message}</p>
       {onRetry && (
         <button className="btn btn-ghost" onClick={onRetry}>
           <RefreshCw size={13} /> Retry
