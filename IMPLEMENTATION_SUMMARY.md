@@ -1,7 +1,156 @@
-# Implementation summary — OceanAI India Water Intelligence (V2)
+# Implementation summary — OceanAI India Water Intelligence
 
-Branch `feature/india-water-intelligence`, built on top of `main` at `738f1ca`
-(the published v1). Nothing was deployed; see §20.
+Branch `feature/india-water-intelligence`, built on `main` at `738f1ca`
+(the published v1). **Nothing was deployed and the public v1 was not
+changed.** Phase 2 (below) builds on Phase 1 (further down, kept as the
+record of that change).
+
+---
+
+# Phase 2 — V2 geospatial foundation
+
+## P2.1 Summary
+
+Phase 2 turns a seven-state prototype into a national, geospatially honest
+platform:
+
+- **All 35 CPCB state/UT codes** ingested from the live NWDP API — 211
+  resources, **582,192 observations, 4,000 stations, 2,595 water bodies**,
+  zero ingestion errors. Station counts cross-checked against the source
+  (Goa 64/64, Sikkim 12/12).
+- **No default standard.** Rivers are compared against the EP Rules 1986
+  bathing-water criteria (what CPCB uses for polluted river stretches);
+  everything else shows "Reference comparison unavailable" unless a
+  designated use is recorded or chosen. `POLLUTED_STRETCH` only from an
+  imported official classification (import path built; no data loadable).
+- **Four evidence layers** separated end to end: MEASURED,
+  REFERENCE_COMPARISON, SOURCE_CLASSIFICATION, DERIVED_STATUS; satellite
+  values are a fifth, `SATELLITE_OBSERVED`, uncalibrated proxy.
+- **Real geometry** from OpenStreetMap matched to stations (lines for rivers,
+  polygons for lakes), with provenance; **boundaries** from geoBoundaries;
+  **35 cities** as documented district groupings; a rebuilt **map** with a
+  layer catalogue, server clustering, state selection and the NRSC Bhuvan
+  water raster; **Sentinel-2** evidence for lakes with strict per-lake
+  checks; **Q&A** that understands cities, distances and stations.
+
+## P2.2 What was built, by requirement
+
+| Req | Delivered |
+|---|---|
+| 2A–2B coverage | National ingest; per-plan error isolation; `cli coverage`, `GET /water-coverage`, `docs/DATASET_COVERAGE.md`, coverage table in the UI |
+| 2C–2D identity | Position markers incl. MIDSTREAM/UPSTREAM/DOWNSTREAM kept as `position_descriptor`; canonical spellings; per-state keying for local features; drain→river and **cross-state river/canal linking** (Ganga: 4 state fragments → one 85-station river; Yamuna 2 → 1); leading-article fix; regression tests (Mithi, Yamuna, Ganga, Brahmaputra, Rani Talab, Amravati) |
+| 2E source verification | Bhuvan, OSM, geoBoundaries, Planetary Computer, EP 1986 PDF verified live; PRS report, CPCB DBU PDF, Bhuvan WFS, WRIS/WBIS documented as inaccessible |
+| 2F–2H geometry | `water_body_geometries` with provenance; OSM matching by name + station proximity; monitored reaches; `ambiguous` instead of guessing; station `relationship_type` + distance |
+| 2I river stretches | Model with `derivation`, official id, source, year; no stretch invented |
+| 2J PRS | `source_classifications` + validated CSV importer (`cli import-classifications`); no rows |
+| 2K–2N standards/status | `reference_catalog.py` + DB tables; explicit selection order; desirable levels; engine 2.0 with `NO_APPLICABLE_REFERENCE`; explanations only from stored facts |
+| 2O–2T map | Lines/polygons, water blue, status casing/outline, clusters, viewport + zoom + filters + limits, layer control (Hydrology / Monitoring / Status / Boundaries / Evidence) |
+| 2U–2W geography | State boundaries (select, hover, search, zoom, filter), district outlines, curated cities |
+| 2X detail | Geometry map with stations, docked panel on desktop, bottom sheet on phones |
+| 2Y–2AA imagery | `water_images`; Sentinel-2 L2A path; NDTI proxy clearly labelled, never beside lab values as comparable |
+| 2AB–2AD RAG | City/extent distances, "within N km", stations near X, strict high-concern, state listings, evidence layers per answer |
+| 2AE–2AH UX | "Latest available observation" / "Current condition: cannot be established"; sources panel by role; data quality with visible factors and rule |
+| 2AI–2AJ search/empty | Cities first; question-shaped queries hand off to Q&A; honest empty states |
+| 2AK benchmark | Below |
+| 2AL PostGIS | `docs/POSTGIS_MIGRATION.md` (plan, not executed) |
+
+## P2.3 Real-data outcomes (snapshot at time of writing)
+
+| Layer | Result |
+|---|---|
+| Geometry | Matching is limited by the public Overpass service (rate limits, resets). Snapshot: 93 bodies matched (lakes 53, ponds 12, reservoirs 6, rivers 21, canal 1), 189 with no named OSM feature near their stations, 3 not near stations, 1 ambiguous, 65 source errors pending retry, the rest not yet attempted. River shapes are re-matched after fragment merges. |
+| Satellite | Hussain Sagar: 16 Jun 2026 scene accepted (89.5% water, 0% cloud) after three monsoon scenes rejected for 26–34% cirrus. Rajsamand: refused, ~1% of its full outline was water on clear days. |
+| Boundaries | 36 states (34 linked to CPCB codes), 735 districts, all with a parent state; 35 cities positioned |
+| Standards | 6 standards, their thresholds seeded to the DB |
+| Classifications | 0 (source inaccessible) |
+
+## P2.4 Defects found by testing against real data (all fixed, with tests)
+
+1. Centroid merge rule split long rivers into state fragments → station-linking reconcile.
+2. Overpass server-side key regex caused timeouts/blocks → indexed keys + local name matching.
+3. `out tags geom` dropped relation members; no multipolygon lake could match → `out geom`.
+4. Platform qualifiers ("(Bihar)") and `re.escape` spaces broke name queries.
+5. "Sagar" stripped from proper names (Hussain Sagar) → two-reading name cores.
+6. District parent by centroid misplaced Kamrup Metropolitan → vertex vote.
+7. City answers returned HTTP 500 (ORM object in the trace) → JSON-safe trace; HTTP-level tests.
+8. "The River" parsed from "THE RIVER ASHWANI …"; common words resolving to bodies.
+9. `httpx` missing from runtime requirements; image crashed on start.
+10. Boundary cache path unwritable in the container → `WATER_CACHE_DIR`.
+11. "rivers in Goa" unanswered; state listings truncated by a pre-filter row limit.
+12. Reference tables empty after the first national ingest (seeding added after it started).
+13. Zero-width first map request; overlapping controls with the docked panel.
+
+## P2.5 Verification
+
+| Check | Result |
+|---|---|
+| Backend pytest | **415 passed** |
+| Ruff check + format | Pass |
+| TypeScript `tsc --noEmit` | Pass |
+| ESLint `--max-warnings 0` | Pass |
+| Vite production build | Pass |
+| Docker build | Pass (`oceanai-backend:v2-local`, local only) |
+| Container | Healthy, non-root (uid 1000); bootstrap from the live source; boundaries/cities import inside; all Phase 2 endpoints 200; SPA served |
+| Browser (desktop) | Map layers, geometry, clusters, state selection, Bhuvan WMS, search → city, search → Q&A, docked panel, detail page, Q&A evidence layers |
+| Browser (375 px) | Bottom sheet, focused feature kept visible above it |
+| Secret scan | No credentials in the 73 changed files; no `.env`, key or DB files tracked |
+
+## P2.6 Benchmark (10 runs, TestClient, median ms)
+
+Before = Phase 1 database (7 states, 177k observations); after = national
+(582k observations, 3.3× the data). Not like-for-like.
+
+| Route | Before | After |
+|---|---|---|
+| `/map/stations` whole India | 2,218 | 352 |
+| `/map/near` Delhi 25 km | 112 | 17 |
+| `/water-bodies/mithi-river` | 23 | 36 (adds geometry, quality, sources, imagery) |
+| `/map/water-bodies` whole India | 28 | 140 (2× the features) |
+| `/search?q=ganga` | 22 | 73 (adds cities) |
+| `POST /water/ask` (polluted rivers near Mumbai) | 60 | 152 (city extent search) |
+| `/water-overview` | 56 | 187 |
+| `/boundaries/states?zoom=4` | — | 52 (cached; 185 KB, 55 KB gzipped) |
+| `/map/geometries` Mumbai / India | — | 19 / 121 |
+| `/map/station-clusters` India z5 | — | 280 |
+| `/water-coverage` | — | 3 (cached; 887 uncached) |
+
+## P2.7 Deployment readiness
+
+**NOT READY for public deployment.** The build is sound and verified
+locally, but:
+
+1. Geometry and imagery are populated by long-running jobs against rate-
+   limited public services and are incomplete; a deployed container starting
+   from SQLite would have none of it. Production needs a persistent database
+   (PostgreSQL, ideally PostGIS) seeded from this run, not per-container
+   bootstrap.
+2. A national ingest takes ~12 minutes; `WATER_BOOTSTRAP_STATES` suits one or
+   two states, not all 35, on an ephemeral task.
+3. Outbound calls to Overpass, geoBoundaries and Planetary Computer have not
+   been verified from inside AWS (Fargate egress, NAT).
+4. The deployment would replace the public v1 demo, which requires an
+   explicit go-ahead.
+
+Ready for: local use, review, and a staging deployment against a persistent
+database.
+
+## P2.8 Recommended Phase 3
+
+1. Persistent PostgreSQL + PostGIS (plan in `docs/POSTGIS_MIGRATION.md`),
+   with Alembic; move spatial queries to SQL.
+2. Batch geometry matching (one Overpass query per region, local assignment)
+   or an OSM extract for India to remove the rate-limit bottleneck; finish
+   river geometry.
+3. Obtain the CPCB PRS table (RTI/official data request) and designated-use
+   records; import through the existing validated paths.
+4. Scheduled ingestion with change detection; status history population.
+5. IS 10500 for groundwater; coastal/marine criteria.
+6. Station-to-reach matching along river geometry (upstream/downstream order).
+7. Staging deployment behind HTTPS, then a reviewed cut-over from v1.
+
+---
+
+# Phase 1 record
 
 ## 1. Executive summary
 
