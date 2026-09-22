@@ -66,6 +66,11 @@ class Settings(BaseSettings):
     # map. It runs in a background thread so health checks pass immediately.
     water_bootstrap_states: str = ""
 
+    # Where downloaded reference files (boundary GeoJSON) are cached. In the
+    # container the repo-root default resolves to an unwritable path, so the
+    # image points this at the data volume.
+    water_cache_dir: str = str(REPO_ROOT / "data" / "raw")
+
     # -- Vision ------------------------------------------------------------
     detector_backend: Literal["yolo", "mock"] = "mock"
     yolo_model_path: str | None = None

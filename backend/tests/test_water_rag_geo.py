@@ -108,3 +108,15 @@ class TestOverHttp:
             "/api/v1/water/ask", json={"question": "monitoring stations near Mumbai"}
         )
         assert r.status_code == 200
+
+    def test_state_listing_question(self, water_db, geo_client):  # noqa: F811
+        """Regression: "rivers in <state>" had no route and returned no evidence."""
+        r = geo_client.post(
+            "/api/v1/water/ask", json={"question": "rivers in Maharashtra"}
+        )
+        body = r.json()
+        assert body["status"] == "grounded"
+        names = {i["name"] for i in body["sections"][0]["items"]}
+        assert {"Mithi River", "Godavari River"} <= names
+        assert "Sea Water" not in " ".join(names)  # coastal excluded by type
+        assert "rivers in Maharashtra" in body["headline"]

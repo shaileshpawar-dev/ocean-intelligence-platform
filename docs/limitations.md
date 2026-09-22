@@ -248,43 +248,65 @@ the point of the project.
 
 ## 8. India water intelligence
 
-**Data age.** The newest CPCB surface-water data published on the National
-Water Data Portal is from 2021. Every water body's present-tense status is
-therefore "no recent data". The dated "when last measured" status is a true
-statement about that sample and nothing more.
+**Data age.** Most state extracts on the National Water Data Portal end in
+2020–2021; ten Meghalaya stations run to January 2025. For almost every water
+body the current condition cannot be established, and the UI says exactly
+that. The "latest measured status" is a dated statement about that sample.
 
-**Coverage.** Seven of 35 states are ingested locally (Maharashtra, Delhi,
-Uttar Pradesh, Karnataka, Tamil Nadu, West Bengal, Gujarat). The rest are one
-CLI command away, but have not been loaded or checked.
+**Coverage.** All 35 state/UT codes the source lists are ingested (211
+resources, 582,192 observations, 4,000 stations). See
+[DATASET_COVERAGE.md](DATASET_COVERAGE.md). Ladakh and Andaman & Nicobar have
+boundaries but no CPCB resource in the catalogue.
 
-**Identity is parsed, not supplied.** The source's `River` column is empty, so
-water bodies are resolved from station names. About a third of stations do not
-name a water body at all (`ERODE-2`, `GIDC DAHOD`) and are shown as
-"Unclassified". Some parses are imperfect: a drain meeting a river
-(`CHIKHALI NALLAH MEETS GODAVARI RIVER`) is read as a river. Every body shows
-its match method and confidence.
+**Identity is parsed, not supplied.** The source's `River` column is empty,
+so water bodies are resolved from station names by rules. About a quarter of
+stations sit on bodies typed "Unclassified" because the label names no water
+body; ~100 stations resolve to no body. Untyped same-named bodies are not
+linked across states (generic names would cause false merges), so e.g.
+"Damanganga" can appear more than once. River/canal fragments are linked by a
+150 km station-to-station rule, which could in principle join two distinct
+same-named rivers that close together.
 
-**Long rivers can split.** Same-named stations more than 500 km apart form
-separate bodies unless intermediate stations bridge them. The Ganga in West
-Bengal is separate from the Ganga in Uttar Pradesh because Bihar is not yet
-ingested.
+**Standards.** Rivers are compared against the EP Rules 1986 bathing-water
+criteria because that is what CPCB uses to identify polluted stretches; the
+UI states that basis. No designated use is recorded for any water body, so
+lakes, coastal points and groundwater show "Reference comparison
+unavailable". IS 10500 (groundwater/drinking) is not loaded. The CPCB
+designated-best-use PDF was unreachable; class values were cross-checked from
+independent sources.
 
-**Standards.** Status defaults to CPCB class C. A different designated use can
-legitimately change the verdict. The CPCB criteria PDFs could not be fetched
-directly (expired TLS certificate); the values were verified from independent
-sources quoting them and match the platform's thresholds.
+**Polluted river stretches.** CPCB's PRS report could not be retrieved in a
+machine-readable form. The importer exists; no official classification is
+loaded, so `POLLUTED_STRETCH` currently appears nowhere.
 
-**Not implemented:** river-stretch derivation (schema only), status history
-population, satellite or image evidence for inland water bodies, official or
-field imagery, marker clustering, administrative/basin boundary layers,
-PostGIS, user-reported issues, pollution-source context. None of these is
-presented in the UI as if it existed.
+**Geometry.** Shapes come from OpenStreetMap and are accepted only when
+stations are on or near them. Coverage is partial: the public Overpass
+service rate-limits heavily, so a national pass takes hours and ends with
+bodies in `source_error` to retry; others have no named OSM feature near
+their stations. Rivers are drawn as monitored reaches, not whole courses.
+Bhuvan's water-body layer is a raster overlay only (its WFS is disabled).
+Boundaries (geoBoundaries 2011/2021) are not the official boundaries of
+India.
 
-**Satellite honesty.** No satellite-derived value is attached to any water
-body. When one is, it will be labelled `SATELLITE_OBSERVED` and will never
-report BOD, COD, coliform or dissolved metals, which optical and SAR sensors
-cannot measure.
+**Cities** are curated district groupings (35 cities), not municipal
+boundaries; "near a city" is measured from the bounding box of its
+districts.
 
-**Q&A.** Intent routing is rule-based and can misroute unusual phrasings; it
-fails towards "no evidence", never towards an invented answer. No language
-model is used on the water path.
+**Satellite.** One path: Sentinel-2 L2A for matched lake polygons, strict
+per-lake cloud/water checks. Many lakes have no accepted scene (monsoon
+cloud, dry reservoirs, outlines larger than the current water). The NDTI
+value is an uncalibrated relative proxy with no unit; it is not turbidity
+and is never compared with a standard. Rivers are not attempted. No
+official or field photographs are integrated (the model supports them).
+
+**Geometry helpers** are planar approximations in pure Python (no GEOS);
+adequate for the kilometre-scale decisions made here. A PostGIS path is
+documented in [POSTGIS_MIGRATION.md](POSTGIS_MIGRATION.md) and not executed.
+
+**Q&A.** Intent routing and place resolution are rule-based; unusual
+phrasings fail towards "no evidence", never towards an invented answer. No
+language model is used on the water path.
+
+**Not implemented:** status-history population, user-reported issues,
+pollution-source context, basin boundaries, automated scheduling of
+ingestion/geometry refresh.

@@ -31,14 +31,14 @@ import httpx
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.core.config import REPO_ROOT
+from app.core.config import settings
 from app.models.water import District, State
 from app.models.water_geo import AdminBoundary
 from app.water import geo
 from app.water.matching import PLACE_ALIASES, normalise_name
 
 GEOBOUNDARIES_COMMIT = "9469f09"
-CACHE_DIR = REPO_ROOT / "data" / "raw" / "boundaries"
+CACHE_DIR = Path(settings.water_cache_dir) / "boundaries"
 
 
 @dataclass(frozen=True, slots=True)

@@ -5,14 +5,14 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB)](https://www.python.org/)
 [![React 18](https://img.shields.io/badge/react-18-61DAFB)](https://react.dev/)
 [![FastAPI](https://img.shields.io/badge/fastapi-0.115-009688)](https://fastapi.tiangolo.com/)
-[![Tests](https://img.shields.io/badge/tests-314%20passing-brightgreen)](#testing)
+[![Tests](https://img.shields.io/badge/tests-412%20passing-brightgreen)](#testing)
 [![Data: CPCB](https://img.shields.io/badge/data-CPCB%20via%20NWDP-0369a1)](docs/data-sources.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 > **Live demo status.** The public deployment below still runs **v1, the marine
 > pollution platform**. The India Water Intelligence version on this branch has
 > been built and verified locally (tests, browser, Docker) but **has not been
-> deployed**. See [Deploying V2](#deploying-v2).
+> deployed**. See [Deployment](#deployment).
 
 ## 🌊 Live Demo (v1)
 
@@ -53,78 +53,80 @@ support.
 
 ## What this does
 
-It resolves CPCB monitoring records into **water bodies**, places them on a
-map of India, judges each against **cited CPCB standards**, and is explicit on
-every screen about the difference between *what the water is like now* and
-*what the last measurement found*.
+It resolves CPCB monitoring records into **water bodies** across all of
+India, places them on a map with their **real shapes** where one can be
+matched, compares them only against a **standard that is shown to apply**,
+and keeps apart what was measured, what a standard says, what an official
+body classified, and what the platform derives.
 
 ```mermaid
 flowchart LR
-    SRC["CPCB surface-water data<br/>National Water Data Portal<br/>(public CKAN API)"] --> ING["Ingestion<br/>validate · normalise · match · dedupe"]
-    ING --> DB[("Water bodies · stations<br/>177k observations")]
-    STD["CPCB criteria<br/>Classes A–E · PRS bands"] --> ENG["Status engine<br/>freshness gate → bands"]
-    DB --> ENG
-    ENG --> API["FastAPI /api/v1"]
-    DB --> QA["Water Q&A<br/>IDENTIFY→OBSERVE→RESEARCH→ANALYZE→REPORT"]
-    QA --> API
+    SRC["CPCB surface-water data<br/>NWDP public API · 35 states"] --> ING["Ingestion<br/>validate · normalise · identity · reconcile"]
+    ING --> DB[("2.6k water bodies · 4k stations<br/>582k observations")]
+    OSM["OpenStreetMap (Overpass)"] --> GEO["Geometry matching<br/>name + station proximity"]
+    GB["geoBoundaries ADM1/ADM2"] --> BND["States · districts · cities"]
+    S2["Sentinel-2 L2A<br/>Planetary Computer"] --> SAT["Satellite evidence<br/>per-lake cloud/water checks"]
+    STD["Reference catalogue<br/>EP 1986 item 93 · CPCB A–E"] --> ENG["Status engine<br/>4 evidence layers"]
+    GEO --> DB
+    BND --> DB
+    SAT --> DB
+    DB --> ENG --> API["FastAPI /api/v1"]
+    DB --> QA["Water Q&A (no LLM)"] --> API
     API --> MAP["India water map"]
     API --> PAGES["Water body · state · city · station pages"]
-    API --> AI["Ask about water<br/>citations → map"]
 ```
 
 ### The honest centre of the product
 
-The newest CPCB data anywhere on the portal is from **2021**. So every water
-body carries two statuses:
+Most state extracts on the portal end in 2020–2021 (a few Meghalaya stations
+run to 2025). So every water body shows two things, never merged:
 
 | | Mithi River, Mumbai |
 |---|---|
-| **Right now** | *No recent data* — latest observation 02 Dec 2021, too old to describe today |
-| **When last measured** | *Polluted stretch*, CPCB priority V, **as of 02 Dec 2021** |
-
-A platform showing only the first would be useless; one showing only the
-second without its date would be misleading. The map colours by the dated
-verdict and says so in its legend.
+| **Current data availability** | Latest available observation 02 Dec 2021 — *current condition cannot be established from this dataset* |
+| **Latest measured status** | *High concern* **as of 02 Dec 2021**, compared against the EP 1986 bathing-water criteria (faecal coliform 4.4× the limit) |
 
 ## Real data
 
-Verified against the live source before any code was written
-([details](docs/data-sources.md)):
-
-- **Source:** CPCB Surface Water Quality (Manual), 315 datastore-backed
-  resources, public, no key.
-- **Ingested locally:** 7 states — Maharashtra, Delhi, Uttar Pradesh,
-  Karnataka, Tamil Nadu, West Bengal, Gujarat — **177,112 observations,
-  1,190 stations, 765 water bodies**, 42/42 resources, zero errors.
-- **43 parameters**, including BOD, COD, dissolved oxygen, pH, faecal and
-  total coliform, heavy metals and nutrients.
-- The source's `River` column is empty everywhere, so water bodies are
-  **parsed from station names** by deterministic rules with a recorded
-  confidence ([how](docs/data-model.md)).
+- **CPCB Surface Water Quality (Manual)** via the National Water Data Portal:
+  all 35 state/UT codes, 211 resources, **582,192 observations, 4,000
+  stations, ~2,600 water bodies**, zero ingestion errors.
+  Live counts: [DATASET_COVERAGE.md](docs/DATASET_COVERAGE.md).
+- **OpenStreetMap** geometry for rivers and lakes, accepted only where CPCB
+  stations lie on or near it, with OSM ids, licence and retrieval time.
+- **geoBoundaries** state and district boundaries; **35 cities** defined as
+  documented groupings of whole districts.
+- **Sentinel-2 L2A** scenes for matched lakes, kept only when the lake itself
+  is clear of cloud. [Sources and what was not usable](docs/data-sources.md).
 
 ## Status, not a score
 
-No 0–100 pollution score. A band — *within reference, elevated, high concern,
-polluted stretch, insufficient data, no recent data* — reached by stated rules
-over named parameters against **CPCB Designated Best Use criteria** (class C
-by default) and the national **polluted-river-stretch** BOD bands. A parameter
-that was not measured is never treated as compliant; dissolved oxygen fails
-when it is *low*. [Engine details](docs/water-status-engine.md).
+No 0–100 score, and **no default standard**. Rivers are compared against the
+EP Rules 1986 bathing-water criteria because that is what CPCB uses to
+identify polluted river stretches; other water bodies are compared only when
+a designated use is recorded or chosen, otherwise the page says *"Reference
+comparison unavailable"*. *Polluted stretch* appears only when an official
+CPCB classification is imported (none is loaded — the report is PDF-only).
+Answers and pages separate **MEASURED · REFERENCE_COMPARISON ·
+SOURCE_CLASSIFICATION · DERIVED_STATUS**, and satellite values are labelled
+*uncalibrated proxy*, never measurements.
+[Engine and standards](docs/water-status-engine.md).
 
-## The map and the AI are one system
+## The map
 
-- `/app/map` — India, full screen, loaded per viewport, coloured by status
-  when last measured, searchable, with a detail panel (a bottom sheet on
-  phones).
-- `/app/ai` — ask *"Show polluted rivers near Mumbai"* or *"Has the Godavari
-  improved?"*. Answers are built from stored records, every figure cited with
-  its date and source row, and no language model produces any value. Each
-  answer can be put on the map, and each citation flies the map to its
-  evidence.
-- *"How much mercury is in Mithi River?"* → **no evidence**: nobody measured
-  mercury there, so no number is given.
+`/app/map`: rivers as lines and lakes as polygons (water stays blue, status as
+a casing/outline), server-clustered stations, selectable state boundaries and
+district outlines, an optional NRSC Bhuvan water-body raster, city and state
+search, and questions handed to the Q&A. Everything is fetched per viewport.
+[Geospatial details](docs/water-geospatial.md).
 
-[Map and Q&A details](docs/water-map-and-ai.md).
+## Ask about water
+
+`/app/ai` — *"Show polluted rivers near Mumbai"*, *"Lakes near Bengaluru"*,
+*"Which rivers are within 20 km of Pune?"*, *"High-concern water bodies in
+Maharashtra"*, *"Monitoring stations near Chennai"*. Built from stored
+records with citations, dates and a trace; no language model produces any
+value. *"How much mercury is in Mithi River?"* → no evidence.
 
 ## Pages
 
@@ -133,25 +135,29 @@ when it is *low*. [Engine details](docs/water-status-engine.md).
 | `/app/india` | Coverage, data currency, status distribution, sources |
 | `/app/map` | The India water map |
 | `/app/ai` | Ask about water |
-| `/app/water/:slug` | Water body: dual status, why, parameters, trend, stations, location, sources |
-| `/app/state/:slug`, `/app/city/:slug` | State and district pages |
+| `/app/water/:slug` | Availability vs latest measured status, reference and why, data quality, parameters, trend, stations and their relation to the shape, map, satellite evidence, sources |
+| `/app/state/:slug`, `/app/city/:slug` | State; curated city or district |
 | `/app/stations/:id` | Monitoring station |
-| `/app/standards` | Every threshold applied, with its source |
-| `/app/data-quality` | Provider health, last run, validation outcomes |
+| `/app/standards` | Selection order and every threshold, with sources |
+| `/app/data-quality` | Providers, validation outcomes, dataset coverage |
 
-## Water API
+## Water API (new in V2)
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /water-bodies` · `/water-bodies/{slug}` | List and filter; detail with both statuses |
-| `GET /water-bodies/{slug}/trend?parameter=bod` | Observed points only, no interpolation |
-| `GET /water-bodies/{slug}/parameters` · `/stations` · `/sources` | Supporting views |
-| `GET /stations` · `/stations/{id}` | Monitoring stations |
-| `GET /map/water-bodies?bbox=` · `/map/stations` · `/map/near` | Viewport and true-circle radius queries |
-| `GET /states` · `/states/{slug}` · `/cities/{slug}` | Geography |
-| `GET /search?q=` | Water bodies, districts (with official renamings), states, stations |
-| `POST /water/ask` | Grounded Q&A with citations, trace and map action |
-| `GET /water-overview` · `/water-standards` · `/water-parameters` · `/water-quality-report` | Platform views |
+| `GET /water-bodies/{slug}?reference=A..E` | Detail, optionally against a chosen standard |
+| `GET /water-bodies/{slug}/geometry` | Geometry with provenance, or why there is none |
+| `GET /map/geometries?bbox=&zoom=` | Matched lines/polygons in view, zoom-simplified |
+| `GET /map/station-clusters?bbox=&zoom=` | Server-side station clusters |
+| `GET /map/layers` | Layer catalogue, sources, attributions, WMS |
+| `GET /boundaries/states` · `/boundaries/districts?state=` | Boundaries |
+| `GET /cities` · `/cities/{slug}` | Curated cities (district slugs still resolve) |
+| `GET /water-coverage` | What the database holds, per state |
+| `GET /search?q=` | Cities first; `ask_suggested` for question-shaped queries |
+
+Phase 1 endpoints (`/water-bodies`, `/stations`, `/map/water-bodies`,
+`/map/near`, `/states`, `/water/ask`, …) are unchanged in shape apart from
+added fields.
 
 ## Run it locally
 
@@ -159,36 +165,30 @@ when it is *low*. [Engine details](docs/water-status-engine.md).
 python -m venv .venv && source .venv/Scripts/activate
 pip install -r backend/requirements-dev.txt
 cd frontend && npm install && npm run build && cd ..
-```
-
-Load real data (public source, no key; roughly ten seconds per state):
-
-```bash
-cd backend && python -m app.water.cli ingest --states MH DL KA
-```
-
-```bash
+cd backend
+python -m app.water.cli ingest --all           # ~12 min, public source, no key
+python -m app.water.cli import-boundaries      # geoBoundaries, cached under data/raw
+python -m app.water.cli import-cities
+python -m app.water.cli fetch-geometry --type lake reservoir pond   # slow: public Overpass
+python -m app.water.cli fetch-imagery
+python -m app.water.cli coverage --markdown ../docs/DATASET_COVERAGE.md
 uvicorn app.main:app --port 8000
 ```
 
-Open <http://localhost:8000/app/map>. In Docker, set
-`WATER_BOOTSTRAP_STATES=MH` and the container ingests on first start.
+Open <http://localhost:8000/app/map>. `cli --help` lists `reconcile`,
+`seed-standards`, `import-classifications` and `refresh-status`.
 
-## Deploying V2
+## Deployment
 
-Not done in this change. The image builds and runs locally, and a fresh
-container rebuilds Maharashtra's data from the source in about 11 seconds.
-Rolling it out means pushing a new image tag to `oceanai/backend`,
-registering task definition revision 2 with `WATER_BOOTSTRAP_STATES` set, and
-updating the `oceanai-api` service — see [deployment](docs/deployment.md). It
-is left for an explicit go-ahead because it replaces the public demo.
+V2 is **not deployed**; the public demo above is V1 and was not changed.
+See the readiness notes in [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md).
 
 ## Water limitations
 
-The newest data is from 2021; 7 of 35 states are ingested; identity is parsed
-and about a third of stations name no water body; long rivers can split
-across unbridged states; river stretches, satellite evidence for inland
-water, imagery, clustering and boundary layers are not implemented.
+Old data (current condition cannot be established almost anywhere); parsed
+identity; partial geometry coverage limited by the public Overpass service;
+no official polluted-stretch data loaded; no designated uses recorded; the
+satellite value is an uncalibrated proxy; cities are district groupings.
 [Full list](docs/limitations.md#8-india-water-intelligence).
 
 ---

@@ -1304,14 +1304,32 @@ def _answer_parameter_filter(
     """Answer questions like "Which rivers in Maharashtra have elevated BOD?"."""
     parameter = resolution.parameters[0] if resolution.parameters else None
     state = resolution.states[0] if resolution.states else None
-    filters = ws.WaterBodyFilters(state=state.slug if state else None)
+    # "Rivers in Goa": a place and a kind, no filter -- list them all.
+    listing = bool(
+        state
+        and resolution.water_types
+        and not parameter
+        and not (
+            resolution.wants_polluted
+            or resolution.wants_high_concern
+            or resolution.wants_no_recent
+        )
+    )
+    # The type is filtered in SQL: a state can hold several hundred bodies,
+    # and filtering after a row limit silently truncated large states.
+    filters = ws.WaterBodyFilters(
+        state=state.slug if state else None,
+        water_type=resolution.water_types[0]
+        if len(resolution.water_types) == 1
+        else None,
+    )
     bodies, _ = tracer.call(
         "OBSERVE",
         "list_water_bodies",
         ws.list_water_bodies,
         db=db,
         filters=filters,
-        limit=200,
+        limit=1000,
     )
 
     if resolution.water_types:
@@ -1319,9 +1337,12 @@ def _answer_parameter_filter(
 
     matches: list[tuple[dict, dict]] = []
     for summary in bodies:
-        body = db.get(WaterBody, summary["id"])
-        readings = ws.latest_parameters(db, body)
-        if parameter:
+        if listing:
+            matches.append((summary, {}))
+        elif parameter:
+            # Readings only when a parameter was asked about (was N+1 always).
+            body = db.get(WaterBody, summary["id"])
+            readings = ws.latest_parameters(db, body)
             reading = next((r for r in readings if r["parameter"] == parameter), None)
             if reading and reading["comparison"]["failed"]:
                 matches.append((summary, reading))
@@ -1342,10 +1363,14 @@ def _answer_parameter_filter(
     tracer.call("ANALYZE", "filter_failing", lambda: matches)
     scope = f" in {state.name}" if state else ""
 
-    if not parameter and not (
-        resolution.wants_polluted
-        or resolution.wants_high_concern
-        or resolution.wants_no_recent
+    if (
+        not listing
+        and not parameter
+        and not (
+            resolution.wants_polluted
+            or resolution.wants_high_concern
+            or resolution.wants_no_recent
+        )
     ):
         return _no_evidence(question, Intent.PARAMETER)
 
@@ -1405,13 +1430,18 @@ def _answer_parameter_filter(
         )
 
     what = f"{label} outside its reference limit" if parameter else "matching status"
+    plural = "water body" if len(matches) == 1 else "water bodies"
     return WaterAnswer(
         question=question,
         intent=Intent.PARAMETER,
         status=AnswerStatus.GROUNDED,
         headline=(
-            f"{len(matches)} monitored water bod{'y' if len(matches) == 1 else 'ies'}"
-            f"{scope} had {what} at the most recent measurement."
+            f"{len(matches)} monitored "
+            + " / ".join(f"{t.replace('_', ' ')}s" for t in resolution.water_types)
+            + f"{scope}, each shown with its latest measured status and date."
+            if listing
+            else f"{len(matches)} monitored {plural}{scope} had {what} at the most "
+            "recent measurement."
         ),
         sections=[{"kind": "list", "items": items}],
         citations=citations,
@@ -1558,6 +1588,8 @@ def answer(db: Session, question: str) -> dict:
             resolution,
             intent if intent is not Intent.UNKNOWN else Intent.STATUS,
         )
+    elif resolution.states and resolution.water_types and not resolution.districts:
+        result = _answer_parameter_filter(db, tracer, question, resolution)
     elif has_place and wants_filter:
         if resolution.districts and not resolution.states:
             result = _answer_nearby(db, tracer, question, resolution)

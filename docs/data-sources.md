@@ -66,22 +66,36 @@ Both were verified via search results quoting the criteria; the CPCB site's
 TLS certificate was expired at the time, so the PDF itself could not be
 fetched directly. The numeric values match across independent sources.
 
+## Geospatial sources (Phase 2)
+
+Each verified live before use; access dates are 2026-09-21/22.
+
+| Source | Used for | Access | Licence |
+|---|---|---|---|
+| OpenStreetMap via Overpass API (`overpass-api.de`) | River lines, lake/reservoir polygons, matched to stations | Public, no key; heavily rate-limited | ODbL 1.0 |
+| NRSC Bhuvan WMS (`bhuvan-vec1.nrsc.gov.in/bhuvan/wms`, layer `basemap:waterbody_DEM`) | Map overlay of surface water bodies | Public WMS; WFS disabled, so raster only | © NRSC/ISRO, attributed |
+| geoBoundaries IND ADM1 / ADM2 (commit `9469f09`) | State and district boundaries, city extents | Public GitHub release | CC BY 2.5 IN (ADM1), ODbL (ADM2) |
+| Microsoft Planetary Computer — Sentinel-2 L2A (STAC + data API) | Satellite scenes and an NDTI proxy for matched lakes | Public, no key | Copernicus Sentinel data, free and open |
+| EP Rules 1986, Schedule item 93 (CPCB-hosted PDF) | Bathing-water criteria, the river reference | Read directly | Government publication |
+
 ## Not integrated, and why
 
 Listed so their absence is visible rather than mistaken for coverage.
 
 | Source | Status | Reason |
 |---|---|---|
+| CPCB polluted-river-stretch report (PRS) | Import path only | Published as PDF; report URLs returned an HTML stub/404. A validated CSV importer exists; no rows are loaded. |
+| CPCB designated-best-use criteria PDF | Values cross-checked | The PDF was unreachable (expired TLS certificate); class values were verified from independent sources. |
+| Bhuvan vector water bodies / other Bhuvan layers | Not used | WFS returns ServiceUnavailable; many listed WMS layers are broken. Only `waterbody_DEM` was verified to render. |
+| India-WRIS / WBIS water-body inventory | Not used | No openly machine-readable download was found. |
 | CPCB real-time water quality (`rtwqmsdb1.cpcb.gov.in`) | Not integrated | A dashboard application; no documented public API was found. |
-| Bhuvan / NRSC water bodies | Not integrated | No public, documented, unauthenticated query endpoint was verified in this session. Not stubbed. |
-| MPCB (Maharashtra) | Not integrated | Publishes reports and bulletins, not a machine-readable feed that was verified. |
-| Central Water Commission | Not integrated | Hydrological (level/flow), not water quality; out of scope for status. |
-| Sentinel-1/2 for water bodies | Not integrated | The Earth Engine provider exists for the marine pipeline; nothing derives water-body indicators from it yet. See `limitations.md`. |
-| data.gov.in OGD | Not integrated | Mirrors the same CPCB tables but requires an API key; NWDP gives the same data without one. |
+| MPCB (Maharashtra) | Not integrated | Reports and bulletins, not a verified machine-readable feed. |
+| Central Water Commission | Not integrated | Hydrological (level/flow), not water quality. |
+| data.gov.in OGD | Not integrated | Mirrors the CPCB tables but needs an API key; NWDP gives the same data without one. |
+| Official / field photographs | Not integrated | No source found; the imagery model supports them. |
 
-No adapter was written for any of these. A provider that cannot reach real
-data is not registered, so it cannot appear in the UI as a working
-integration.
+A provider that cannot reach real data is not registered, so it cannot
+appear in the UI as a working integration.
 
 ## Adding a provider
 

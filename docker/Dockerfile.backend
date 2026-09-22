@@ -58,7 +58,8 @@ FROM python:3.12-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:$PATH" \
-    DATABASE_URL="sqlite:////app/data/oip.db"
+    DATABASE_URL="sqlite:////app/data/oip.db" \
+    WATER_CACHE_DIR="/app/data/raw"
 
 # Run as a non-root user. The container writes only to /app/data.
 RUN useradd --create-home --uid 1000 oip
