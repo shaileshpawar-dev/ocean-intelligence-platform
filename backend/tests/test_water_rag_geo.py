@@ -26,6 +26,7 @@ class TestCityQuestions:
         names = [i["name"] for i in a["sections"][0]["items"]]
         assert names == ["Mithi River"]
         assert "Mumbai" in a["headline"]
+        assert a["headline"].startswith("1 river ")  # not "1 rivers"
         assert any("Mumbai City and Mumbai Suburban" in lim for lim in a["limitations"])
         assert all(c["evidence_type"] == "DERIVED_STATUS" for c in a["citations"])
 
@@ -120,3 +121,28 @@ class TestOverHttp:
         assert {"Mithi River", "Godavari River"} <= names
         assert "Sea Water" not in " ".join(names)  # coastal excluded by type
         assert "rivers in Maharashtra" in body["headline"]
+
+    def test_common_words_never_resolve_to_water_bodies(self, water_db):  # noqa: F811
+        """Regression: a body normalised to "THE" matched every question."""
+        from app.models.water import WaterBody
+        from app.water.rag import resolve_entities
+
+        db, _ = water_db
+        db.add(
+            WaterBody(
+                slug="the-river",
+                name="The River",
+                normalized_name="THE",
+                water_type="river",
+            )
+        )
+        db.add(
+            WaterBody(
+                slug="red-lake", name="Red Lake", normalized_name="RED", water_type="lake"
+            )
+        )
+        db.commit()
+        r = resolve_entities(db, "What is the status of the red fort area?")
+        assert [b.slug for b in r.water_bodies] == []
+        r = resolve_entities(db, "How is Red Lake?")
+        assert [b.slug for b in r.water_bodies] == ["red-lake"]

@@ -429,6 +429,9 @@ def parse_station_name(station_name: str) -> MatchResult:
     ``unidentified`` result that the caller records rather than discards.
     """
     raw = re.sub(r"\s+", " ", str(station_name or "").strip())
+    # A leading article is not part of any name: "THE RIVER ASHWANI AT ..."
+    # otherwise parsed as a river called "The".
+    raw = re.sub(r"^(the)\s+", "", raw, flags=re.IGNORECASE)
     if not raw:
         return MatchResult("", "", WaterBodyType.OTHER, "unidentified", 0.0)
 

@@ -599,3 +599,15 @@ class TestIngestionValidation:
         aware = datetime(2021, 12, 2, 8, 30, tzinfo=UTC)
         assert _as_utc(naive) == _as_utc(aware)
         assert _as_utc(None) is None
+
+
+class TestLeadingArticle:
+    def test_the_is_not_a_river_name(self):
+        """Regression: THE RIVER ASHWANI AT ... became a river called "The"."""
+        from app.water.matching import resolve
+
+        r = resolve(
+            "THE RIVER ASHWANI AT VILLAGE SADHUPIL TEHSIL KANDAGHAT DISTRICT SOLAN."
+        )
+        assert r.name == "Ashwani River"
+        assert str(r.water_type) == "river"

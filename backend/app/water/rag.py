@@ -60,7 +60,39 @@ HIGH_CONCERN_BANDS = frozenset({"POLLUTED_STRETCH", "HIGH_CONCERN"})
 
 # Words that would otherwise resolve to water bodies with generic names.
 _STOP_ENTITIES = frozenset(
-    {"SEA", "WATER", "RIVER", "LAKE", "TANK", "SEA WATER", "GROUNDWATER", "INDIA"}
+    {
+        "SEA",
+        "WATER",
+        "RIVER",
+        "LAKE",
+        "TANK",
+        "SEA WATER",
+        "GROUNDWATER",
+        "INDIA",
+        "THE",
+        "NEAR",
+        "WITH",
+        "WHAT",
+        "WHICH",
+        "WHERE",
+        "FROM",
+        "LAST",
+        "LATEST",
+        "STATUS",
+        "SHOW",
+        "ABOUT",
+        "OVER",
+        "TIME",
+        "RIGHT",
+        "POND",
+        "CANAL",
+        "DRAIN",
+        "CREEK",
+        "BEACH",
+        "WELL",
+        "STP",
+        "B W",
+    }
 )
 
 # Extra phrasings people use for parameters, beyond the registry's labels.
@@ -392,9 +424,16 @@ def resolve_entities(db: Session, question: str) -> Resolution:
         name = body.normalized_name.strip()
         if not name or name in _STOP_ENTITIES or len(name) < 3:
             continue
-        names = [name, *(normalise_name(a) for a in (body.aliases or []))]
-        hit = next((n for n in names if len(n) >= 3 and f" {n} " in text), None)
-        if hit and hit not in _STOP_ENTITIES:
+        # A short core ("KIM", "RED", "SON") is an ordinary word too often to
+        # match alone; it counts only with its type word ("Kim River").
+        full = normalise_name(body.name)
+        names = [
+            n
+            for n in (name, full, *(normalise_name(a) for a in (body.aliases or [])))
+            if n and (len(n) >= 4 or " " in n) and n not in _STOP_ENTITIES
+        ]
+        hit = next((n for n in names if f" {n} " in text), None)
+        if hit:
             candidates.append((len(hit), body))
     candidates.sort(key=lambda pair: -pair[0])
 
@@ -1262,7 +1301,7 @@ def _answer_city(
         for i, b in enumerate(found[:25])
     ]
     noun = (
-        kinds
+        (" / ".join(resolution.water_types) if len(found) == 1 else kinds)
         if resolution.water_types
         else "monitored water body"
         if len(found) == 1
