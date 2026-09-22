@@ -30,6 +30,7 @@ from app.water.geometry import (
     fetch_and_store,
     match_geometry,
     name_cores,
+    name_matches,
 )
 from app.water.reference_catalog import ALL_STANDARDS
 from app.water.reference_seed import seed_reference_standards
@@ -158,18 +159,28 @@ class TestOsmMatching:
         body = WaterBody(name="Cauvery River", aliases=[])
         assert "KAVERI" in name_cores(body)
 
-    def test_multi_word_names_are_not_space_escaped(self):
-        """Regression: re.escape turned spaces into backslash-space."""
-        q = build_query(POLICIES["polygon"], ["RANI TALAB"], [(0, 0, 1, 1)])
-        assert "rani talab" in q
-        assert r"rani\ talab" not in q
-
-    def test_query_is_windowed_and_name_filtered(self):
-        q = build_query(POLICIES["line"], ["MITHI"], [(72.8, 19.0, 72.9, 19.1)])
+    def test_query_uses_indexed_keys_not_regex(self):
+        q = build_query(POLICIES["line"], [(72.8, 19.0, 72.9, 19.1)])
         assert "(19.00000,72.80000,19.10000,72.90000)" in q
-        assert '~"^(name|name:en|alt_name' in q
-        assert '"~"^(mithi)(' in q
-        assert "out tags geom" in q
+        assert '["name"]' in q and '["name:en"]' in q
+        assert '~"^(name' not in q  # no server-side key regex
+        # Regression: "out tags geom" silently dropped relation members.
+        assert q.endswith("out geom;")
+
+    def test_names_are_matched_locally_across_keys(self):
+        assert name_matches({"name": "Mithi River"}, ["MITHI"])
+        assert name_matches({"name": "मिठी नदी", "name:en": "Mithi"}, ["MITHI"])
+        assert name_matches({"name": "Hussain Sagar"}, ["HUSSAIN", "HUSSAIN SAGAR"])
+        assert not name_matches({"name": "Mithila Nagar Lake"}, ["MITHI"])
+        assert not name_matches({"name": "Powai Lake"}, ["MITHI"])
+
+    def test_unrelated_named_features_in_window_are_ignored(self, db):
+        body = _body(db, "Mithi River", WaterBodyType.RIVER, [(19.05, 72.85)])
+        other = _way(
+            12, [(72.849, 19.049), (72.851, 19.051)], waterway="river", name="Dahisar"
+        )
+        outcome = fetch_and_store(db, body, fetch=lambda q: {"elements": [other]})
+        assert outcome.status == "no_candidates"
 
     def test_relation_rings_are_assembled(self):
         rel = {

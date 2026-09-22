@@ -147,10 +147,12 @@ for _variant, _canonical in CANONICAL_SPELLINGS.items():
 
 # OSM keys that carry a name a CPCB label might correspond to. In India the
 # plain ``name`` is often in a local script, with the Latin form elsewhere.
-NAME_KEYS = "^(name|name:en|alt_name|official_name|int_name|old_name)$"
+NAME_KEYS = ("name", "name:en", "alt_name", "official_name", "int_name", "old_name")
+# Keys the server filters on. Both are indexed; a key or value regex on the
+# server forces a scan of every tag and was the main cause of timeouts.
+QUERY_NAME_KEYS = ("name", "name:en")
 
 _QUALIFIER = re.compile(r"\([^)]*\)")
-_REGEX_SPECIAL = re.compile(r"([.^$*+?()\[\]{}|\\])")
 
 
 def name_cores(body: WaterBody) -> list[str]:
@@ -174,37 +176,43 @@ def name_cores(body: WaterBody) -> list[str]:
     return cores
 
 
-def _escape(text: str) -> str:
-    # Overpass regexes are POSIX ERE: escape metacharacters only. Python's
-    # re.escape also escapes spaces, which ERE does not define.
-    return _REGEX_SPECIAL.sub(r"\\\1", text)
+def build_query(policy: MatchPolicy, windows: list[geo.BBox]) -> str:
+    """Overpass QL for *named* water features of the right kind in each window.
 
-
-def _name_regex(cores: list[str]) -> str:
-    alternatives = "|".join(_escape(c.lower()) for c in cores)
-    return f"^({alternatives}){_NAME_SUFFIX}$"
-
-
-def build_query(policy: MatchPolicy, cores: list[str], windows: list[geo.BBox]) -> str:
-    """Overpass QL for named water features inside any station window."""
-    regex = _name_regex(cores).replace('"', '\\"')
+    Names are not filtered on the server: the candidates are few per window
+    and :func:`name_matches` decides locally, across every name key.
+    """
+    selectors: list[str] = []
+    if policy.kind in ("line", "both"):
+        selectors.append('way["waterway"~"^(river|stream|canal|drain|tidal_channel)$"]')
+    if policy.kind in ("polygon", "both"):
+        selectors += [
+            'way["natural"="water"]',
+            'relation["natural"="water"]',
+            'way["landuse"="reservoir"]',
+        ]
     clauses: list[str] = []
     for w in windows:
         box = f"({w[1]:.5f},{w[0]:.5f},{w[3]:.5f},{w[2]:.5f})"
-        if policy.kind in ("line", "both"):
-            clauses.append(
-                f'way["waterway"~"^(river|stream|canal|drain|tidal_channel)$"]'
-                f'[~"{NAME_KEYS}"~"{regex}",i]{box};'
-            )
-        if policy.kind in ("polygon", "both"):
-            clauses.append(f'way["natural"="water"][~"{NAME_KEYS}"~"{regex}",i]{box};')
-            clauses.append(
-                f'relation["natural"="water"][~"{NAME_KEYS}"~"{regex}",i]{box};'
-            )
-            clauses.append(
-                f'way["landuse"="reservoir"][~"{NAME_KEYS}"~"{regex}",i]{box};'
-            )
-    return f"[out:json][timeout:50];({''.join(clauses)});out tags geom;"
+        for selector in selectors:
+            for key in QUERY_NAME_KEYS:
+                clauses.append(f'{selector}["{key}"]{box};')
+    # "out geom" (full body), not "out tags geom": the tags verbosity drops
+    # relation members, and most large lakes are multipolygon relations.
+    return f"[out:json][timeout:50];({''.join(clauses)});out geom;"
+
+
+def name_matches(tags: dict, cores: list[str]) -> bool:
+    """Whether any name tag is one of the cores plus optional type words."""
+    pattern = re.compile(_python_name_regex(cores), re.IGNORECASE)
+    return any(
+        pattern.match(normalise_name(tags[k]).lower()) for k in NAME_KEYS if tags.get(k)
+    )
+
+
+def _python_name_regex(cores: list[str]) -> str:
+    alternatives = "|".join(re.escape(c.lower()) for c in cores)
+    return f"^({alternatives}){_NAME_SUFFIX}$"
 
 
 REQUEST_DEADLINE_SECONDS = 75.0
@@ -386,7 +394,7 @@ def match_geometry(
         for i in range(0, len(windows), WINDOWS_PER_QUERY):
             if i:
                 time.sleep(CHUNK_PAUSE_SECONDS)
-            part = fetch(build_query(policy, cores, windows[i : i + WINDOWS_PER_QUERY]))
+            part = fetch(build_query(policy, windows[i : i + WINDOWS_PER_QUERY]))
             payload["elements"].extend(part.get("elements", []))
             if "osm3s" in part:
                 payload["osm3s"] = part["osm3s"]
@@ -397,7 +405,7 @@ def match_geometry(
     seen: set[str] = set()
     for element in payload.get("elements", []):
         key = f"{element['type']}/{element['id']}"
-        if key in seen:
+        if key in seen or not name_matches(element.get("tags", {}), cores):
             continue
         seen.add(key)
         g = element_geometry(element)
