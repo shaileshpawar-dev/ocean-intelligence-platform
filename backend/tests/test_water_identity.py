@@ -16,6 +16,7 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 
 import pytest
+from app.models.enums import WaterBodyType
 from app.models.water import MonitoringStation, WaterBody
 from app.water import providers as provider_registry
 from app.water.freshness import Cadence
@@ -27,6 +28,7 @@ from app.water.providers.base import (
     ProviderInfo,
     WaterDataProvider,
 )
+from sqlalchemy import func, select
 
 WHEN = datetime(2021, 12, 2, 8, 30, tzinfo=UTC)
 
@@ -183,3 +185,150 @@ class TestDescriptorParsing:
 
     def test_no_descriptor_when_the_label_is_only_the_name(self):
         assert resolve("ABBIGERE LAKE").position is None
+
+
+# ---------------------------------------------------------------------------
+# Cross-state river fragments (link_river_fragments)
+# ---------------------------------------------------------------------------
+def _fragment(db, source, name, slug, stations):
+    body = WaterBody(
+        slug=slug,
+        name=name,
+        normalized_name=name.upper(),
+        water_type=WaterBodyType.RIVER,
+        station_count=len(stations),
+    )
+    db.add(body)
+    db.flush()
+    for i, (lat, lon) in enumerate(stations):
+        db.add(
+            MonitoringStation(
+                station_code=f"{slug}:{i}",
+                name=f"{name} station {i}",
+                slug=f"{slug}-{i}",
+                source_id=source.id,
+                water_body_id=body.id,
+                latitude=lat,
+                longitude=lon,
+            )
+        )
+    db.commit()
+    return body
+
+
+class TestRiverFragmentLinking:
+    """Stations are fixtures; positions are chosen for the distances only."""
+
+    def _source(self, db):
+        from app.models.water import DataSource
+
+        src = DataSource(key="t", name="t", organisation="t")
+        db.add(src)
+        db.flush()
+        return src
+
+    def test_connected_fragments_become_one_river(self, db):
+        from app.models.water_geo import WaterBodyGeometry
+        from app.water.ingestion import link_river_fragments
+
+        src = self._source(db)
+        # ~100 km between the nearest stations across the state line, but the
+        # far ends are 900 km apart: the centroid rule split these.
+        a = _fragment(db, src, "Ganga River", "ganga-river", [(25.3, 83.0), (25.4, 81.0)])
+        b = _fragment(
+            db,
+            src,
+            "Ganga River (Bihar)",
+            "ganga-river-bihar",
+            [(25.5, 84.0), (25.4, 87.5)],
+        )
+        db.add(
+            WaterBodyGeometry(
+                water_body_id=b.id,
+                geometry_type="LineString",
+                geojson="{}",
+                min_lat=0,
+                min_lon=0,
+                max_lat=0,
+                max_lon=0,
+                source="t",
+                source_ids=[],
+                retrieved_at=WHEN,
+                confidence="high",
+                match_method="t",
+            )
+        )
+        db.commit()
+        result = link_river_fragments(db)
+        assert result["merged"] == 1
+        rivers = db.scalars(
+            select(WaterBody).where(WaterBody.water_type == "river")
+        ).all()
+        assert [r.slug for r in rivers] == ["ganga-river"]
+        assert "Ganga River (Bihar)" in rivers[0].aliases
+        assert (
+            db.scalar(
+                select(func.count(MonitoringStation.id)).where(
+                    MonitoringStation.water_body_id == a.id
+                )
+            )
+            == 4
+        )
+        # A geometry of one fragment does not describe the merged river.
+        assert db.scalar(select(func.count(WaterBodyGeometry.id))) == 0
+        assert rivers[0].geometry_status == "not_attempted"
+
+    def test_qualifier_dropped_when_whole_group_merges(self, db):
+        from app.water.ingestion import link_river_fragments
+
+        src = self._source(db)
+        _fragment(db, src, "Yamuna River (Delhi)", "yamuna-river-delhi", [(28.6, 77.3)])
+        _fragment(
+            db, src, "Yamuna River (Uttar Pradesh)", "yamuna-river-up", [(27.5, 77.7)]
+        )
+        link_river_fragments(db)
+        body = db.scalar(select(WaterBody))
+        assert body.name == "Yamuna River"
+        assert {"Yamuna River (Delhi)", "Yamuna River (Uttar Pradesh)"} & set(
+            body.aliases
+        )
+
+    def test_distant_same_named_rivers_stay_separate(self, db):
+        from app.water.ingestion import link_river_fragments
+
+        src = self._source(db)
+        _fragment(db, src, "Amravati River", "amravati-river", [(10.73, 77.52)])
+        _fragment(
+            db, src, "Amravati River (Gujarat)", "amravati-river-gj", [(21.6, 73.0)]
+        )
+        assert link_river_fragments(db)["merged"] == 0
+        assert db.scalar(select(func.count(WaterBody.id))) == 2
+
+    def test_main_river_takes_plain_name_distant_one_is_qualified(self, db):
+        from app.models.water import State
+        from app.water.ingestion import link_river_fragments
+
+        src = self._source(db)
+        ar = State(code="AR", name="Arunachal Pradesh", slug="arunachal-pradesh")
+        db.add(ar)
+        db.flush()
+        far = _fragment(db, src, "Ganga River", "ganga-river", [(27.07, 93.61)])
+        far.state_id = ar.id
+        _fragment(
+            db,
+            src,
+            "Ganga River (Bihar)",
+            "ganga-river-bihar",
+            [(25.5, 84.0), (25.4, 85.0)],
+        )
+        _fragment(
+            db, src, "Ganga River (Uttar Pradesh)", "ganga-river-up", [(25.3, 83.0)]
+        )
+        db.commit()
+        link_river_fragments(db)
+        names = {b.slug: b.name for b in db.scalars(select(WaterBody))}
+        # Slugs are kept; the connected river gets the plain name.
+        assert names == {
+            "ganga-river-bihar": "Ganga River",
+            "ganga-river": "Ganga River (Arunachal Pradesh)",
+        }

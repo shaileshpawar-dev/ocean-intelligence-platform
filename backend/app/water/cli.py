@@ -5,6 +5,7 @@
     python -m app.water.cli refresh-status
     python -m app.water.cli health
     python -m app.water.cli seed-standards
+    python -m app.water.cli reconcile
     python -m app.water.cli import-boundaries [--offline]
     python -m app.water.cli import-cities
     python -m app.water.cli coverage [--markdown PATH]
@@ -55,6 +56,32 @@ def _refresh() -> int:
     init_db()
     with SessionLocal() as db:
         print(f"Refreshed {refresh_cached_statuses(db)} water-body statuses.")
+    return 0
+
+
+def _reconcile() -> int:
+    from sqlalchemy import select
+
+    from app.models.water import WaterBody
+    from app.services.water_service import refresh_cached_statuses
+    from app.water.ingestion import _recompute_denormalised, link_river_fragments
+
+    init_db()
+    with SessionLocal() as db:
+        linked = link_river_fragments(db)
+        touched = set(
+            db.scalars(select(WaterBody.id).where(WaterBody.id.in_(linked["touched"])))
+        )
+        _recompute_denormalised(db, touched, set())
+        db.commit()
+        print(
+            json.dumps(
+                {
+                    "river_fragments_linked": linked["merged"],
+                    "statuses_refreshed": refresh_cached_statuses(db),
+                }
+            )
+        )
     return 0
 
 
@@ -230,6 +257,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("refresh-status", help="Recompute cached water-body statuses.")
     sub.add_parser("health", help="Probe every registered provider.")
     sub.add_parser("seed-standards", help="Write the reference catalogue to the DB.")
+    sub.add_parser("reconcile", help="Join river fragments split across states.")
     boundaries = sub.add_parser(
         "import-boundaries", help="Import geoBoundaries state and district polygons."
     )
@@ -269,6 +297,8 @@ def main(argv: list[str] | None = None) -> int:
         return _ingest(None if args.all else [s.upper() for s in args.states])
     if args.command == "refresh-status":
         return _refresh()
+    if args.command == "reconcile":
+        return _reconcile()
     if args.command == "seed-standards":
         return _seed_standards()
     if args.command == "import-boundaries":

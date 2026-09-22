@@ -43,6 +43,7 @@ from app.models.water import (
     District,
     IngestionRun,
     MonitoringStation,
+    RiverStretch,
     State,
     WaterBody,
     WaterBodyStatusHistory,
@@ -51,6 +52,7 @@ from app.models.water import (
 )
 from app.water.matching import (
     DRAIN_TO_RIVER_KM,
+    RIVER_LINK_KM,
     MatchResult,
     apply_propagation,
     haversine_km,
@@ -476,6 +478,9 @@ def ingest_provider(
     reconciled = _reconcile_untyped(db)
     touched_bodies |= reconciled["touched"]
     touched_bodies -= reconciled["deleted"]
+    linked = link_river_fragments(db)
+    touched_bodies |= linked["touched"]
+    touched_bodies -= linked["deleted"]
     _recompute_denormalised(db, touched_bodies, touched_stations)
     _recompute_district_centroids(db)
 
@@ -490,6 +495,7 @@ def ingest_provider(
     run.detail = {
         "bodies_merged": reconciled["merged"],
         "bodies_retyped": reconciled["retyped"],
+        "river_fragments_linked": linked["merged"],
         "plans_total": len(plans),
         "plans_completed": plans_done,
         "states": states or "all",
@@ -642,10 +648,25 @@ def _merge_into(db: Session, source: WaterBody, target: WaterBody) -> None:
     The source's name is kept as an alias of the target, so a search for the
     old label still finds the merged water body.
     """
-    for model in (MonitoringStation, WaterQualityObservation, WaterEvidence):
+    from app.models.water_geo import SourceClassification, WaterBodyGeometry, WaterImage
+
+    for model in (
+        MonitoringStation,
+        WaterQualityObservation,
+        WaterEvidence,
+        RiverStretch,
+        SourceClassification,
+        WaterImage,
+    ):
         db.query(model).filter(model.water_body_id == source.id).update(
             {model.water_body_id: target.id}, synchronize_session=False
         )
+    # A geometry matched to either fragment describes only part of the merged
+    # body; both are dropped so the next geometry pass matches the whole.
+    db.query(WaterBodyGeometry).filter(
+        WaterBodyGeometry.water_body_id.in_([source.id, target.id])
+    ).delete(synchronize_session=False)
+    target.geometry_status = "not_attempted"
     db.query(WaterBodyStatusHistory).filter(
         WaterBodyStatusHistory.water_body_id == source.id
     ).delete(synchronize_session=False)
@@ -790,6 +811,135 @@ def _reconcile_untyped(db: Session) -> dict:
             "water_bodies_reconciled", extra={"merged": merged, "retyped": retyped}
         )
     return {"merged": merged, "retyped": retyped, "touched": touched, "deleted": deleted}
+
+
+def _plain_name(name: str) -> str:
+    """A body's name without the "(State)" qualifier added to split it."""
+    return name.split(" (")[0].strip()
+
+
+def _find(parent: dict[int, int], i: int) -> int:
+    """Union-find root with path halving."""
+    while parent[i] != i:
+        parent[i] = parent[parent[i]]
+        i = parent[i]
+    return i
+
+
+def _name_river_group(db: Session, targets: list[WaterBody]) -> None:
+    """Give the main river the plain name and qualify the others by state.
+
+    Slugs are left alone: they are identifiers that pages and answers link
+    to. Only display names change, and every old name stays as an alias.
+    """
+    if not targets:
+        return
+    plain = _plain_name(targets[0].name)
+    primary = max(targets, key=lambda b: b.station_count or 0)
+    for body in targets:
+        if body is primary:
+            wanted = plain
+        elif body.name == plain:
+            state = db.get(State, body.state_id) if body.state_id else None
+            wanted = f"{plain} ({state.name if state else 'Unknown'})"
+        else:
+            continue
+        if body.name != wanted:
+            aliases = list(body.aliases or [])
+            if body.name not in aliases:
+                aliases.append(body.name)
+            body.aliases = aliases
+            body.name = wanted
+            body.normalized_name = normalise_name(wanted)
+
+
+def link_river_fragments(db: Session) -> dict:
+    """Join same-named river bodies that are one connected river.
+
+    Ingestion splits a same-named river when a station is more than
+    ``MAX_MERGE_KM`` from the body's *centroid*. For a river that is the wrong
+    test: the Ganga's centroid sits in whichever state was ingested first, so
+    Uttar Pradesh's stations, 100 km from Bihar's nearest one, still landed
+    in a separate "(Uttar Pradesh)" body. Here fragments are joined when their
+    *nearest stations* are within :data:`RIVER_LINK_KM`, transitively, which
+    follows the river rather than an average point. Fragments with no
+    station close to another stay separate: that is what keeps the Amravati
+    in Tamil Nadu apart from the Amravati in Gujarat.
+    """
+    groups: dict[tuple[str, str], list[WaterBody]] = defaultdict(list)
+    # Linear features only. Untyped bodies are left alone: their names are
+    # often generic ("Pond", "STP") and a distance rule would join unrelated
+    # places.
+    for body in db.scalars(
+        select(WaterBody).where(
+            WaterBody.water_type.in_([WaterBodyType.RIVER, WaterBodyType.CANAL])
+        )
+    ):
+        groups[(str(body.water_type), normalise_name(_plain_name(body.name)))].append(
+            body
+        )
+
+    merged = 0
+    touched: set[int] = set()
+    deleted: set[int] = set()
+    for bodies in groups.values():
+        if len(bodies) < 2:
+            continue
+        points: dict[int, list[tuple[float, float]]] = {}
+        for body in bodies:
+            points[body.id] = [
+                (lat, lon)
+                for lat, lon in db.execute(
+                    select(MonitoringStation.latitude, MonitoringStation.longitude).where(
+                        MonitoringStation.water_body_id == body.id,
+                        MonitoringStation.latitude.is_not(None),
+                    )
+                )
+            ]
+        parent = {b.id: b.id for b in bodies}
+        for i, a in enumerate(bodies):
+            for b in bodies[i + 1 :]:
+                if (
+                    _find(parent, a.id) == _find(parent, b.id)
+                    or not points[a.id]
+                    or not points[b.id]
+                ):
+                    continue
+                nearest = min(
+                    distance_km(p[0], p[1], q[0], q[1])
+                    for p in points[a.id]
+                    for q in points[b.id]
+                )
+                if nearest <= RIVER_LINK_KM:
+                    parent[_find(parent, b.id)] = _find(parent, a.id)
+
+        components: dict[int, list[WaterBody]] = defaultdict(list)
+        for body in bodies:
+            components[_find(parent, body.id)].append(body)
+        targets: list[WaterBody] = []
+        for members in components.values():
+            # Prefer the body already carrying the plain name (its slug is
+            # the one people link to), else the best-sampled fragment.
+            target = max(
+                members,
+                key=lambda b: (b.name == _plain_name(b.name), b.station_count or 0),
+            )
+            for other in members:
+                if other.id == target.id:
+                    continue
+                target.station_count = (target.station_count or 0) + (
+                    other.station_count or 0
+                )
+                _merge_into(db, other, target)
+                deleted.add(other.id)
+                merged += 1
+                touched.add(target.id)
+            targets.append(target)
+        _name_river_group(db, targets)
+    db.commit()
+    if merged:
+        logger.info("river_fragments_linked", extra={"merged": merged})
+    return {"merged": merged, "touched": touched, "deleted": deleted}
 
 
 def _recompute_denormalised(

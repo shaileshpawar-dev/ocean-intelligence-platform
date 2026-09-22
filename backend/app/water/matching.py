@@ -271,6 +271,12 @@ CANONICAL_SPELLINGS: dict[str, str] = {
 # same watercourse under a local label, and its stations join the river.
 DRAIN_TO_RIVER_KM = 25.0
 
+# Two same-named river fragments are one river when their nearest monitoring
+# stations are this close. CPCB stations on the Ganga, Yamuna and Godavari are
+# typically 30-120 km apart across state lines; distinct same-named rivers in
+# different parts of India are hundreds of kilometres apart.
+RIVER_LINK_KM = 150.0
+
 
 def canonical_core(normalized: str) -> str:
     """Rewrite known spelling variants inside a normalised name."""
