@@ -285,6 +285,15 @@ def station_clusters(
 # ---------------------------------------------------------------------------
 # Boundaries
 # ---------------------------------------------------------------------------
+_BOUNDARY_CACHE: dict[tuple, bytes] = {}
+_BOUNDARY_CACHE_MAX = 256
+
+
+def clear_boundary_cache() -> None:
+    """Forget rendered boundaries; called after a boundary import."""
+    _BOUNDARY_CACHE.clear()
+
+
 def boundaries(
     db: Session,
     *,
@@ -293,7 +302,48 @@ def boundaries(
     bbox: BBox | None = None,
     zoom: int | None = None,
 ) -> dict:
-    """State or district polygons, simplified for the zoom."""
+    """State or district polygons, simplified for the zoom.
+
+    Boundaries change only when re-imported, so the rendered collection is
+    cached per request shape. Parsing and simplifying 36 state polygons on
+    every map load was the slowest map call.
+    """
+    return json.loads(boundaries_json(db, level=level, state=state, bbox=bbox, zoom=zoom))
+
+
+def boundaries_json(
+    db: Session,
+    *,
+    level: str,
+    state: str | None = None,
+    bbox: BBox | None = None,
+    zoom: int | None = None,
+) -> bytes:
+    """:func:`boundaries`, serialised once and cached as bytes.
+
+    Caching the dict alone still left ~160 ms per call re-encoding 185 KB of
+    GeoJSON; the routes return these bytes directly.
+    """
+    key = (level, (state or "").upper(), bbox, zoom)
+    cached = _BOUNDARY_CACHE.get(key)
+    if cached is not None:
+        return cached
+    result = _render_boundaries(db, level=level, state=state, bbox=bbox, zoom=zoom)
+    encoded = json.dumps(result, separators=(",", ":")).encode("utf-8")
+    if len(_BOUNDARY_CACHE) >= _BOUNDARY_CACHE_MAX:
+        _BOUNDARY_CACHE.clear()
+    _BOUNDARY_CACHE[key] = encoded
+    return encoded
+
+
+def _render_boundaries(
+    db: Session,
+    *,
+    level: str,
+    state: str | None,
+    bbox: BBox | None,
+    zoom: int | None,
+) -> dict:
     stmt = (
         select(AdminBoundary, State)
         .outerjoin(State, State.id == AdminBoundary.state_id)

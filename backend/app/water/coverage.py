@@ -264,3 +264,25 @@ def render_markdown(report: dict) -> str:
         )
     lines.append("")
     return "\n".join(lines)
+
+
+COVERAGE_TTL_SECONDS = 300
+_COVERAGE_CACHE: dict[str, tuple[float, dict]] = {}
+
+
+def cached_coverage_report(db: Session, provider_key: str = "cpcb_nwdp") -> dict:
+    """:func:`coverage_report`, reused for a few minutes.
+
+    The counts aggregate every observation (~0.9 s nationally) and change only
+    when an ingestion runs, so the API serves a recent computation; the
+    report's ``generated_at`` says when it was computed.
+    """
+    import time
+
+    now = time.monotonic()
+    hit = _COVERAGE_CACHE.get(provider_key)
+    if hit and now - hit[0] < COVERAGE_TTL_SECONDS:
+        return hit[1]
+    report = coverage_report(db, provider_key)
+    _COVERAGE_CACHE[provider_key] = (now, report)
+    return report

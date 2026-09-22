@@ -257,6 +257,9 @@ def import_boundaries(
                     linked_districts += 1
         db.add(row)
     db.commit()
+    from app.services.geo_service import clear_boundary_cache
+
+    clear_boundary_cache()
     return {
         "states": len(state_rows),
         "states_linked": sum(1 for r, _ in state_rows if r.state_id),

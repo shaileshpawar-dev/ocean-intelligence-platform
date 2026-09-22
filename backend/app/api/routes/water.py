@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -343,9 +343,13 @@ def map_layers() -> dict:
 # Geography
 # ---------------------------------------------------------------------------
 @router.get("/boundaries/states", summary="State and UT boundaries")
-def state_boundaries(db: DbSession, zoom: int | None = Query(None, ge=0, le=22)) -> dict:
+def state_boundaries(
+    db: DbSession, zoom: int | None = Query(None, ge=0, le=22)
+) -> Response:
     """All state / UT polygons, simplified for ``zoom``."""
-    return gs.boundaries(db, level="state", zoom=zoom)
+    return Response(
+        gs.boundaries_json(db, level="state", zoom=zoom), media_type="application/json"
+    )
 
 
 @router.get("/boundaries/districts", summary="District boundaries")
@@ -354,14 +358,17 @@ def district_boundaries(
     state: str | None = None,
     bbox: str | None = None,
     zoom: int | None = Query(None, ge=0, le=22),
-) -> dict:
+) -> Response:
     """District polygons for one state or a viewport (one is required)."""
     if not state and not bbox:
         raise HTTPException(
             status_code=422, detail="Pass a state or a bbox; all 735 at once is too much."
         )
-    return gs.boundaries(
-        db, level="district", state=state, bbox=_parse_bbox(bbox), zoom=zoom
+    return Response(
+        gs.boundaries_json(
+            db, level="district", state=state, bbox=_parse_bbox(bbox), zoom=zoom
+        ),
+        media_type="application/json",
     )
 
 
@@ -449,9 +456,9 @@ def water_overview(db: DbSession) -> dict:
 @router.get("/water-coverage", summary="What the database holds")
 def water_coverage(db: DbSession) -> dict:
     """Counts per state, computed from the tables; nothing estimated."""
-    from app.water.coverage import coverage_report
+    from app.water.coverage import cached_coverage_report
 
-    return coverage_report(db)
+    return cached_coverage_report(db)
 
 
 @router.get("/water-standards", summary="Reference standards in force")

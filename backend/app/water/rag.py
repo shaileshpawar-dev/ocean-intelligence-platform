@@ -266,12 +266,30 @@ class _Tracer:
             ToolCall(
                 stage=stage,
                 tool=tool,
-                arguments={k: v for k, v in kwargs.items() if k != "db"},
+                arguments={k: _trace_value(v) for k, v in kwargs.items() if k != "db"},
                 result_summary=_summarise(result),
                 duration_ms=elapsed,
             )
         )
         return result
+
+
+def _trace_value(value: Any) -> Any:
+    """A JSON-safe stand-in for a tool argument, for the recorded trace.
+
+    ORM objects are recorded by type and name, long lists by their length;
+    the trace documents what was asked, not a dump of the database.
+    """
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    if isinstance(value, list | tuple):
+        if len(value) > 5:
+            return f"<{len(value)} items>"
+        return [_trace_value(v) for v in value]
+    if isinstance(value, dict):
+        return {str(k): _trace_value(v) for k, v in list(value.items())[:10]}
+    name = getattr(value, "name", None) or getattr(value, "slug", None)
+    return f"{type(value).__name__}:{name}" if name else type(value).__name__
 
 
 def _summarise(result: Any) -> str:

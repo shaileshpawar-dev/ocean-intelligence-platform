@@ -87,3 +87,24 @@ class TestLayeredEvidence:
         layers = a["sections"][0]["evidence_layers"]
         assert layers["REFERENCE_COMPARISON"]["standard"] is None
         assert "coastal" in layers["REFERENCE_COMPARISON"]["unavailable_reason"].lower()
+
+
+class TestOverHttp:
+    def test_city_answer_serialises_through_the_api(self, water_db, geo_client):  # noqa: F811
+        """Regression: a City object in the trace broke JSON serialisation."""
+        r = geo_client.post(
+            "/api/v1/water/ask", json={"question": "Show polluted rivers near Mumbai"}
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["status"] == "grounded"
+        traced = [
+            c["arguments"] for c in body["trace"] if c["tool"] == "water_bodies_near_city"
+        ]
+        assert traced and traced[0]["city"] == "City:Mumbai"
+
+    def test_station_answer_serialises_through_the_api(self, water_db, geo_client):  # noqa: F811
+        r = geo_client.post(
+            "/api/v1/water/ask", json={"question": "monitoring stations near Mumbai"}
+        )
+        assert r.status_code == 200
