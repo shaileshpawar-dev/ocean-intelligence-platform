@@ -54,12 +54,13 @@ platform:
 | 2AK benchmark | Below |
 | 2AL PostGIS | `docs/POSTGIS_MIGRATION.md` (plan, not executed) |
 
-## P2.3 Real-data outcomes (snapshot at time of writing)
+## P2.3 Real-data outcomes
 
 | Layer | Result |
 |---|---|
-| Geometry | Matching is limited by the public Overpass service (rate limits, resets). Snapshot: 93 bodies matched (lakes 53, ponds 12, reservoirs 6, rivers 21, canal 1), 189 with no named OSM feature near their stations, 3 not near stations, 1 ambiguous, 65 source errors pending retry, the rest not yet attempted. River shapes are re-matched after fragment merges. |
-| Satellite | Hussain Sagar: 16 Jun 2026 scene accepted (89.5% water, 0% cloud) after three monsoon scenes rejected for 26–34% cirrus. Rajsamand: refused, ~1% of its full outline was water on clear days. |
+| Geometry — lakes, ponds, reservoirs (535) | **97 matched** real outlines (lakes 69, ponds 18, reservoirs 10); 314 no named OSM feature near their stations; 5 shapes not near stations; 1 ambiguous (refused); 118 Overpass errors, retryable |
+| Geometry — rivers, canals | 22 shapes (21 rivers, 1 canal). Merged river fragments dropped their partial shapes; the whole-river pass (`cli fetch-geometry --type river canal drain creek`) has not been re-run — several hours against public Overpass |
+| Satellite | 97 lake polygons attempted: **14 scenes accepted** (Loktak, Umiam, Sukhna, Bhopal Lower Lake, Himayat Sagar, Hussain Sagar, Veeranam, Ramappa, Dharoi, Dimna, Govindgarh, Yelahanka, Herohalli, Rachenahalli); 83 had no scene clear over the lake itself in the past year (monsoon cloud, cirrus, dry beds) and none was forced |
 | Boundaries | 36 states (34 linked to CPCB codes), 735 districts, all with a parent state; 35 cities positioned |
 | Standards | 6 standards, their thresholds seeded to the DB |
 | Classifications | 0 (source inaccessible) |
