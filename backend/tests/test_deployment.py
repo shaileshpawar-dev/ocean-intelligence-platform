@@ -1,0 +1,112 @@
+"""Deployment guards: a fresh container serves, it does not rebuild.
+
+The rule these tests defend is the one that decides whether this can be
+deployed at all: **starting the application must not ingest anything.** Data
+arrives through explicit jobs and persists in the database; a web task that
+rebuilt it would take twelve minutes to answer a health check and would hit
+public APIs on every scale-out.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+import pytest
+from app.core.config import settings
+from app.core.dbinfo import BackendInfo, SpatialBackendUnavailableError, report_backend
+from app.models.water import (
+    DataSource,
+    MonitoringStation,
+    WaterBody,
+    WaterQualityObservation,
+)
+from app.water.cli import bootstrap_in_background
+from fastapi.testclient import TestClient
+
+
+def _one_observation(db) -> None:
+    source = DataSource(key="s", name="s", organisation="s")
+    body = WaterBody(slug="b", name="B", normalized_name="B", water_type="river")
+    db.add_all([source, body])
+    db.flush()
+    station = MonitoringStation(
+        station_code="s1",
+        name="s1",
+        slug="s1",
+        source_id=source.id,
+        water_body_id=body.id,
+    )
+    db.add(station)
+    db.flush()
+    db.add(
+        WaterQualityObservation(
+            station_id=station.id,
+            water_body_id=body.id,
+            source_id=source.id,
+            parameter="bod",
+            observed_at=datetime(2025, 4, 21, tzinfo=UTC),
+            value=2.0,
+            retrieved_at=datetime.now(UTC),
+        )
+    )
+    db.commit()
+
+
+class TestStartupDoesNotIngest:
+    def test_no_bootstrap_when_unconfigured(self, db, monkeypatch):
+        """The production default is empty, so nothing is fetched."""
+        monkeypatch.setattr(settings, "water_bootstrap_states", "")
+        assert bootstrap_in_background() is None
+
+    def test_no_bootstrap_when_data_exists(self, db, monkeypatch):
+        """A database that already holds observations is served as-is."""
+        _one_observation(db)
+        monkeypatch.setattr(settings, "water_bootstrap_states", "MH")
+        assert bootstrap_in_background() is None
+
+    def test_health_is_immediate_and_names_the_backend(self, client: TestClient):
+        response = client.get("/api/v1/health")
+        assert response.status_code == 200
+        database = next(
+            c for c in response.json()["components"] if c["name"] == "database"
+        )
+        assert database["available"] is True
+        assert database["detail"]  # says which backend, e.g. "sqlite development mode"
+
+
+class TestProductionGuards:
+    def test_production_without_postgres_fails_loudly(self, monkeypatch):
+        """Silently serving SQLite in production is the failure to avoid."""
+        monkeypatch.setattr(settings, "environment", "production")
+        monkeypatch.setattr(
+            "app.core.dbinfo.backend_info",
+            lambda: BackendInfo("sqlite", None, None),
+        )
+        with pytest.raises(SpatialBackendUnavailableError, match="requires PostgreSQL"):
+            report_backend()
+
+    def test_production_without_postgis_fails_loudly(self, monkeypatch):
+        monkeypatch.setattr(settings, "environment", "production")
+        monkeypatch.setattr(
+            "app.core.dbinfo.backend_info",
+            lambda: BackendInfo("postgresql", "16.4", None),
+        )
+        with pytest.raises(
+            SpatialBackendUnavailableError, match="PostGIS is not installed"
+        ):
+            report_backend()
+
+    def test_development_on_sqlite_is_allowed(self, monkeypatch):
+        monkeypatch.setattr(settings, "environment", "development")
+        monkeypatch.setattr(
+            "app.core.dbinfo.backend_info",
+            lambda: BackendInfo("sqlite", None, None),
+        )
+        info = report_backend()
+        assert "development mode" in info.label
+
+    def test_backend_label_reads_plainly(self):
+        assert BackendInfo("postgresql", "16.4", "3.4").label == (
+            "PostgreSQL 16.4 + PostGIS 3.4"
+        )
+        assert "WITHOUT PostGIS" in BackendInfo("postgresql", "16.4", None).label

@@ -205,12 +205,24 @@ export function ImageryPanel({ images, note }: { images: WaterImageEvidence[]; n
       {images.map((img) => (
         <figure key={img.image_id} className="imagery-item">
           {img.thumbnail_url && (
-            <a href={img.full_image_url ?? img.thumbnail_url} target="_blank" rel="noreferrer noopener">
+            <a
+              href={img.full_image_url ?? img.thumbnail_url}
+              target="_blank"
+              rel="noreferrer noopener"
+            >
               <img
                 src={img.thumbnail_url}
                 alt={`${img.sensor ?? "Satellite"} true-colour scene, ${img.acquisition_date ?? ""}`}
                 loading="lazy"
                 width={256}
+                // The picture is rendered on demand by the imagery service.
+                // The evidence itself — scene, date, cloud and water cover,
+                // the proxy value — is stored here, so when that service is
+                // unreachable the record still reads correctly.
+                onError={(event) => {
+                  event.currentTarget.style.display = "none";
+                  event.currentTarget.dataset.failed = "true";
+                }}
               />
             </a>
           )}
