@@ -5,6 +5,7 @@
     python -m app.water.cli refresh-status
     python -m app.water.cli health
     python -m app.water.cli seed-standards
+    python -m app.water.cli db upgrade | current | copy-from-sqlite | sync-geometry
     python -m app.water.cli reconcile
     python -m app.water.cli import-boundaries [--offline]
     python -m app.water.cli import-cities
@@ -27,12 +28,17 @@ import argparse
 import json
 import sys
 import threading
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 from app.core.config import settings
 from app.core.database import SessionLocal, init_db
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from alembic.config import Config
 
 
 def _ingest(states: list[str] | None) -> int:
@@ -83,6 +89,55 @@ def _reconcile() -> int:
             )
         )
     return 0
+
+
+def _alembic_config() -> Config:
+    """Alembic configuration anchored at the backend directory."""
+    from alembic.config import Config
+
+    root = Path(__file__).resolve().parents[2]
+    config = Config(str(root / "alembic.ini"))
+    config.set_main_option("script_location", str(root / "migrations"))
+    return config
+
+
+def _db(action: str, sqlite_url: str | None) -> int:
+    """Migrations and the SQLite -> PostgreSQL transfer."""
+    from alembic import command
+
+    from app.core.database import SessionLocal, engine
+    from app.core.dbinfo import backend_info
+    from app.db.transfer import (
+        city_extents_from_districts,
+        copy_sqlite_to_postgres,
+        sync_geometry,
+    )
+
+    info = backend_info()
+    print(f"Database backend: {info.label}")
+
+    if action == "current":
+        command.current(_alembic_config(), verbose=True)
+        return 0
+    if action == "upgrade":
+        command.upgrade(_alembic_config(), "head")
+        print("Schema at head.")
+        return 0
+    if action == "copy-from-sqlite":
+        if not sqlite_url:
+            print("--sqlite-url is required, e.g. sqlite:///../data/oip.db")
+            return 2
+        counts = copy_sqlite_to_postgres(sqlite_url, engine)
+        print(json.dumps({k: v for k, v in counts.items() if v}, indent=2))
+        return 0
+    if action == "sync-geometry":
+        with SessionLocal() as db:
+            updated = sync_geometry(db)
+            extents = city_extents_from_districts(db)
+        print(json.dumps({**updated, "city_extents": extents}, indent=2))
+        return 0
+    print(f"Unknown db action {action!r}.")
+    return 2
 
 
 def _seed_standards() -> int:
@@ -257,6 +312,14 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("refresh-status", help="Recompute cached water-body statuses.")
     sub.add_parser("health", help="Probe every registered provider.")
     sub.add_parser("seed-standards", help="Write the reference catalogue to the DB.")
+    db_parser = sub.add_parser("db", help="Migrations and database transfer.")
+    db_parser.add_argument(
+        "action",
+        choices=["upgrade", "current", "copy-from-sqlite", "sync-geometry"],
+    )
+    db_parser.add_argument(
+        "--sqlite-url", help="Source for copy-from-sqlite, e.g. sqlite:///data/oip.db"
+    )
     sub.add_parser("reconcile", help="Join river fragments split across states.")
     boundaries = sub.add_parser(
         "import-boundaries", help="Import geoBoundaries state and district polygons."
@@ -299,6 +362,8 @@ def main(argv: list[str] | None = None) -> int:
         return _refresh()
     if args.command == "reconcile":
         return _reconcile()
+    if args.command == "db":
+        return _db(args.action, args.sqlite_url)
     if args.command == "seed-standards":
         return _seed_standards()
     if args.command == "import-boundaries":

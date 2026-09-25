@@ -40,3 +40,7 @@ convention = "google"
     "C408",
 ]
 "**/__init__.py" = ["D104"]
+# Alembic revisions are generated: their headers and upgrade/downgrade
+# functions follow Alembic's template, not this project's docstring style.
+"**/migrations/versions/*.py" = ["D103", "D415", "E501", "I001"]
+"**/migrations/env.py" = ["I001"]

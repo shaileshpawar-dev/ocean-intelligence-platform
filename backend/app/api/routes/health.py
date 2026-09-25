@@ -29,7 +29,11 @@ def health(db: Session = Depends(get_db)) -> HealthResponse:
 
     try:
         db.execute(text("SELECT 1"))
-        components.append(HealthComponent(name="database", available=True))
+        from app.core.dbinfo import backend_info
+
+        components.append(
+            HealthComponent(name="database", available=True, detail=backend_info().label)
+        )
     except Exception as exc:
         components.append(
             HealthComponent(

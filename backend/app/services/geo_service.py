@@ -12,7 +12,7 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import Row, Select, func, or_, select
+from sqlalchemy import ColumnElement, Row, Select, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.water import (
@@ -78,10 +78,28 @@ def map_geometries(
     limit: int = GEOMETRY_LIMIT,
 ) -> dict:
     """Stored water-body geometries in a viewport, as a FeatureCollection."""
+    from app.services import spatial
+
     stmt = select(WaterBodyGeometry, WaterBody).join(
         WaterBody, WaterBody.id == WaterBodyGeometry.water_body_id
     )
-    if bbox:
+    sql_ids = (
+        spatial.geometry_ids_in_bbox(
+            db,
+            bbox,
+            water_type=water_type,
+            status=status,
+            state_code=state,
+            limit=limit + 1,
+        )
+        if bbox
+        else None
+    )
+    if sql_ids is not None:
+        # The GIST index chose the features; the rest of the filtering is
+        # already applied, so only these rows are fetched.
+        stmt = stmt.where(WaterBodyGeometry.water_body_id.in_(sql_ids))
+    elif bbox:
         stmt = _body_bbox_filter(stmt, bbox)
     if state:
         stmt = stmt.join(State, State.id == WaterBody.state_id).where(
@@ -175,6 +193,30 @@ GEOMETRY_STATUS_TEXT: dict[str, str] = {
 # ---------------------------------------------------------------------------
 # Station clusters
 # ---------------------------------------------------------------------------
+def _sql_cluster(group: dict) -> dict:
+    """One aggregated grid cell from PostGIS, in the API's cluster shape."""
+    statuses = [s for s in group["statuses"] if s]
+    worst = max(statuses, key=status_rank, default=None)
+    if group["count"] == 1:
+        return {
+            "kind": "station",
+            "id": group["station_id"],
+            "name": group["station_name"],
+            "latitude": group["latitude"],
+            "longitude": group["longitude"],
+            "latest_available_status": worst,
+            "latest_observed_at": _iso(group["latest_observed_at"]),
+        }
+    return {
+        "kind": "cluster",
+        "count": group["count"],
+        "latitude": group["latitude"],
+        "longitude": group["longitude"],
+        "worst_latest_available_status": worst,
+        "status_counts": {s: statuses.count(s) for s in sorted(set(statuses))},
+    }
+
+
 def station_clusters(
     db: Session,
     *,
@@ -213,6 +255,18 @@ def station_clusters(
                 func.upper(State.code) == state.upper(),
             )
         )
+    from app.services import spatial
+
+    if zoom < CLUSTER_SINGLE_ZOOM:
+        cell = 360.0 / (2**zoom) / 4
+        grouped = spatial.station_clusters(db, bbox, cell, state_code=state)
+        if grouped is not None:
+            return {
+                "zoom": zoom,
+                "clustered": True,
+                "items": [_sql_cluster(g) for g in grouped],
+            }
+
     rows = db.execute(stmt).all()
     body_ids = {r.water_body_id for r in rows if r.water_body_id}
     bodies = (
@@ -515,6 +569,29 @@ def bodies_near_city(
     """
     if city.min_lat is None:
         return []
+
+    from app.services import spatial
+
+    ids = spatial.bodies_near_city(db, city.id, radius_km)
+    if ids is not None:
+        # Distance to the city's actual extent (district union), in SQL.
+        bodies = {
+            b.id: b
+            for b in db.scalars(
+                select(WaterBody).where(WaterBody.id.in_([i for i, _ in ids]))
+            )
+        }
+        lookups = ws.preload(db, bodies=list(bodies.values()))
+        out = [
+            {**ws.summarise_body(db, bodies[i], lookups=lookups), "distance_km": km}
+            for i, km in ids
+            if i in bodies
+        ]
+        wanted_type = kwargs.get("water_type")
+        if wanted_type:
+            out = [b for b in out if b["water_type"] == wanted_type]
+        return out
+
     centre_lat = (city.min_lat + city.max_lat) / 2
     centre_lon = (city.min_lon + city.max_lon) / 2
     half_diag = haversine_km(city.min_lat, city.min_lon, city.max_lat, city.max_lon) / 2
@@ -546,6 +623,17 @@ def bodies_near_city(
 # ---------------------------------------------------------------------------
 # Data quality and availability
 # ---------------------------------------------------------------------------
+def _month_key(db: Session, column: ColumnElement) -> ColumnElement:
+    """A "YYYY-MM" expression that works on both backends.
+
+    ``strftime`` is SQLite-only and raised on PostgreSQL; ``date_trunc`` is
+    the PostgreSQL equivalent.
+    """
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        return func.date_trunc("month", column)
+    return func.strftime("%Y-%m", column)
+
+
 def data_quality(db: Session, body: WaterBody, status_detail: dict) -> dict:
     """HIGH / MODERATE / LIMITED / INSUFFICIENT from objective metadata.
 
@@ -559,7 +647,7 @@ def data_quality(db: Session, body: WaterBody, status_detail: dict) -> dict:
             func.min(WaterQualityObservation.observed_at),
             func.max(WaterQualityObservation.observed_at),
             func.count(
-                func.distinct(func.strftime("%Y-%m", WaterQualityObservation.observed_at))
+                func.distinct(_month_key(db, WaterQualityObservation.observed_at))
             ),
         ).where(WaterQualityObservation.water_body_id == body.id)
     ).one()

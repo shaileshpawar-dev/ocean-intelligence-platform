@@ -1003,6 +1003,32 @@ def water_bodies_near(
     in Python over the survivors. Skipping the second stage would return a
     square, which is what "within 10 km" must not mean.
     """
+    from app.services import spatial
+
+    ids = spatial.bodies_within_radius(
+        db,
+        latitude,
+        longitude,
+        radius_km,
+        water_type=water_type,
+        status=status,
+        limit=limit,
+    )
+    if ids is not None:
+        # PostGIS did the circle on an index; only the chosen rows load.
+        bodies = {
+            b.id: b
+            for b in db.scalars(
+                select(WaterBody).where(WaterBody.id.in_([i for i, _ in ids]))
+            )
+        }
+        lookups = preload(db, bodies=list(bodies.values()))
+        return [
+            {**summarise_body(db, bodies[i], lookups=lookups), "distance_km": km}
+            for i, km in ids
+            if i in bodies
+        ]
+
     lat_delta = radius_km / 110.574
     # Longitude degrees shorten towards the poles; guard the cosine so a
     # near-polar query cannot divide by zero.

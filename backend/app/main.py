@@ -38,10 +38,16 @@ logger = get_logger(__name__)
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Start-up and shut-down hooks."""
     init_db()
+    # Says which backend is actually in use, and refuses a production start
+    # without PostGIS rather than silently falling back to Python geometry.
+    from app.core.dbinfo import report_backend
+
+    backend = report_backend()
     logger.info(
         "startup",
         extra={
             "environment": settings.environment,
+            "database_backend": backend.label,
             "demo_mode": settings.demo_mode,
             "detector_backend": settings.detector_backend,
             "gee_configured": settings.gee_configured,
