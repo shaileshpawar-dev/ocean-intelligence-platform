@@ -307,13 +307,22 @@ def tolerance_for_zoom(zoom: int | None) -> float:
     return 360.0 / (256 * 2 ** max(0, min(zoom, 22)))
 
 
-def display_geometry(geometry: dict, zoom: int | None) -> dict:
-    """Simplify and round a geometry for display at ``zoom``.
+def places_for_zoom(zoom: int | None) -> int:
+    """Decimal places worth sending at ``zoom``.
 
     Precision follows the pixel size: 3 decimals (~110 m) is finer than a
-    pixel at national zoom, 5 (~1 m) is enough at street level.
+    pixel at national zoom, 5 (~1 m) is enough at street level. Shared with
+    the PostGIS path so the two cannot drift apart.
     """
     if zoom is None:
+        return 6
+    return 3 if zoom <= 7 else 4 if zoom <= 11 else 5
+
+
+def display_geometry(geometry: dict, zoom: int | None) -> dict:
+    """Simplify and round a geometry for display at ``zoom``."""
+    if zoom is None:
         return geometry
-    places = 3 if zoom <= 7 else 4 if zoom <= 11 else 5
-    return round_geometry(simplify(geometry, tolerance_for_zoom(zoom)), places)
+    return round_geometry(
+        simplify(geometry, tolerance_for_zoom(zoom)), places_for_zoom(zoom)
+    )

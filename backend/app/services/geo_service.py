@@ -117,9 +117,28 @@ def map_geometries(
     ).all()
     truncated = len(rows) > limit
 
+    # PostGIS simplifies and rounds in the query; the Python path below is
+    # the fallback for SQLite and for rows without a derived geometry.
+    kept = rows[:limit]
+    simplified = (
+        spatial.simplified_geometries(
+            db,
+            [g.water_body_id for g, _ in kept],
+            geo.tolerance_for_zoom(zoom),
+            geo.places_for_zoom(zoom),
+        )
+        if zoom is not None
+        else {}
+    )
+
     features = []
-    for g, body in rows[:limit]:
-        geometry = geo.display_geometry(json.loads(g.geojson), zoom)
+    for g, body in kept:
+        from_db = simplified.get(g.water_body_id)
+        geometry = (
+            json.loads(from_db)
+            if from_db
+            else geo.display_geometry(json.loads(g.geojson), zoom)
+        )
         features.append(
             {
                 "type": "Feature",

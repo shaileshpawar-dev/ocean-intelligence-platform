@@ -12,6 +12,8 @@ Distances use ``geography``, i.e. metres on the spheroid, not degrees.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -283,7 +285,7 @@ def geometry_ids_in_bbox(
 
 
 def simplified_geometry(
-    db: Session, water_body_id: int, tolerance_deg: float
+    db: Session, water_body_id: int, tolerance_deg: float, places: int = 5
 ) -> str | None:
     """Server-side simplified GeoJSON for one water body, or ``None``."""
     if not available(db):
@@ -291,14 +293,49 @@ def simplified_geometry(
     return db.execute(
         text(
             """
-            SELECT ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom, :tol), 5)
+            SELECT ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom, :tol), :places)
               FROM water_body_geometries
-             WHERE water_body_id = :id
+             WHERE water_body_id = :id AND geom IS NOT NULL
              LIMIT 1
             """
         ),
-        {"id": water_body_id, "tol": max(tolerance_deg, 0.0)},
+        {"id": water_body_id, "tol": max(tolerance_deg, 0.0), "places": places},
     ).scalar_one_or_none()
+
+
+def simplified_geometries(
+    db: Session,
+    water_body_ids: Sequence[int],
+    tolerance_deg: float,
+    places: int = 5,
+) -> dict[int, str]:
+    """Simplified GeoJSON for many water bodies, in one query.
+
+    This is what the map's geometry layer draws. Simplifying in the database
+    means a national request carries the vertices the client will actually
+    plot instead of every vertex OpenStreetMap holds, and no full shape is
+    parsed in Python on the way.
+    """
+    if not available(db) or not water_body_ids:
+        return {}
+    rows = db.execute(
+        text(
+            """
+            SELECT water_body_id,
+                   ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom, :tol), :places)
+                       AS geojson
+              FROM water_body_geometries
+             WHERE geom IS NOT NULL
+               AND water_body_id = ANY(:ids)
+            """
+        ),
+        {
+            "tol": max(tolerance_deg, 0.0),
+            "places": places,
+            "ids": list(water_body_ids),
+        },
+    ).all()
+    return {row.water_body_id: row.geojson for row in rows if row.geojson}
 
 
 def station_distance_to_geometry(

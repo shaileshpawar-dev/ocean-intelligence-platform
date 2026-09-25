@@ -278,6 +278,12 @@ CANONICAL_SPELLINGS: dict[str, str] = {
     "TAPTI": "TAPI",
     "SATLUJ": "SUTLEJ",
     "SUTLUJ": "SUTLEJ",
+    # Both pairs were found by geometry QA: the two spellings had matched the
+    # same OpenStreetMap ways, which is as direct as evidence gets that they
+    # are one river. The commoner spelling in the published data wins
+    # (Subarnarekha 24 stations to 3; Kosi 9 to 4).
+    "SWARNREKHA": "SUBARNAREKHA",
+    "KOSHI": "KOSI",
 }
 
 # Drains may share a name with the river they join ("Mithi Nallah", "Mithi

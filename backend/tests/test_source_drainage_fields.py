@@ -195,3 +195,28 @@ class TestCpcbRowsAreUnaffected:
         assert match.name == "Godavari"
         assert match.method == "unclassified"
         assert match.position == "At Nasik D/S"
+
+
+class TestSpellingVariantsFoundByGeometry:
+    """Two spellings that matched the same OSM ways are one river."""
+
+    def test_swarnrekha_and_subarnarekha_converge(self):
+        from app.water.matching import canonical_core
+
+        assert canonical_core("SWARNREKHA") == canonical_core("SUBARNAREKHA")
+
+    def test_koshi_and_kosi_converge(self):
+        from app.water.matching import canonical_core
+
+        assert canonical_core("KOSHI") == canonical_core("KOSI")
+
+    def test_the_commoner_published_spelling_is_the_canonical_one(self):
+        from app.water.matching import canonical_core
+
+        assert canonical_core("SWARNREKHA") == "SUBARNAREKHA"
+        assert canonical_core("KOSHI") == "KOSI"
+
+    def test_the_variant_is_kept_as_an_alias_on_resolution(self):
+        match = resolve("SWARNREKHA RIVER AT GHATSILA")
+        assert match.name == "Subarnarekha River"
+        assert any("Swarnrekha" in alias for alias in match.aliases)

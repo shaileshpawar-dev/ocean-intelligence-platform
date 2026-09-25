@@ -470,7 +470,9 @@ export function MatchConfidenceNote({
       ? "Type inferred from other stations on the same named water body."
       : method === "unclassified"
         ? "The source does not state what kind of water body this is."
-        : "Name parsed from the monitoring station label.";
+        : method === "source_sub_basin"
+          ? "The source names a basin and a sub-basin for these stations, not the watercourse. This is the sub-basin, which can be coarser than the stream actually sampled."
+          : "Name parsed from the monitoring station label.";
   return (
     <p className="match-note">
       <Info size={12} aria-hidden /> {wording} Identification confidence{" "}
