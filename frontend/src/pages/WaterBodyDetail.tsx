@@ -43,7 +43,11 @@ import {
   ReferencePanel,
   SourcesPanel,
 } from "@/components/waterPanels";
-import type { StationSummary, WaterBodyDetail as Detail } from "@/lib/waterTypes";
+import type {
+  StationSummary,
+  TrendPoint,
+  WaterBodyDetail as Detail,
+} from "@/lib/waterTypes";
 import {
   LatestAvailableStatus,
   MatchConfidenceNote,
@@ -378,18 +382,54 @@ const GAP_MS = 120 * 86_400_000;
  */
 function withGaps(
   points: { observed_at: string; value: number }[],
-): { t: number; value: number | null }[] {
-  const out: { t: number; value: number | null }[] = [];
+  key: string,
+): Record<string, number | null>[] {
+  const out: Record<string, number | null>[] = [];
   let previous: number | null = null;
   for (const point of points) {
     const t = new Date(point.observed_at).getTime();
     if (previous !== null && t - previous > GAP_MS) {
-      out.push({ t: previous + (t - previous) / 2, value: null });
+      out.push({ t: previous + (t - previous) / 2, [key]: null });
     }
-    out.push({ t, value: point.value });
+    out.push({ t, [key]: point.value });
     previous = t;
   }
   return out;
+}
+
+/** One colour per source, in the order the API returns them (newest first). */
+const SOURCE_COLOURS = ["#0369a1", "#b45309", "#7c3aed", "#0f766e"];
+
+/**
+ * Split a series by the agency that measured it.
+ *
+ * Two agencies sampling the same river are two series. Drawing one line
+ * through both would assert a continuity nobody measured — the CPCB extract
+ * stops in 2021 and CWC's continues to 2025, and the gap between them is not
+ * a trend.
+ */
+function bySource(points: TrendPoint[]): {
+  key: string;
+  name: string;
+  colour: string;
+  rows: Record<string, number | null>[];
+}[] {
+  const order: string[] = [];
+  const grouped = new Map<string, TrendPoint[]>();
+  for (const point of points) {
+    const key = point.source ?? "unknown";
+    if (!grouped.has(key)) {
+      grouped.set(key, []);
+      order.push(key);
+    }
+    grouped.get(key)!.push(point);
+  }
+  return order.map((key, index) => ({
+    key,
+    name: grouped.get(key)![0]?.source_name ?? key,
+    colour: SOURCE_COLOURS[index % SOURCE_COLOURS.length],
+    rows: withGaps(grouped.get(key)!, key),
+  }));
 }
 
 /**
@@ -436,6 +476,7 @@ function TrendSection({ slug }: { slug: string }) {
   }
 
   const series = trend.data;
+  const seriesBySource = series ? bySource(series.points) : [];
   const limit = series?.points.length
     ? undefined
     : undefined;
@@ -463,10 +504,23 @@ function TrendSection({ slug }: { slug: string }) {
 
       {series && series.points.length > 0 && (
         <>
+          {seriesBySource.length > 1 && (
+            <p className="trend-sources">
+              {seriesBySource.map((s) => (
+                <span key={s.key} className="trend-source">
+                  <span className="trend-swatch" style={{ background: s.colour }} aria-hidden />
+                  {s.name}
+                </span>
+              ))}
+              <span className="muted-note">
+                Separate series per agency — the lines are never joined.
+              </span>
+            </p>
+          )}
           <div className="trend-chart">
             <ResponsiveContainer width="100%" height={260}>
               <LineChart
-                data={withGaps(series.points)}
+                data={seriesBySource.flatMap((s) => s.rows).sort((a, b) => (a.t as number) - (b.t as number))}
               >
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                 <XAxis
@@ -498,14 +552,18 @@ function TrendSection({ slug }: { slug: string }) {
                     series.label,
                   ]}
                 />
-                <Line
-                  type="monotone"
-                  dataKey="value"
-                  stroke="#0369a1"
-                  strokeWidth={2}
-                  dot={{ r: 2.5 }}
-                  connectNulls={false}
-                />
+                {seriesBySource.map((source) => (
+                  <Line
+                    key={source.key}
+                    type="monotone"
+                    dataKey={source.key}
+                    name={source.name}
+                    stroke={source.colour}
+                    strokeWidth={2}
+                    dot={{ r: 2.5 }}
+                    connectNulls={false}
+                  />
+                ))}
                 {limit !== undefined && (
                   <ReferenceLine y={limit} stroke="#e02424" strokeDasharray="4 4" />
                 )}

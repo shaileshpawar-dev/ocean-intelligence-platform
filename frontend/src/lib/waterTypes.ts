@@ -157,6 +157,7 @@ export interface StatusDetail {
     value: number | null;
     unit: string | null;
     observed_at: string;
+    source: string | null;
     evidence_type: "MEASURED";
   }[];
   limitations?: string[];
@@ -262,7 +263,30 @@ export interface DataQuality {
   excludes: string;
 }
 
+/** What one agency has for one water body. Facts, not a ranking. */
+export interface SourceRecency {
+  key: string;
+  name: string;
+  organisation: string;
+  source_type: string;
+  observation_method: string | null;
+  expected_cadence: string;
+  reliability_note: string | null;
+  observation_count: number;
+  parameter_count: number;
+  first_observed_at: string | null;
+  latest_observed_at: string | null;
+}
+
 export interface Availability {
+  newest_source: {
+    key: string;
+    name: string;
+    organisation: string;
+    latest_observed_at: string | null;
+    observation_method: string | null;
+  } | null;
+  older_sources: { key: string; name: string; latest_observed_at: string | null }[];
   latest_available_observation: string | null;
   age_days: number | null;
   expected_cadence: string | null;
@@ -330,6 +354,7 @@ export interface WaterBodyDetail extends Omit<WaterBodySummary, "latest_availabl
   data_quality: DataQuality;
   availability: Availability;
   sources_panel: SourcePanelEntry[];
+  sources_by_recency: SourceRecency[];
   imagery: WaterImageEvidence[];
   imagery_note: string;
 }
@@ -345,6 +370,9 @@ export interface TrendPoint {
   value: number;
   station: string | null;
   quality_flag: string;
+  /** Which agency measured it. Series are never merged across sources. */
+  source: string;
+  source_name: string;
 }
 
 export interface ParameterTrend {

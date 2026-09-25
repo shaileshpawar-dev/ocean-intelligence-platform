@@ -33,6 +33,24 @@ export function AvailabilityPanel({ availability }: { availability: Availability
         <span className="availability-label">Current condition</span>
         <strong>{availability.current_condition}</strong>
       </p>
+      {availability.newest_source && (
+        <p className="availability-row">
+          <span className="availability-label">Newest source</span>
+          <strong>
+            {availability.newest_source.name} ·{" "}
+            {formatDay(availability.newest_source.latest_observed_at)}
+          </strong>
+        </p>
+      )}
+      {availability.older_sources?.length > 0 && (
+        <p className="muted-note">
+          Also measured by{" "}
+          {availability.older_sources
+            .map((s) => `${s.name} (to ${formatDay(s.latest_observed_at)})`)
+            .join(", ")}
+          . Sources are kept separate; their values are never combined.
+        </p>
+      )}
       {availability.summary && <p className="muted-note">{availability.summary}</p>}
     </div>
   );

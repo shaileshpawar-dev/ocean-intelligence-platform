@@ -1939,3 +1939,26 @@
 :root[data-theme="dark"] .dq-warn { color: #fcd34d; }
 :root[data-theme="dark"] .dq-bad { color: #fca5a5; }
 :root[data-theme="dark"] .dq-unknown { color: #cbd5e1; }
+
+/* Per-source trend series: one colour per agency, never joined. */
+.trend-sources {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.trend-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.trend-swatch {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+}
