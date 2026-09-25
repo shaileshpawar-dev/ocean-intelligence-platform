@@ -640,6 +640,7 @@ def _ingest_plan(
 
     retrieved_at = datetime.now(UTC)
     pending: list[WaterQualityObservation] = []
+    seen_by_station: dict[int, set[tuple[str, datetime | None]]] = {}
 
     for name, group in by_station.items():
         sample = group[0]
@@ -660,16 +661,21 @@ def _ingest_plan(
             touched_bodies.add(body.id)
 
         # -- DEDUPLICATE: one query per station, not per row ---------------
-        existing = {
-            (parameter, _as_utc(observed_at))
-            for parameter, observed_at in db.execute(
-                select(
-                    WaterQualityObservation.parameter,
-                    WaterQualityObservation.observed_at,
-                ).where(WaterQualityObservation.station_id == station.id)
-            ).all()
-        }
-        seen_in_batch: set[tuple[str, datetime | None]] = set()
+        # Keyed by station for the whole plan, not per group: two labels in
+        # one resource can normalise to the same station, and inserts are only
+        # flushed at the end, so a per-group set never saw the other group's
+        # pending rows and the database rejected the batch.
+        if station.id not in seen_by_station:
+            seen_by_station[station.id] = {
+                (parameter, _as_utc(observed_at))
+                for parameter, observed_at in db.execute(
+                    select(
+                        WaterQualityObservation.parameter,
+                        WaterQualityObservation.observed_at,
+                    ).where(WaterQualityObservation.station_id == station.id)
+                ).all()
+            }
+        seen = seen_by_station[station.id]
 
         for row in group:
             flag, notes = _validate(row)
@@ -679,10 +685,10 @@ def _ingest_plan(
                 counts["valid"] += 1
 
             key = (row.parameter_key, _as_utc(row.observed_at))
-            if key in existing or key in seen_in_batch:
+            if key in seen:
                 counts["duplicate"] += 1
                 continue
-            seen_in_batch.add(key)
+            seen.add(key)
 
             pending.append(
                 WaterQualityObservation(

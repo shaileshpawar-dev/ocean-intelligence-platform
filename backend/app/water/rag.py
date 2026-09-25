@@ -684,14 +684,36 @@ def _body_status_section(
             )
         )
 
+    sources = detail.get("sources_by_recency") or []
+    if len(sources) > 1:
+        newest, *older = sources
+        limitations.append(
+            f"{body.name} is measured by more than one agency. Newest: "
+            f"{newest['name']} ({_day(newest['latest_observed_at'])}). Also: "
+            + "; ".join(f"{s['name']} ({_day(s['latest_observed_at'])})" for s in older)
+            + ". Their observations are kept separate and never combined."
+        )
+
     return {
         "water_body": body.name,
         "slug": body.slug,
+        "source_breakdown": [
+            {
+                "key": s["key"],
+                "name": s["name"],
+                "organisation": s["organisation"],
+                "latest_observed_at": s["latest_observed_at"],
+                "observation_count": s["observation_count"],
+                "observation_method": s.get("observation_method"),
+            }
+            for s in sources
+        ],
         "evidence_layers": _evidence_layers(detail, historical, indicators),
         "place": ", ".join(x for x in [detail.get("district"), detail.get("state")] if x),
         "present_status": present["label"],
         "present_reason": present["freshness"]["summary"],
         "latest_available_status": status_line,
+        "newest_source": _newest_source_phrase(detail),
         "status_cite": status_ref,
         "indicators": indicators,
         "why": (historical or present)["reasons"][:3],
@@ -712,6 +734,22 @@ def _status_source(detail: dict) -> str:
     )
 
 
+def _newest_source_phrase(detail: dict) -> str:
+    """Say which source is newest, e.g. Newest data: CWC, 21 Apr 2025.
+
+    Returns an empty string when the water body has only one source.
+    """
+    sources = detail.get("sources_by_recency") or []
+    if not sources:
+        return ""
+    newest = sources[0]
+    phrase = f"Newest data: {newest['name']}, {_day(newest['latest_observed_at'])}"
+    if len(sources) > 1:
+        older = sources[1]
+        phrase += f"; {older['name']} stops at {_day(older['latest_observed_at'])}"
+    return phrase + "."
+
+
 def _evidence_layers(detail: dict, historical: dict | None, indicators: list) -> dict:
     """The same answer, split by kind of evidence, so none is mistaken for another."""
     reference = detail.get("reference") or {}
@@ -722,6 +760,14 @@ def _evidence_layers(detail: dict, historical: dict | None, indicators: list) ->
             "count": len(indicators),
             "latest": detail.get("latest_observed_at"),
             "source": ", ".join(s["name"] for s in detail.get("sources", [])),
+            "by_source": [
+                {
+                    "name": s["name"],
+                    "latest": s["latest_observed_at"],
+                    "observations": s["observation_count"],
+                }
+                for s in (detail.get("sources_by_recency") or [])
+            ],
         },
         "REFERENCE_COMPARISON": {
             "standard": reference.get("standard_name"),

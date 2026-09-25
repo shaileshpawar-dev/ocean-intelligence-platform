@@ -119,25 +119,31 @@ def compute_status(
             WaterQualityObservation.value,
             WaterQualityObservation.observed_at,
             WaterQualityObservation.normalized_unit,
+            DataSource.key,
+            DataSource.name,
         )
+        .join(DataSource, DataSource.id == WaterQualityObservation.source_id)
         .where(WaterQualityObservation.water_body_id == body.id)
         .order_by(WaterQualityObservation.observed_at.desc())
         .limit(4000)
     ).all()
 
     latest: dict[str, Measurement] = {}
-    for parameter, normalized, raw, observed_at, unit in rows:
+    for parameter, normalized, raw, observed_at, unit, source_key, source_name in rows:
         observed_at = _as_utc(observed_at)
         if observed_at is None or parameter in latest:
             continue
-        # Prefer the normalised value; fall back to the published one only
-        # when no conversion was needed in the first place.
+        # Newest first, so the first row for a parameter is the newest
+        # measurement of it -- whichever agency made it. Both sources are
+        # kept in the database; the status uses the most recent value and
+        # says which source it came from.
         value = normalized if normalized is not None else raw
         latest[parameter] = Measurement(
             parameter_key=parameter,
             value=value,
             observed_at=observed_at,
             unit=unit,
+            source=source_name or source_key,
         )
 
     measurements = list(latest.values())
@@ -513,6 +519,7 @@ def _geography(db: Session, body: WaterBody, status: StatusResult) -> dict:
     from app.water.satellite import images_for
 
     status_dict = status.to_dict()
+    sources = latest_by_source(db, body)
     geometry = gs.water_body_geometry(db, body)
     partial = {
         "imagery": images_for(db, body),
@@ -526,7 +533,8 @@ def _geography(db: Session, body: WaterBody, status: StatusResult) -> dict:
         "geometry_status": body.geometry_status,
         "geometry_status_text": gs.GEOMETRY_STATUS_TEXT.get(body.geometry_status, ""),
         "data_quality": gs.data_quality(db, body, status_dict),
-        "availability": gs.availability(body, status_dict),
+        "availability": gs.availability(body, status_dict, sources),
+        "sources_by_recency": sources,
         "sources_panel": gs.sources_panel(db, body, partial),
         "imagery": images_for(db, body),
         "imagery_note": (
@@ -736,6 +744,63 @@ def station_detail(db: Session, station_id: int) -> dict | None:
     }
 
 
+def latest_by_source(db: Session, body: WaterBody) -> list[dict]:
+    """What each source has for this water body, newest source first.
+
+    This is what makes "the CPCB extract stops in 2021 but CWC sampled it in
+    2025" visible instead of being flattened into one date.
+    """
+    rows = db.execute(
+        select(
+            DataSource.key,
+            DataSource.name,
+            DataSource.organisation,
+            DataSource.source_type,
+            DataSource.observation_method,
+            DataSource.expected_cadence,
+            DataSource.reliability_note,
+            func.count(WaterQualityObservation.id),
+            func.min(WaterQualityObservation.observed_at),
+            func.max(WaterQualityObservation.observed_at),
+            func.count(func.distinct(WaterQualityObservation.parameter)),
+        )
+        .join(DataSource, DataSource.id == WaterQualityObservation.source_id)
+        .where(WaterQualityObservation.water_body_id == body.id)
+        .group_by(DataSource.id)
+    ).all()
+
+    out = [
+        {
+            "key": key,
+            "name": name,
+            "organisation": organisation,
+            "source_type": source_type,
+            "observation_method": method,
+            "expected_cadence": cadence,
+            "reliability_note": note,
+            "observation_count": count,
+            "parameter_count": parameters,
+            "first_observed_at": _as_utc(first).isoformat() if first else None,
+            "latest_observed_at": _as_utc(last).isoformat() if last else None,
+        }
+        for (
+            key,
+            name,
+            organisation,
+            source_type,
+            method,
+            cadence,
+            note,
+            count,
+            first,
+            last,
+            parameters,
+        ) in rows
+    ]
+    out.sort(key=lambda s: s["latest_observed_at"] or "", reverse=True)
+    return out
+
+
 def sources_for_body(db: Session, body: WaterBody) -> list[dict]:
     """Which sources contributed observations to this water body."""
     rows = db.execute(
@@ -815,11 +880,14 @@ def parameter_trend(
             WaterQualityObservation.value,
             WaterQualityObservation.quality_flag,
             MonitoringStation.name,
+            DataSource.key,
+            DataSource.name,
         )
         .join(
             MonitoringStation,
             MonitoringStation.id == WaterQualityObservation.station_id,
         )
+        .join(DataSource, DataSource.id == WaterQualityObservation.source_id)
         .where(
             WaterQualityObservation.water_body_id == body.id,
             WaterQualityObservation.parameter == parameter,
@@ -834,8 +902,12 @@ def parameter_trend(
             "value": normalized if normalized is not None else value,
             "station": station,
             "quality_flag": str(flag),
+            # Two agencies sampling the same river are two series, never one
+            # line: joining them would draw a trend nobody measured.
+            "source": source_key,
+            "source_name": source_name,
         }
-        for observed_at, normalized, value, flag, station in rows
+        for observed_at, normalized, value, flag, station, source_key, source_name in rows
         if (normalized if normalized is not None else value) is not None
     ]
 

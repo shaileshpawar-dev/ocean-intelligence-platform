@@ -724,11 +724,41 @@ def data_quality(db: Session, body: WaterBody, status_detail: dict) -> dict:
     }
 
 
-def availability(body: WaterBody, status_detail: dict) -> dict:
-    """LATEST MEASURED STATUS vs CURRENT DATA AVAILABILITY, kept apart."""
+def availability(
+    body: WaterBody, status_detail: dict, sources: list[dict] | None = None
+) -> dict:
+    """LATEST MEASURED STATUS vs CURRENT DATA AVAILABILITY, kept apart.
+
+    With more than one source the newest is named: "the CPCB extract for this
+    river stops in 2021, but CWC sampled it in 2025" is the single most
+    useful thing this panel can say, and flattening the two dates into one
+    would hide it.
+    """
     freshness = status_detail.get("freshness", {})
     present = status_detail.get("describes_present_state", False)
+    sources = sources or []
+    newest = sources[0] if sources else None
+    others = [s for s in sources[1:] if s.get("latest_observed_at")]
     return {
+        "newest_source": (
+            {
+                "key": newest["key"],
+                "name": newest["name"],
+                "organisation": newest["organisation"],
+                "latest_observed_at": newest["latest_observed_at"],
+                "observation_method": newest.get("observation_method"),
+            }
+            if newest
+            else None
+        ),
+        "older_sources": [
+            {
+                "key": s["key"],
+                "name": s["name"],
+                "latest_observed_at": s["latest_observed_at"],
+            }
+            for s in others
+        ],
         "latest_available_observation": _iso(body.latest_observed_at),
         "age_days": freshness.get("age_days"),
         "expected_cadence": freshness.get("expected_cadence_label"),

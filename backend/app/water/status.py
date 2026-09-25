@@ -158,6 +158,7 @@ class StatusResult:
                     "value": m.value,
                     "unit": m.unit,
                     "observed_at": m.observed_at.isoformat(),
+                    "source": m.source,
                     "evidence_type": "MEASURED",
                 }
                 for m in self.measurements

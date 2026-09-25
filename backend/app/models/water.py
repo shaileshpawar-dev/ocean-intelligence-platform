@@ -383,11 +383,15 @@ class WaterQualityObservation(Base, TimestampMixin):
 
     __tablename__ = "water_quality_observations"
     __table_args__ = (
+        # The source is part of the key: two agencies sampling the same
+        # station, parameter and moment are two observations, and keeping
+        # only one would silently drop a source.
         UniqueConstraint(
+            "source_id",
             "station_id",
             "parameter",
             "observed_at",
-            name="uq_observation_station_param_time",
+            name="uq_observation_source_station_param_time",
         ),
         Index("ix_obs_body_param_time", "water_body_id", "parameter", "observed_at"),
         Index("ix_obs_param_time", "parameter", "observed_at"),
