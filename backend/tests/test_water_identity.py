@@ -392,3 +392,31 @@ class TestTributaryAndSpelling:
             "Amravati River",
             "Amravati River (Tamil Nadu)",
         }
+
+
+class TestConfluenceShorthand:
+    """``A/c`` and ``B/c`` mark a position, not a water body.
+
+    Both agencies label gauges by their confluences: "Krishna A/c With
+    Tungabhadra" is the Krishna just after the Tungabhadra joins it. Reading
+    the shorthand as part of the name produced 31 water bodies with one
+    station each.
+    """
+
+    @pytest.mark.parametrize(
+        ("label", "expected", "position"),
+        [
+            ("Krishna A/c With Tungabhadra", "Krishna", "A/C With Tungabhadra"),
+            ("Mahanadi A/c With Tel", "Mahanadi", "A/C With Tel"),
+            ("Kharoon River A/c Khapri Drain", "Kharoon River", "A/C Khapri Drain"),
+            ("Tirthan B/c TO River Satluj", "Tirthan", "B/C To River Satluj"),
+        ],
+    )
+    def test_the_name_stops_at_the_confluence_marker(self, label, expected, position):
+        result = resolve(label)
+        assert result.name == expected
+        assert result.position == position
+
+    def test_canonical_spelling_still_applies_after_the_cut(self):
+        result = resolve("Satluj River B/c With River")
+        assert result.name == "Sutlej River"

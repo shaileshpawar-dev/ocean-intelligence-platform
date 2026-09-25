@@ -22,11 +22,38 @@ date of the data in general, and the UI never implies it is.
 
 Layered and deterministic; no language model is involved.
 
-1. **Source field** — a populated `River`/`Tributary` column wins (empty in
-   the current source).
+1. **Source drainage columns** — `River`, `Basin` and `Tributary`, which are
+   not all the same kind of thing. CPCB leaves all three empty; CWC fills
+   them, and a QA pass over the real rows established what they mean:
+
+   - `River` ≠ `Basin` → the `River` column names a watercourse and is
+     trusted. Every Odisha row is like this: basin "Brahmani and Baitarni",
+     river "Baitarani".
+   - `River` = `Basin` → it is a **basin label**, in 72% of rows sampled and
+     100% of Uttar Pradesh's. An empty `Tributary` ("-") then means the
+     station is on that basin's main river; a populated one names the
+     sub-basin.
+   - The station's own label wins when it names one of the columns: "Tapi at
+     Sarangkheda" and "Purna at Gopalkheda" carry the same pair of columns
+     and stand on different rivers.
+   - Otherwise the **more specific name wins** — a populated `Tributary`
+     over the river it joins — because the finer name is both likelier to be
+     the stream sampled and less likely to attract the wrong geometry.
+   - A label naming a **lake, tank, reservoir or well** outranks all of them:
+     Gurudongmar Lake drains to the Brahmaputra but is not the Brahmaputra.
+
+   A sub-basin name is recorded at confidence 0.55 rather than 1.0, because a
+   sub-basin can still be coarser than the stream sampled (§9). All three
+   columns are stored verbatim on the station, so the rule can be revisited
+   without re-fetching four million rows.
+
+   Reading the basin label as the water body is what put all 36 Sikkim
+   stations on the Brahmaputra mainstem, up to 264 km from the Teesta they
+   sample; geometry QA is what caught it. `cli ingest --reassign-identity`
+   applies a corrected rule to stations already stored and lists every move.
 2. **Station-name parse** — the water body is the name before the first
    position marker (`AT`, `D/S`, `U/S`, `MIDSTREAM`, `UPSTREAM`,
-   `DOWNSTREAM`, `NEAR`…). The rest is kept as the station's
+   `DOWNSTREAM`, `NEAR`, `A/C`, `B/C`…). The rest is kept as the station's
    `position_descriptor` ("At Nasik D/S Gadgebaba Maharaj Nagar Nashik"), so
    sampling positions never become separate water bodies.
 3. **Canonical spelling** — `BRAHAMPUTRA → BRAHMAPUTRA`, `KAVERI → CAUVERY`,
@@ -47,10 +74,16 @@ Layered and deterministic; no language model is involved.
 7. **Unresolved** — labels that name no water body (`ERODE-2`) are typed
    `other` with confidence 0.4 and labelled "Unclassified".
 
+`A/c` and `B/c` ("after/before confluence") are position markers, not names:
+"Krishna A/c With Tungabhadra" is a gauge on the Krishna, and reading the
+shorthand as a name produced 31 water bodies with one station each.
+
 Every body records `match_method`, `match_confidence`, `aliases` and
 `source_ids`. Regression tests: Mithi (five positional labels, one river),
 Yamuna, Ganga, Brahmaputra spellings, Rani Talab in two states, Amravati,
-cross-state fragment linking (`test_water_identity.py`).
+cross-state fragment linking (`test_water_identity.py`); the drainage-column
+rule, case by case against published rows, in
+`test_source_drainage_fields.py`.
 
 ## 3. Geometry
 

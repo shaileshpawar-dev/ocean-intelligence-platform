@@ -136,9 +136,13 @@ class _Registry:
     of its time in the database driver.
     """
 
-    def __init__(self, db: Session, source: DataSource) -> None:
+    def __init__(
+        self, db: Session, source: DataSource, *, reassign_identity: bool = False
+    ) -> None:
         self.db = db
         self.source = source
+        self.reassign_identity = reassign_identity
+        self.reassignments: list[str] = []
         self.states: dict[str, State] = {}
         self.districts: dict[tuple[int, str], District] = {}
         self.bodies: dict[tuple[str, str, str], WaterBody] = {}
@@ -355,6 +359,9 @@ class _Registry:
                 longitude=row.longitude,
                 geo_quality=geo_quality,
                 position_descriptor=(position or None) and position[:300],
+                source_river=(row.river or None) and row.river[:160],
+                source_basin=(row.basin or None) and row.basin[:160],
+                source_tributary=(row.tributary or None) and row.tributary[:160],
             )
             self.db.add(found)
             self.db.flush()
@@ -362,8 +369,33 @@ class _Registry:
         else:
             if found.water_body_id is None and body is not None:
                 found.water_body_id = body.id
+            elif (
+                self.reassign_identity
+                and body is not None
+                and found.water_body_id != body.id
+            ):
+                # The identity rule changed under existing rows. Move the
+                # station and name both bodies in the run summary: a silent
+                # re-point would make a wrong assignment indistinguishable
+                # from a corrected one.
+                previous = self.db.get(WaterBody, found.water_body_id)
+                self.reassignments.append(
+                    f"{found.name}: "
+                    f"{previous.name if previous else found.water_body_id}"
+                    f" -> {body.name}"
+                )
+                found.water_body_id = body.id
             if found.position_descriptor is None and position:
                 found.position_descriptor = position[:300]
+            # Backfill provenance on stations created before these columns
+            # existed, without overwriting anything already recorded.
+            for column, value in (
+                ("source_river", row.river),
+                ("source_basin", row.basin),
+                ("source_tributary", row.tributary),
+            ):
+                if getattr(found, column) is None and value:
+                    setattr(found, column, value[:160])
 
         self.stations[code] = found
         return found
@@ -399,6 +431,7 @@ def ingest_provider(
     max_plans: int | None = None,
     max_rows_per_plan: int | None = None,
     incremental: bool = True,
+    reassign_identity: bool = False,
 ) -> dict:
     """Run one ingestion pass and return its summary.
 
@@ -413,6 +446,10 @@ def ingest_provider(
         max_rows_per_plan: cap rows per resource, for smoke tests.
         incremental: skip resources whose row count is unchanged since the
             last successful ingest. Pass False to re-read everything.
+        reassign_identity: move an existing station when the current identity
+            rule resolves it to a different water body, and report every
+            move. Off by default so an ordinary ingest cannot undo the
+            reconcile pass; use it after changing the rule itself.
     """
     provider = get_provider(provider_key)
     source = ensure_source(db, provider)
@@ -433,7 +470,7 @@ def ingest_provider(
     if max_plans is not None:
         plans = plans[:max_plans]
 
-    registry = _Registry(db, source)
+    registry = _Registry(db, source, reassign_identity=reassign_identity)
     errors: list[str] = []
     warnings: list[str] = []
     touched_bodies: set[int] = set()
@@ -515,6 +552,9 @@ def ingest_provider(
         "plans_skipped_unchanged": skipped,
         "states": states or "all",
         "provider": provider_key,
+        # Kept in full: the point of reassignment is that it is auditable.
+        "stations_reassigned": len(registry.reassignments),
+        "reassignments": registry.reassignments,
     }
 
     source.last_success_at = run.finished_at if plans_done else source.last_success_at
@@ -537,6 +577,7 @@ def ingest_provider(
         "records_duplicate": run.records_duplicate,
         "stations_created": run.stations_created,
         "water_bodies_created": run.water_bodies_created,
+        "stations_reassigned": len(registry.reassignments),
         "errors": errors,
     }
     logger.info("ingest_complete", extra=summary)
@@ -630,7 +671,12 @@ def _ingest_plan(
         by_station[((row.state_code or "").upper(), row.station_name)].append(row)
 
     first_pass = {
-        key: resolve(key[1], river=group[0].river, tributary=group[0].tributary)
+        key: resolve(
+            key[1],
+            river=group[0].river,
+            tributary=group[0].tributary,
+            basin=group[0].basin,
+        )
         for key, group in by_station.items()
     }
     learned = propagate_types(list(first_pass.values()))

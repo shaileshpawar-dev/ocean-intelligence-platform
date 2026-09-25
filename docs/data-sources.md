@@ -71,11 +71,22 @@ fetched directly. The numeric values match across independent sources.
 | Source | Agency | Coverage | Newest data | Identity |
 |---|---|---|---|---|
 | `cpcb_nwdp` | Central Pollution Control Board | 35 state/UT codes, 211 resources | mostly 2021 (a few stations 2025) | `River` empty — parsed from station names |
-| `cwc_nwdp` | Central Water Commission | 29 states, 169 fetchable resources | **2025** | `River`/`Tributary` populated — used directly |
+| `cwc_nwdp` | Central Water Commission | 29 states, 169 fetchable resources | **2025** | `River`/`Basin`/`Tributary` populated — read as drainage, not identity |
 
 Both are CKAN datastore resources on the National Water Data Portal, public
 and unauthenticated. Neither overwrites the other: an observation belongs to
 one source and the UI shows which agency measured what, and when.
+
+**CWC's `River` column is usually a basin name.** In the rows sampled it
+repeats `Basin` 72% of the time (100% for Uttar Pradesh), and the watercourse
+is in `Tributary`: Sikkim publishes `River=Brahmaputra, Basin=Brahmaputra,
+Tributary=Teesta` for every station in the state. Where the two columns
+differ — every Odisha row, `Basin="Brahmani and Baitarni"`,
+`River="Baitarani"` — the `River` column does name a river. `Tributary` uses
+`-` for "not on a tributary", and carries reach numbering such as
+`Bhagirathi-II (WB)*`. How the platform reads all this, and what it refuses
+to conclude, is in
+[water-geospatial.md](water-geospatial.md#2-canonical-identity).
 
 Checked for newer data and **not** usable from this environment:
 India-WRIS (`indiawris.gov.in` resolves but every connection is reset),

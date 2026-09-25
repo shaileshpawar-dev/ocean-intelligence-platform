@@ -339,6 +339,15 @@ class MonitoringStation(Base, TimestampMixin):
     tehsil: Mapped[str | None] = mapped_column(String(160), nullable=True)
     village: Mapped[str | None] = mapped_column(String(160), nullable=True)
 
+    # The source's own drainage columns, kept verbatim. They are provenance,
+    # not identity: CWC's River column repeats the Basin name for most rows,
+    # so "Brahmaputra" there means the basin and the Tributary column ("Teesta")
+    # names the watercourse. Storing all three means the identity rule can be
+    # revisited without re-fetching four million rows.
+    source_river: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    source_basin: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    source_tributary: Mapped[str | None] = mapped_column(String(160), nullable=True)
+
     latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     position_descriptor: Mapped[str | None] = mapped_column(String(300), nullable=True)

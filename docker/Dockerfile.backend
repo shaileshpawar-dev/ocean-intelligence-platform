@@ -61,6 +61,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DATABASE_URL="sqlite:////app/data/oip.db" \
     WATER_CACHE_DIR="/app/data/raw"
 
+# libexpat is the one shared library the OSM extract reader (osmium) needs;
+# the slim base does not carry it. ~100 KB, and only the extract job uses it.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libexpat1 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Run as a non-root user. The container writes only to /app/data.
 RUN useradd --create-home --uid 1000 oip
 

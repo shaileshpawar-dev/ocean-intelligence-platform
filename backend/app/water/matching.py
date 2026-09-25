@@ -69,10 +69,17 @@ NATIONAL_TYPES = frozenset(
 
 CONFIDENCE = {
     "source_field": 1.0,
+    # The source named a sub-basin, which can be coarser than the watercourse
+    # actually sampled, so it is evidence but not as good as a river name.
+    "source_sub_basin": 0.55,
     "station_name_parse": 0.75,
     "type_propagated": 0.6,
     "unclassified": 0.4,
 }
+
+# Values a source column uses for "no value here". CWC writes "-" in the
+# Tributary column when the station is on the basin's main river.
+_NULL_FIELD_TOKENS = frozenset({"", "-", "--", "---", "na", "n/a", "nil", "none", "."})
 
 # ---------------------------------------------------------------------------
 # Vocabulary
@@ -180,6 +187,11 @@ POSITION_MARKERS = (
     " d/stream",
     " u/stream",
     " confl",
+    # "after confluence" / "before confluence", the gauging shorthand both
+    # agencies use: "Krishna A/c With Tungabhadra" is a position on the
+    # Krishna, and reading it as a name made 31 one-station water bodies.
+    " a/c ",
+    " b/c ",
     " bridge",
     " ghat",
     " intake",
@@ -604,45 +616,129 @@ def parse_station_name(station_name: str) -> MatchResult:
     )
 
 
+def _source_field(text: str | None) -> str | None:
+    """A source column value, or None when the column says "not applicable".
+
+    CWC writes ``-`` for "this station is not on a tributary", which is
+    information, not a name.
+    """
+    cleaned = re.sub(r"\s+", " ", str(text or "").strip())
+    if cleaned.lower() in _NULL_FIELD_TOKENS:
+        return None
+    return cleaned
+
+
+def _tidy_watercourse_label(text: str) -> str:
+    """Strip the bookkeeping the sub-basin column carries.
+
+    ``Bhagirathi-II (WB)*`` is the source's label for a numbered sub-basin
+    reach in West Bengal, not the name of a river. The suffixes go; the
+    original is kept as an alias by the caller.
+    """
+    cleaned = re.sub(r"\s*\([^)]*\)", "", text)  # "(WB)"
+    cleaned = cleaned.replace("*", "")
+    # A trailing segment number: "Bhagirathi-II", "Yamuna - I".
+    cleaned = re.sub(r"\s*[-\u2013]\s*(?:[IVXLC]+|\d+)\s*$", "", cleaned)
+    return re.sub(r"\s+", " ", cleaned).strip(" -\u2013,")
+
+
+def _as_river(text: str, *, method: str) -> MatchResult:
+    """Build a river MatchResult from a source column value."""
+    tidied = _tidy_watercourse_label(text) or text
+    display = _title(tidied)
+    if "river" not in display.lower():
+        display = f"{display} River"
+    # The alias keeps the source's spelling exactly as published.
+    aliases = [text] if normalise_name(tidied) != normalise_name(text) else []
+    return MatchResult(
+        name=display,
+        normalized_name=normalise_name(tidied),
+        water_type=WaterBodyType.RIVER,
+        method=method,
+        confidence=CONFIDENCE[method],
+        aliases=aliases,
+    )
+
+
 def resolve(
     station_name: str,
     *,
     river: str | None = None,
     tributary: str | None = None,
+    basin: str | None = None,
 ) -> MatchResult:
-    """Resolve a water body, preferring populated source fields.
+    """Resolve a water body from the source's own columns, then the label.
 
-    ``river`` and ``tributary`` come from the source row. When either is
-    populated it wins outright, because a field the provider filled in is
-    better evidence than anything parsed out of a free-text label.
+    The columns are not all the same kind of thing, which took a QA pass on
+    real data to establish:
 
-    Between the two, the **tributary wins when the station is named for it**.
-    CWC rows carry both ("River: Tapi, Tributary: Purna"), and a station
-    called "Purna at Gopalkheda" samples the Purna, not the Tapi 70 km away;
-    attaching it to the main river put stations far from their own water
-    body, which the geometry QA pass flagged.
+    * When ``River`` differs from ``Basin`` -- every Odisha row, where the
+      basin is "Brahmani and Baitarni" and the river is "Baitarani" -- the
+      ``River`` column names a watercourse and is trusted.
+    * When ``River`` repeats ``Basin`` -- 72% of the CWC rows sampled, and
+      every row for Uttar Pradesh -- it is a **basin label**. Then an empty
+      ``Tributary`` means the station is on that basin's main river, and a
+      populated one names the sub-basin. Reading the basin label as the water
+      body is what put every Sikkim station on the Brahmaputra mainstem, up
+      to 264 km from the Teesta they actually sample.
+    * A station whose own label **names one of the columns** settles it:
+      "Tapi at Sarangkheda" stands on the Tapi and "Purna at Gopalkheda" on
+      the Purna, though both rows carry the same pair.
+    * Failing that, the **more specific name wins**: a populated
+      ``Tributary`` beats the river it joins, because the finer name is both
+      likelier to be the stream sampled and less likely to attract the wrong
+      geometry.
+    * A station whose own label names a **lake, tank, reservoir, pond or
+      well** is that water body, whatever basin it drains to. Gurudongmar
+      Lake is in the Brahmaputra basin; it is not the Brahmaputra.
+
+    A sub-basin name is recorded at lower confidence than a river name,
+    because the sub-basin can still be coarser than the stream sampled: a
+    station at Ujjain is in the Yamuna sub-basin but stands on the Shipra,
+    which the source never names.
     """
-    ordered = [river, tributary]
-    label = normalise_name(station_name)
-    tributary_key = normalise_name(tributary or "")
-    if tributary_key and f" {tributary_key} " in f" {label} ":
-        ordered = [tributary, river]
+    river_value = _source_field(river)
+    basin_value = _source_field(basin)
+    tributary_value = _source_field(tributary)
 
-    for field_value in ordered:
-        text = (field_value or "").strip()
-        if text and text not in {"-", "--", "NA", "N/A"}:
-            display = _title(text)
-            if "river" not in display.lower():
-                display = f"{display} River"
-            return MatchResult(
-                name=display,
-                normalized_name=normalise_name(text),
-                water_type=WaterBodyType.RIVER,
-                method="source_field",
-                confidence=CONFIDENCE["source_field"],
-            )
+    parsed = finalise(station_name, parse_station_name(station_name))
 
-    return finalise(station_name, parse_station_name(station_name))
+    # A still water body named in the label outranks any drainage column.
+    if parsed.is_identified and parsed.water_type not in {
+        WaterBodyType.RIVER,
+        WaterBodyType.OTHER,
+    }:
+        return parsed
+
+    basin_key = normalise_name(basin_value or "")
+    river_key = normalise_name(river_value or "")
+    tributary_key = normalise_name(tributary_value or "")
+    river_is_basin_label = bool(basin_key) and river_key == basin_key
+
+    label_key = f" {normalise_name(station_name)} "
+    parsed_key = parsed.normalized_name if parsed.is_identified else ""
+
+    def named_in_label(key: str) -> bool:
+        return bool(key) and (parsed_key == key or f" {key} " in label_key)
+
+    # The label naming a column outranks specificity: the row for "Tapi at
+    # Sarangkheda" also carries Tributary=Purna, but the station says which
+    # watercourse it stands on. The finer name is tested first.
+    if tributary_value and named_in_label(tributary_key):
+        return _as_river(tributary_value, method="source_field")
+    if river_value and named_in_label(river_key):
+        return _as_river(river_value, method="source_field")
+
+    # Most specific first. A tributary that merely repeats the river or the
+    # basin adds nothing.
+    if tributary_value and tributary_key not in {river_key, basin_key}:
+        method = "source_sub_basin" if river_is_basin_label else "source_field"
+        return _as_river(tributary_value, method=method)
+
+    if river_value:
+        return _as_river(river_value, method="source_field")
+
+    return parsed
 
 
 _TYPE_WORDS_UPPER = frozenset({k.upper() for k, _ in TYPE_KEYWORDS} | {"WATER"})

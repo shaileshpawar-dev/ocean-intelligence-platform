@@ -46,7 +46,11 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 
 
 def _ingest(
-    states: list[str] | None, provider: str = "cpcb_nwdp", *, incremental: bool = True
+    states: list[str] | None,
+    provider: str = "cpcb_nwdp",
+    *,
+    incremental: bool = True,
+    reassign_identity: bool = False,
 ) -> int:
     from app.services.water_service import refresh_cached_statuses
     from app.water.ingestion import ingest_provider
@@ -56,7 +60,13 @@ def _ingest(
         from app.water.reference_seed import seed_reference_standards
 
         seed_reference_standards(db)
-        summary = ingest_provider(db, provider, states=states, incremental=incremental)
+        summary = ingest_provider(
+            db,
+            provider,
+            states=states,
+            incremental=incremental,
+            reassign_identity=reassign_identity,
+        )
         summary["statuses_refreshed"] = refresh_cached_statuses(db)
     print(json.dumps(summary, indent=2, default=str))
     return 0 if summary["status"] != "failed" else 1
@@ -382,6 +392,15 @@ def main(argv: list[str] | None = None) -> int:
         help="Re-read every resource, ignoring the stored row counts.",
     )
     ingest.add_argument(
+        "--reassign-identity",
+        action="store_true",
+        help=(
+            "Move stations whose water body the current identity rule resolves "
+            "differently, and list every move. For use after the rule changes; "
+            "an ordinary ingest never re-points a station."
+        ),
+    )
+    ingest.add_argument(
         "--provider",
         default="cpcb_nwdp",
         help="Registered provider key (cpcb_nwdp, cwc_nwdp).",
@@ -458,6 +477,7 @@ def main(argv: list[str] | None = None) -> int:
             None if args.all else [s.upper() for s in args.states],
             args.provider,
             incremental=not args.full,
+            reassign_identity=args.reassign_identity,
         )
     if args.command == "refresh-status":
         return _refresh()

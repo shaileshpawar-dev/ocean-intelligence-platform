@@ -267,11 +267,23 @@ reliability note are recorded as facts.
 [DATASET_COVERAGE.md](DATASET_COVERAGE.md) for the counts, which are computed
 from the database.
 
-**Identity is still parsed for CPCB.** CPCB's `River` column is empty, so its
-water bodies come from station names. CWC populates `River` and `Tributary`,
-which is stronger evidence, and a station named for a tributary now resolves
-to the tributary. Untyped same-named bodies are not linked across states, so
-generic names can still appear more than once.
+**Identity is parsed for CPCB and read from drainage columns for CWC.**
+CPCB's `River` column is empty, so its water bodies come from station names.
+CWC fills `River`, `Basin` and `Tributary`, but the `River` column repeats the
+`Basin` name in most rows, where it is a basin label rather than the water
+body: read literally it put all 36 Sikkim stations on the Brahmaputra
+mainstem, up to 264 km from the Teesta they sample. The rule that replaced it
+is in [water-geospatial.md](water-geospatial.md#2-canonical-identity).
+
+**A sub-basin is not always the stream sampled.** Where the source gives only
+a basin and a sub-basin, the sub-basin is used and recorded at confidence
+0.55. It can still be too coarse: a station at Ujjain is in the Yamuna
+sub-basin but stands on the Shipra, which the source never names, so it is
+attached to the Yamuna. `cli geometry-qa` reports every station further than
+25 km from its water body's geometry — that report is the measure of this
+limitation, not a list of bugs, and it is not silently repaired. Untyped
+same-named bodies are not linked across states, so generic names can still
+appear more than once.
 
 **Geometry** comes from an OpenStreetMap regional extract, matched offline by
 name, water-type affinity and station proximity, with connectivity for rivers.

@@ -45,6 +45,32 @@ ingested, how many records it produced, its newest observation and its last
 status. A monthly re-run therefore costs one request per unchanged resource
 instead of paging 2.8M rows.
 
+## Repairing identity after the rule changes
+
+An ordinary ingest never re-points a station that already has a water body.
+That is deliberate: the reconcile pass moves stations between bodies when it
+merges river fragments, and an ingest that undid that would fight it on every
+run.
+
+When the identity rule itself changes — as it did once geometry QA showed that
+CWC's `River` column is a basin label — the correction is explicit:
+
+```
+cli ingest --all --provider cwc_nwdp --full --reassign-identity
+```
+
+Every station whose water body now resolves differently is moved, and each
+move is recorded in `ingestion_runs.detail.reassignments` as
+`station: old body -> new body`, with the count in the run summary. Run
+`reconcile`, `import-geometry`, `db sync-geometry`, `refresh-status` and
+`geometry-qa` afterwards, in that order: reassignment changes which bodies
+exist, which changes what geometry and statuses mean.
+
+The three source drainage columns are stored verbatim on each station
+(`source_river`, `source_basin`, `source_tributary`), so the next revision of
+the rule can be reasoned about, and its effect measured, without re-fetching
+four million observations.
+
 ## Order for a new environment
 
 ```bash
