@@ -1,8 +1,9 @@
 # PostgreSQL / PostGIS migration plan
 
-The water domain runs on SQLite locally. The schema was written so moving to
-PostgreSQL + PostGIS is a storage change, not a redesign. This is the plan;
-it has **not** been executed.
+**Status: executed in Phase 3.** PostgreSQL 16 + PostGIS 3.4 is the
+production target; SQLite remains the development and test backend. This
+document is now both the record of what was done and the runbook for doing
+it again in a new environment.
 
 ## What is already portable
 
@@ -13,6 +14,19 @@ it has **not** been executed.
   columns, which every viewport query filters on. Those queries work
   unchanged on PostgreSQL with a B-tree index; PostGIS makes them faster and
   exact.
+
+## What was done
+
+| Step | Outcome |
+|---|---|
+| PostGIS provisioned | `postgis/postgis:16-3.4` locally; RDS + PostGIS in production |
+| Alembic introduced | `4442e41c4ca0` initial schema, then PostGIS geometry, city extent, source characteristics, observation key |
+| Geometry columns | `water_body_geometries.geom`, `admin_boundaries.geom`, `monitoring_stations.geom`, `water_bodies.centroid_geom`, `cities.extent_geom`, `water_images.footprint_geom`, each with a GIST index |
+| Query indexes | observation (body, parameter, date), (station, date), (source, date); water-body state/type/status/name; station body and state/district; boundary level/name |
+| Data moved | `cli db copy-from-sqlite` — the whole database in ~2.5 min |
+| Geometry derived | `cli db sync-geometry` — GeoJSON kept as the provenance record, PostGIS derived from it |
+| Queries moved to SQL | `app/services/spatial.py`: radius, city distance, viewport, clustering, containment, station-to-geometry distance |
+| Verified | `tests/test_postgis.py` builds a throwaway database, runs the migrations and exercises every geometry type, the GIST indexes and each spatial operation |
 
 ## Steps
 
@@ -35,7 +49,8 @@ it has **not** been executed.
 5. **Copy data** with a one-off script reading SQLite through SQLAlchemy and
    bulk-inserting (`COPY` via `psycopg`). 582k observations copy in minutes.
 6. **Swap Python geometry for SQL where it pays**, keeping `app/water/geo.py`
-   as the SQLite fallback:
+   as the SQLite fallback (done — `app/services/spatial.py` returns ``None``
+   when PostGIS is absent and the caller takes the Python path):
 
    | Python (`geo.py` / services) | PostGIS |
    |---|---|

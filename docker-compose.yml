@@ -1,13 +1,24 @@
-# Local development stack.
+# Local staging stack: what production is meant to look like, on one machine.
 #
-#   docker compose up --build          backend + Postgres
-#   docker compose --profile ui up     also builds the React dashboard
+#   docker compose up -d db                     PostgreSQL + PostGIS
+#   docker compose run --rm migrate             schema to head (one-shot)
+#   docker compose up --build backend           the API (no ingestion at start-up)
+#   docker compose --profile ui up              also builds the React dashboard
 #
-# No secret is defined here. Copy .env.example to .env first; compose reads it.
+# Data loading is deliberately NOT part of starting the app. Ingestion,
+# geometry import and satellite processing are separate one-shot jobs:
+#
+#   docker compose run --rm jobs python -m app.water.cli ingest --all
+#   docker compose run --rm jobs python -m app.water.cli import-geometry --file ...
+#   docker compose run --rm jobs python -m app.water.cli fetch-imagery
+#
+# A fresh container serves what is already in the database; it never rebuilds
+# it. No secret is defined here: copy .env.example to .env first.
 
 services:
   db:
-    image: postgres:16-alpine
+    # PostGIS, not plain Postgres: the spatial queries are SQL.
+    image: postgis/postgis:16-3.4
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-oip}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
@@ -24,6 +35,41 @@ services:
     # ports:
     #   - "5432:5432"
 
+  # One-shot: bring the schema to head. Run before the first start and
+  # after every deploy that carries a migration.
+  migrate:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    profiles: ["jobs"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-oip}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-oip}
+      ENVIRONMENT: ${ENVIRONMENT:-staging}
+    command: ["python", "-m", "app.water.cli", "db", "upgrade"]
+    volumes:
+      - oipdata:/app/data
+
+  # One-shot: ingestion, geometry import, satellite processing. Never part
+  # of serving the application.
+  jobs:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    profiles: ["jobs"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-oip}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-oip}
+      ENVIRONMENT: ${ENVIRONMENT:-staging}
+      WATER_CACHE_DIR: /app/data/raw
+    command: ["python", "-m", "app.water.cli", "health"]
+    volumes:
+      - oipdata:/app/data
+
   backend:
     build:
       context: .
@@ -33,6 +79,8 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-oip}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-oip}
+      # Empty on purpose: a container must not ingest 35 states at start-up.
+      WATER_BOOTSTRAP_STATES: ${WATER_BOOTSTRAP_STATES:-}
       DEMO_MODE: ${DEMO_MODE:-true}
       ENVIRONMENT: ${ENVIRONMENT:-development}
       LOG_FORMAT: ${LOG_FORMAT:-json}

@@ -45,7 +45,9 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from alembic.config import Config
 
 
-def _ingest(states: list[str] | None, provider: str = "cpcb_nwdp") -> int:
+def _ingest(
+    states: list[str] | None, provider: str = "cpcb_nwdp", *, incremental: bool = True
+) -> int:
     from app.services.water_service import refresh_cached_statuses
     from app.water.ingestion import ingest_provider
 
@@ -54,7 +56,7 @@ def _ingest(states: list[str] | None, provider: str = "cpcb_nwdp") -> int:
         from app.water.reference_seed import seed_reference_standards
 
         seed_reference_standards(db)
-        summary = ingest_provider(db, provider, states=states)
+        summary = ingest_provider(db, provider, states=states, incremental=incremental)
         summary["statuses_refreshed"] = refresh_cached_statuses(db)
     print(json.dumps(summary, indent=2, default=str))
     return 0 if summary["status"] != "failed" else 1
@@ -375,6 +377,11 @@ def main(argv: list[str] | None = None) -> int:
     group.add_argument("--states", nargs="+", help="State codes, e.g. MH DL KA.")
     group.add_argument("--all", action="store_true", help="All 35 states (slow).")
     ingest.add_argument(
+        "--full",
+        action="store_true",
+        help="Re-read every resource, ignoring the stored row counts.",
+    )
+    ingest.add_argument(
         "--provider",
         default="cpcb_nwdp",
         help="Registered provider key (cpcb_nwdp, cwc_nwdp).",
@@ -448,7 +455,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "ingest":
         return _ingest(
-            None if args.all else [s.upper() for s in args.states], args.provider
+            None if args.all else [s.upper() for s in args.states],
+            args.provider,
+            incremental=not args.full,
         )
     if args.command == "refresh-status":
         return _refresh()
