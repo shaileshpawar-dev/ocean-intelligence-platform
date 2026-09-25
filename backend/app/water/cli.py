@@ -1,6 +1,7 @@
 """Command-line entry points for water data.
 
     python -m app.water.cli ingest --states MH DL KA
+    python -m app.water.cli ingest --all --provider cwc_nwdp
     python -m app.water.cli ingest --all
     python -m app.water.cli refresh-status
     python -m app.water.cli health
@@ -44,7 +45,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from alembic.config import Config
 
 
-def _ingest(states: list[str] | None) -> int:
+def _ingest(states: list[str] | None, provider: str = "cpcb_nwdp") -> int:
     from app.services.water_service import refresh_cached_statuses
     from app.water.ingestion import ingest_provider
 
@@ -53,7 +54,7 @@ def _ingest(states: list[str] | None) -> int:
         from app.water.reference_seed import seed_reference_standards
 
         seed_reference_standards(db)
-        summary = ingest_provider(db, "cpcb_nwdp", states=states)
+        summary = ingest_provider(db, provider, states=states)
         summary["statuses_refreshed"] = refresh_cached_statuses(db)
     print(json.dumps(summary, indent=2, default=str))
     return 0 if summary["status"] != "failed" else 1
@@ -373,6 +374,11 @@ def main(argv: list[str] | None = None) -> int:
     group = ingest.add_mutually_exclusive_group(required=True)
     group.add_argument("--states", nargs="+", help="State codes, e.g. MH DL KA.")
     group.add_argument("--all", action="store_true", help="All 35 states (slow).")
+    ingest.add_argument(
+        "--provider",
+        default="cpcb_nwdp",
+        help="Registered provider key (cpcb_nwdp, cwc_nwdp).",
+    )
 
     sub.add_parser("refresh-status", help="Recompute cached water-body statuses.")
     sub.add_parser("health", help="Probe every registered provider.")
@@ -441,7 +447,9 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     if args.command == "ingest":
-        return _ingest(None if args.all else [s.upper() for s in args.states])
+        return _ingest(
+            None if args.all else [s.upper() for s in args.states], args.provider
+        )
     if args.command == "refresh-status":
         return _refresh()
     if args.command == "reconcile":

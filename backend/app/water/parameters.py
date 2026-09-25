@@ -538,7 +538,9 @@ class ParsedValue:
 _NUMERIC = re.compile(r"^[<>]?\s*(-?\d+(?:\.\d+)?)(?:\s*[eE]([+-]?\d+))?$")
 
 
-def parse_value(parameter: Parameter, raw: object) -> ParsedValue:
+def parse_value(
+    parameter: Parameter, raw: object, source_unit: str | None = None
+) -> ParsedValue:
     """Parse one raw cell into a value plus quality flags.
 
     Real source data contains ``'-'``, ``None``, empty strings, censored
@@ -576,7 +578,8 @@ def parse_value(parameter: Parameter, raw: object) -> ParsedValue:
     if value < 0 and parameter.key not in {"temperature"}:
         flags.append("negative_implausible")
 
-    normalized, unit = normalise_value(parameter, value)
+    normalized, unit, unit_flags = normalise_with_flags(parameter, value, source_unit)
+    flags.extend(unit_flags)
     return ParsedValue(
         raw=text,
         value=value,
@@ -594,29 +597,57 @@ def normalise_value(
     Returns ``(None, None)`` when no exact conversion is known, so the caller
     stores the raw value and records that normalisation did not happen.
     """
+    normalized, unit, _flags = normalise_with_flags(parameter, value, source_unit)
+    return normalized, unit
+
+
+# Above this, a conductivity reading cannot be in mS/cm: seawater is about
+# 50 mS/cm, so a river reading of hundreds is uS/cm mislabelled.
+CONDUCTIVITY_MS_CM_IMPLAUSIBLE = 100.0
+
+
+def normalise_with_flags(
+    parameter: Parameter, value: float, source_unit: str | None = None
+) -> tuple[float | None, str | None, list[str]]:
+    """:func:`normalise_value`, also returning quality flags.
+
+    Conversions are applied only when they are exact. Where a source's
+    declared unit contradicts its own values the assumption made is recorded
+    as a flag on the observation, so it is visible in the data and not only
+    in this comment.
+    """
     if parameter.unit is None:
-        return value, None
+        return value, None, []
 
     unit = (source_unit or parameter.unit).strip().lower().replace("μ", "u")
+    # A column header like "Electric Conductivity (mS/cm)" carries its unit
+    # in brackets; take that rather than the whole header.
+    if "(" in unit and ")" in unit:
+        unit = unit[unit.rfind("(") + 1 : unit.rfind(")")].strip()
     factor = _CONVERSIONS.get((unit, parameter.unit))
+    flags: list[str] = []
 
     if factor is None:
         # Same unit spelled differently, e.g. "MG/L" vs "mg/L".
         if unit == parameter.unit.lower():
             factor = 1.0
         else:
-            return None, None
+            return None, None, ["unit_not_convertible"]
 
-    # Conductivity needs a judgement call. The CPCB header says mS/cm, but
-    # the published magnitudes (hundreds to thousands) are uS/cm; a genuine
-    # 1500 mS/cm would be forty times seawater. Treating the header as
-    # authoritative would inflate every conductivity reading a thousandfold,
-    # so magnitude decides and the assumption is documented here rather than
-    # hidden in a constant.
-    if parameter.key == "electrical_conductivity" and value > 100:
+    # Conductivity needs a judgement call. Both CPCB and CWC label the column
+    # mS/cm, but the published magnitudes (hundreds to thousands) are uS/cm;
+    # a genuine 1500 mS/cm would be thirty times seawater. Converting on the
+    # header would inflate every reading a thousandfold, so magnitude decides
+    # and the assumption is flagged on the observation.
+    if (
+        parameter.key == "electrical_conductivity"
+        and factor != 1.0
+        and value > CONDUCTIVITY_MS_CM_IMPLAUSIBLE
+    ):
         factor = 1.0
+        flags.append("unit_assumed_us_cm")
 
-    return value * factor, parameter.unit
+    return value * factor, parameter.unit, flags
 
 
 def parameters_for_family(family: ParameterFamily) -> list[Parameter]:

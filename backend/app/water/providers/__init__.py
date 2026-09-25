@@ -15,9 +15,11 @@ from app.water.providers.base import (
     WaterDataProvider,
 )
 from app.water.providers.nwdp_cpcb import NWDPCPCBProvider
+from app.water.providers.nwdp_cwc import NWDPCWCProvider
 
 PROVIDERS: dict[str, type[WaterDataProvider]] = {
     "cpcb_nwdp": NWDPCPCBProvider,
+    "cwc_nwdp": NWDPCWCProvider,
 }
 
 
@@ -40,6 +42,7 @@ __all__ = [
     "PROVIDERS",
     "FetchPlan",
     "NWDPCPCBProvider",
+    "NWDPCWCProvider",
     "ObservationRow",
     "ProviderError",
     "ProviderInfo",

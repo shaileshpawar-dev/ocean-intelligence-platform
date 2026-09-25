@@ -353,7 +353,9 @@ class NWDPCPCBProvider(WaterDataProvider):
             if parameter is None:
                 continue
 
-            parsed = parse_value(parameter, raw)
+            # The header carries the source's declared unit, e.g.
+            # "Electric Conductivity (mS/cm)"; normalisation needs it.
+            parsed = parse_value(parameter, raw, source_unit=column)
             if parsed.is_missing:
                 # Not measured. Storing a zero here is the single most
                 # dangerous thing this pipeline could do, because zero BOD

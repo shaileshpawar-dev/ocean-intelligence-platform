@@ -332,3 +332,33 @@ class TestRiverFragmentLinking:
             "ganga-river-bihar": "Ganga River",
             "ganga-river": "Ganga River (Arunachal Pradesh)",
         }
+
+
+class TestTributaryAndSpelling:
+    """Regressions found by running geometry QA over real CWC rows."""
+
+    def test_station_named_for_the_tributary_resolves_to_it(self):
+        """CWC rows carry both; "Purna at Gopalkheda" samples the Purna."""
+        result = resolve("Purna at Gopalkheda", river="Tapi", tributary="Purna")
+        assert result.name == "Purna River"
+        assert result.method == "source_field"
+
+    def test_main_river_still_wins_when_not_named_for_the_tributary(self):
+        result = resolve("Tapi at Sarangkheda", river="Tapi", tributary="Purna")
+        assert result.name == "Tapi River"
+
+    def test_spelling_variants_of_sutlej_converge(self):
+        from app.water.matching import canonical_core
+
+        assert canonical_core("SATLUJ") == canonical_core("SUTLEJ")
+
+    def test_fragment_linking_groups_spelling_variants(self, db):
+        from app.models.water import DataSource
+        from app.water.ingestion import link_river_fragments
+
+        source = DataSource(key="t2", name="t", organisation="t")
+        db.add(source)
+        db.flush()
+        _fragment(db, source, "Satluj River", "satluj-river", [(31.10, 76.50)])
+        _fragment(db, source, "Sutlej River", "sutlej-river", [(31.15, 76.60)])
+        assert link_river_fragments(db)["merged"] == 1

@@ -264,6 +264,8 @@ CANONICAL_SPELLINGS: dict[str, str] = {
     "SABARAMATI": "SABARMATI",
     "NARMADHA": "NARMADA",
     "TAPTI": "TAPI",
+    "SATLUJ": "SUTLEJ",
+    "SUTLUJ": "SUTLEJ",
 }
 
 # Drains may share a name with the river they join ("Mithi Nallah", "Mithi
@@ -613,8 +615,20 @@ def resolve(
     ``river`` and ``tributary`` come from the source row. When either is
     populated it wins outright, because a field the provider filled in is
     better evidence than anything parsed out of a free-text label.
+
+    Between the two, the **tributary wins when the station is named for it**.
+    CWC rows carry both ("River: Tapi, Tributary: Purna"), and a station
+    called "Purna at Gopalkheda" samples the Purna, not the Tapi 70 km away;
+    attaching it to the main river put stations far from their own water
+    body, which the geometry QA pass flagged.
     """
-    for field_value in (river, tributary):
+    ordered = [river, tributary]
+    label = normalise_name(station_name)
+    tributary_key = normalise_name(tributary or "")
+    if tributary_key and f" {tributary_key} " in f" {label} ":
+        ordered = [tributary, river]
+
+    for field_value in ordered:
         text = (field_value or "").strip()
         if text and text not in {"-", "--", "NA", "N/A"}:
             display = _title(text)

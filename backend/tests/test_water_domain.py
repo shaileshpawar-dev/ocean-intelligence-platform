@@ -611,3 +611,57 @@ class TestLeadingArticle:
         )
         assert r.name == "Ashwani River"
         assert str(r.water_type) == "river"
+
+
+class TestUnitNormalisation:
+    """Units are converted only when the conversion is exact."""
+
+    def _parse(self, column: str, raw: str):
+        from app.water.parameters import parse_value, resolve
+
+        parameter = resolve(column)
+        assert parameter is not None, column
+        return parameter, parse_value(parameter, raw, source_unit=column)
+
+    def test_same_unit_passes_through(self):
+        _, v = self._parse("Biochemical Oxygen Demand (mg/L)", "3.2")
+        assert (v.value, v.normalized_value, v.unit) == (3.2, 3.2, "mg/L")
+        assert v.flags == []
+
+    def test_microgram_converts_to_milligram(self):
+        from app.water.parameters import BY_KEY, normalise_value
+
+        value, unit = normalise_value(BY_KEY["bod"], 2000.0, "ug/L")
+        assert (value, unit) == (2.0, "mg/L")
+
+    def test_millisiemens_converts_when_plausible(self):
+        _, v = self._parse("Electric Conductivity (mS/cm)", "0.4")
+        assert v.normalized_value == 400.0
+        assert v.unit == "uS/cm"
+        assert v.flags == []
+
+    def test_mislabelled_conductivity_is_not_inflated_and_is_flagged(self):
+        """Both CPCB and CWC label uS/cm values as mS/cm.
+
+        309 mS/cm would be six times seawater; converting on the header
+        would multiply every reading by a thousand.
+        """
+        _, v = self._parse("Electric Conductivity (mS/cm)", "309")
+        assert v.normalized_value == 309.0
+        assert "unit_assumed_us_cm" in v.flags
+
+    def test_unknown_unit_is_not_converted(self):
+        from app.water.parameters import BY_KEY, normalise_value
+
+        value, unit = normalise_value(BY_KEY["bod"], 5.0, "grains/gallon")
+        assert (value, unit) == (None, None)
+
+    def test_dimensionless_parameters_are_left_alone(self):
+        _, v = self._parse("pH", "7.4")
+        assert v.value == 7.4 and v.unit is None
+
+    def test_missing_tokens_never_become_zero(self):
+        for token in ("-", "", "NA", "n/a", "nil"):
+            _, value = self._parse("Turbidity (NTU)", token)
+            assert value.is_missing, token
+            assert value.value is None

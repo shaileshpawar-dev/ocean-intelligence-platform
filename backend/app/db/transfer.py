@@ -119,7 +119,7 @@ SYNC_STATEMENTS: list[tuple[str, str]] = [
         UPDATE water_body_geometries
            SET geom = ST_SetSRID(ST_GeomFromGeoJSON(geojson), 4326)
          WHERE geojson IS NOT NULL
-           AND (geom IS NULL OR ST_IsEmpty(geom))
+
         """,
     ),
     (
@@ -128,7 +128,7 @@ SYNC_STATEMENTS: list[tuple[str, str]] = [
         UPDATE admin_boundaries
            SET geom = ST_Multi(ST_SetSRID(ST_GeomFromGeoJSON(geojson), 4326))
          WHERE geojson IS NOT NULL
-           AND (geom IS NULL OR ST_IsEmpty(geom))
+
         """,
     ),
     (
@@ -137,7 +137,7 @@ SYNC_STATEMENTS: list[tuple[str, str]] = [
         UPDATE monitoring_stations
            SET geom = ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)
          WHERE longitude IS NOT NULL AND latitude IS NOT NULL
-           AND (geom IS NULL OR ST_IsEmpty(geom))
+
         """,
     ),
     (
@@ -146,7 +146,7 @@ SYNC_STATEMENTS: list[tuple[str, str]] = [
         UPDATE water_bodies
            SET centroid_geom = ST_SetSRID(ST_MakePoint(centroid_lon, centroid_lat), 4326)
          WHERE centroid_lon IS NOT NULL AND centroid_lat IS NOT NULL
-           AND (centroid_geom IS NULL OR ST_IsEmpty(centroid_geom))
+
         """,
     ),
     (
@@ -157,7 +157,7 @@ SYNC_STATEMENTS: list[tuple[str, str]] = [
                    ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat, 4326)
                )
          WHERE min_lon IS NOT NULL
-           AND (extent_geom IS NULL OR ST_IsEmpty(extent_geom))
+
         """,
     ),
     (
@@ -166,7 +166,7 @@ SYNC_STATEMENTS: list[tuple[str, str]] = [
         UPDATE water_images
            SET footprint_geom = ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat, 4326)
          WHERE min_lon IS NOT NULL
-           AND (footprint_geom IS NULL OR ST_IsEmpty(footprint_geom))
+
         """,
     ),
 ]
@@ -175,7 +175,9 @@ SYNC_STATEMENTS: list[tuple[str, str]] = [
 def sync_geometry(db: Session) -> dict[str, int]:
     """Derive PostGIS geometry from stored GeoJSON / coordinates.
 
-    Returns rows updated per table. A no-op on SQLite.
+    Always recomputed rather than filled only where empty: an import that
+    replaces a water body's GeoJSON must not leave the previous derived
+    geometry in place. Returns rows updated per table; a no-op on SQLite.
     """
     if db.bind is None or db.bind.dialect.name != "postgresql":
         return {}

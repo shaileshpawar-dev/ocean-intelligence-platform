@@ -68,6 +68,18 @@ ANCHOR_KM = 2.0
 CANDIDATE_WINDOW_KM = 60.0
 MAX_ELEMENT_IDS = 200
 
+# Which OSM ``waterway`` values may back which water-body type. Without this,
+# "Krishna Canal" and "Krishna River" both reduce to the core "KRISHNA" and
+# the canal adopted the river's segments.
+WATERWAY_AFFINITY: dict[str, set[str]] = {
+    str(WaterBodyType.RIVER): {"river", "stream", "tidal_channel"},
+    str(WaterBodyType.RIVER_STRETCH): {"river", "stream", "tidal_channel"},
+    str(WaterBodyType.CANAL): {"canal"},
+    str(WaterBodyType.DRAIN): {"drain", "ditch", "stream"},
+    str(WaterBodyType.CREEK): {"river", "stream", "tidal_channel", "canal"},
+    str(WaterBodyType.ESTUARY): {"river", "stream", "tidal_channel"},
+}
+
 
 @dataclass(slots=True)
 class ImportOutcome:
@@ -107,6 +119,10 @@ class FeatureIndex:
         with path.open(encoding="utf-8") as handle:
             for line in handle:
                 record = json.loads(line)
+                # A feature with no coordinates cannot be matched or merged;
+                # it would only surface later as an empty geometry.
+                if not (record.get("geometry") or {}).get("coordinates"):
+                    continue
                 position = len(index.features)
                 index.features.append(record)
                 for name in record.get("names", {}).values():
@@ -138,10 +154,7 @@ class FeatureIndex:
                 b = record["bbox"]
                 if not geo.bbox_intersects(box, (b[0], b[1], b[2], b[3])):
                     continue
-                if not name_matches(
-                    {f"name{i}": v for i, v in enumerate(record["names"].values())},
-                    cores,
-                ):
+                if not name_matches(record["names"], cores):
                     continue
                 out.append(record)
         return out
@@ -235,7 +248,16 @@ def match_body(
         return ImportOutcome("no_candidates", "No named feature of this name nearby.")
 
     wanted_kind = "line" if policy.kind == "line" else "area"
-    typed = [r for r in records if r["kind"] == wanted_kind] or records
+    typed = [r for r in records if r["kind"] == wanted_kind]
+    allowed = WATERWAY_AFFINITY.get(str(body.water_type))
+    if allowed and wanted_kind == "line":
+        typed = [r for r in typed if (r["tags"].get("waterway") or "") in allowed]
+    if not typed:
+        return ImportOutcome(
+            "no_candidates",
+            "Named features exist but none is the right kind of water feature "
+            f"for a {str(body.water_type).replace('_', ' ')}.",
+        )
 
     distances: dict[int, float] = {}
     if wanted_kind == "line":
@@ -313,6 +335,11 @@ def match_body(
                 station_distances_km=distances,
             )
         geometry = _merge_areas(chosen_records)
+
+    if not list(geo.iter_coords(geometry)):
+        return ImportOutcome(
+            "no_candidates", "Matching features carried no usable coordinates."
+        )
 
     for station in located:
         if station.id not in distances:

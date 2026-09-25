@@ -55,6 +55,7 @@ from app.water.matching import (
     RIVER_LINK_KM,
     MatchResult,
     apply_propagation,
+    canonical_core,
     haversine_km,
     is_plausible_merge,
     merge_key,
@@ -875,9 +876,9 @@ def link_river_fragments(db: Session) -> dict:
             WaterBody.water_type.in_([WaterBodyType.RIVER, WaterBodyType.CANAL])
         )
     ):
-        groups[(str(body.water_type), normalise_name(_plain_name(body.name)))].append(
-            body
-        )
+        # Canonical spelling, so "Satluj" and "Sutlej" fall in one group.
+        key = canonical_core(normalise_name(_plain_name(body.name)))
+        groups[(str(body.water_type), key)].append(body)
 
     merged = 0
     touched: set[int] = set()
