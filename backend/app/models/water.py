@@ -68,12 +68,74 @@ class DataSource(Base, TimestampMixin):
     expected_cadence: Mapped[str] = mapped_column(String(32), default="unknown")
     """Declared publishing frequency. Drives freshness judgement."""
 
+    # -- What kind of source this is ---------------------------------------
+    # Recorded as facts, not as a ranking. Two agencies measuring the same
+    # river are not "better" and "worse"; they sample on different schedules,
+    # by different methods, and the reader is told which is which.
+    source_type: Mapped[str] = mapped_column(String(32), default="government")
+    """``government``, ``state_board``, ``research``, ``satellite``, ``other``."""
+
+    observation_method: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    """How the numbers are produced, e.g. ``manual_grab_sample``,
+    ``continuous_sensor``, ``satellite_derived``."""
+
+    reliability_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    """What is known about the source's reliability, in words, with its
+    basis. Never a score."""
+
+    dataset_version: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    """Version or edition the last sync read, where the source declares one."""
+
     last_success_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    last_sync_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_observation_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    """The newest observation this source has supplied. Answers "is there
+    anything newer?" without scanning the observation table."""
+
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_available: Mapped[bool] = mapped_column(Boolean, default=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class SourceResourceState(Base, TimestampMixin):
+    """What was last ingested from one resource of one source.
+
+    Exists so a re-run is cheap. The portal reports a row count per resource
+    for the price of one request; when it has not changed since the last
+    successful ingest, that resource is skipped instead of being paged in
+    full. Re-importing 582,192 observations to discover that nothing moved is
+    what this avoids.
+    """
+
+    __tablename__ = "source_resource_state"
+    __table_args__ = (
+        UniqueConstraint("source_key", "resource_id", name="uq_source_resource"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_key: Mapped[str] = mapped_column(String(64), index=True)
+    resource_id: Mapped[str] = mapped_column(String(120), index=True)
+    description: Mapped[str | None] = mapped_column(String(300), nullable=True)
+
+    last_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    """Row count the source reported at the last successful ingest."""
+
+    last_ingested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_observation_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    records_ingested: Mapped[int] = mapped_column(Integer, default=0)
+    dataset_version: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    last_status: Mapped[str] = mapped_column(String(24), default="ok")
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class State(Base, TimestampMixin):

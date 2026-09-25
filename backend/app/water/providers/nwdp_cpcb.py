@@ -170,6 +170,13 @@ class NWDPCPCBProvider(WaterDataProvider):
             cadence=Cadence.MONTHLY,
             access="public",
             implemented=True,
+            source_type="government",
+            observation_method="manual_grab_sample",
+            reliability_note=(
+                "National regulator's own monitoring programme. The published "
+                "extracts lag by years: the newest rows seen are from 2021 "
+                "(a few Meghalaya stations reach 2025)."
+            ),
             notes=[
                 "Public CKAN datastore API; no key or registration required.",
                 "SQL endpoint is disabled upstream, so aggregation happens "
@@ -415,6 +422,21 @@ class NWDPCPCBProvider(WaterDataProvider):
         raise ProviderUnavailableError(
             f"NWDP {action} failed after {MAX_RETRIES} attempts: {last_error}"
         )
+
+    def resource_total(self, plan: FetchPlan) -> int | None:
+        """Row count for one resource, in a single request.
+
+        CKAN returns the total alongside an empty page, so this costs one
+        request instead of paging the whole resource.
+        """
+        try:
+            payload = self._call(
+                "datastore_search", {"resource_id": plan.identifier, "limit": 0}
+            )
+        except ProviderUnavailableError:
+            return None
+        total = (payload.get("result") or {}).get("total")
+        return int(total) if total is not None else None
 
     def health(self) -> tuple[bool, str]:
         """Probe the portal with the cheapest call that proves it works."""

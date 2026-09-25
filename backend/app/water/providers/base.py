@@ -59,6 +59,17 @@ class ProviderInfo:
     """False for a declared-but-unbuilt adapter. Shown honestly rather than
     presented as a working integration."""
 
+    source_type: str = "government"
+    """``government``, ``state_board``, ``research``, ``satellite``, ``other``.
+    A fact about the publisher, not a ranking."""
+
+    observation_method: str | None = None
+    """``manual_grab_sample``, ``continuous_sensor``, ``satellite_derived``…"""
+
+    reliability_note: str | None = None
+    """What is known about reliability, in words with its basis. Never a
+    score: the platform has no basis for scoring an agency."""
+
     notes: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -73,6 +84,9 @@ class ProviderInfo:
             "expected_cadence": str(self.cadence),
             "access": self.access,
             "implemented": self.implemented,
+            "source_type": self.source_type,
+            "observation_method": self.observation_method,
+            "reliability_note": self.reliability_note,
             "notes": self.notes,
         }
 
@@ -148,6 +162,16 @@ class WaterDataProvider(ABC):
             ProviderUnavailableError: the source could not be read. Never returns
                 an empty iterator to signal failure.
         """
+
+    def resource_total(self, plan: FetchPlan) -> int | None:
+        """Rows the source currently reports for one plan, or ``None``.
+
+        Used for incremental sync: when the count is unchanged since the last
+        successful ingest, the resource is skipped instead of being paged in
+        full. Providers that cannot answer cheaply return ``None``, and the
+        resource is always fetched.
+        """
+        return None
 
     def health(self) -> tuple[bool, str]:
         """Cheap reachability probe.

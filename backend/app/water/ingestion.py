@@ -44,6 +44,7 @@ from app.models.water import (
     IngestionRun,
     MonitoringStation,
     RiverStretch,
+    SourceResourceState,
     State,
     WaterBody,
     WaterBodyStatusHistory,
@@ -383,6 +384,9 @@ def ensure_source(db: Session, provider: WaterDataProvider) -> DataSource:
     source.licence = info.licence
     source.expected_cadence = str(info.cadence)
     source.notes = "\n".join(info.notes) if info.notes else None
+    source.source_type = info.source_type
+    source.observation_method = info.observation_method
+    source.reliability_note = info.reliability_note
     db.flush()
     return source
 
@@ -394,6 +398,7 @@ def ingest_provider(
     states: list[str] | None = None,
     max_plans: int | None = None,
     max_rows_per_plan: int | None = None,
+    incremental: bool = True,
 ) -> dict:
     """Run one ingestion pass and return its summary.
 
@@ -406,6 +411,8 @@ def ingest_provider(
             the state filter precisely so a run can be scoped.
         max_plans: cap the number of resources fetched, for smoke tests.
         max_rows_per_plan: cap rows per resource, for smoke tests.
+        incremental: skip resources whose row count is unchanged since the
+            last successful ingest. Pass False to re-read everything.
     """
     provider = get_provider(provider_key)
     source = ensure_source(db, provider)
@@ -433,7 +440,12 @@ def ingest_provider(
     touched_stations: set[int] = set()
     plans_done = 0
 
+    skipped = 0
     for plan in plans:
+        state = _resource_state(db, provider_key, plan)
+        if incremental and _unchanged(provider, plan, state):
+            skipped += 1
+            continue
         try:
             counts = _ingest_plan(
                 db,
@@ -468,6 +480,7 @@ def ingest_provider(
             registry.reset()
             continue
 
+        _record_resource_state(db, state, counts)
         run.records_seen += counts["seen"]
         run.records_valid += counts["valid"]
         run.records_rejected += counts["rejected"]
@@ -499,6 +512,7 @@ def ingest_provider(
         "river_fragments_linked": linked["merged"],
         "plans_total": len(plans),
         "plans_completed": plans_done,
+        "plans_skipped_unchanged": skipped,
         "states": states or "all",
         "provider": provider_key,
     }
@@ -529,6 +543,54 @@ def ingest_provider(
     return summary
 
 
+def _resource_state(db: Session, source_key: str, plan: FetchPlan) -> SourceResourceState:
+    """The stored sync state for one resource, created if absent."""
+    state = db.scalar(
+        select(SourceResourceState).where(
+            SourceResourceState.source_key == source_key,
+            SourceResourceState.resource_id == plan.identifier,
+        )
+    )
+    if state is None:
+        state = SourceResourceState(
+            source_key=source_key,
+            resource_id=plan.identifier,
+            description=plan.description,
+        )
+        db.add(state)
+        db.flush()
+    state.description = plan.description
+    return state
+
+
+def _unchanged(
+    provider: WaterDataProvider, plan: FetchPlan, state: SourceResourceState
+) -> bool:
+    """Whether the source still reports exactly what was last ingested."""
+    if state.last_ingested_at is None or state.last_total is None:
+        return False
+    total = provider.resource_total(plan)
+    if total is None:
+        return False
+    if total != state.last_total:
+        return False
+    logger.info(
+        "resource_unchanged",
+        extra={"resource": plan.identifier, "rows": total},
+    )
+    return True
+
+
+def _record_resource_state(db: Session, state: SourceResourceState, counts: dict) -> None:
+    """Store what this resource yielded, for the next incremental run."""
+    state.last_total = counts.get("seen", 0) or state.last_total
+    state.records_ingested = counts.get("inserted", 0)
+    state.last_ingested_at = datetime.now(UTC)
+    state.last_observation_at = counts.get("max_observed_at") or state.last_observation_at
+    state.last_status = "ok"
+    state.last_error = None
+
+
 def _ingest_plan(
     db: Session,
     provider: WaterDataProvider,
@@ -547,7 +609,14 @@ def _ingest_plan(
             break
         rows.append(row)
 
-    counts = {"seen": len(rows), "valid": 0, "rejected": 0, "inserted": 0, "duplicate": 0}
+    counts: dict = {
+        "seen": len(rows),
+        "valid": 0,
+        "rejected": 0,
+        "inserted": 0,
+        "duplicate": 0,
+        "max_observed_at": max((r.observed_at for r in rows), default=None),
+    }
     if not rows:
         return counts
 
@@ -831,12 +900,16 @@ def _name_river_group(db: Session, targets: list[WaterBody]) -> None:
     """Give the main river the plain name and qualify the others by state.
 
     Slugs are left alone: they are identifiers that pages and answers link
-    to. Only display names change, and every old name stays as an alias.
+    to, and so is ``normalized_name``, which is the identity key every match
+    is made against: rewriting it from the display name turned the key
+    "AMRAVATI" into "AMRAVATI RIVER" and broke later matching.
     """
     if not targets:
         return
     plain = _plain_name(targets[0].name)
-    primary = max(targets, key=lambda b: b.station_count or 0)
+    # Best-sampled wins; on a tie the body that already carries the plain
+    # name keeps it, so nothing is renamed for no reason.
+    primary = max(targets, key=lambda b: (b.station_count or 0, b.name == plain))
     for body in targets:
         if body is primary:
             wanted = plain
@@ -851,7 +924,6 @@ def _name_river_group(db: Session, targets: list[WaterBody]) -> None:
                 aliases.append(body.name)
             body.aliases = aliases
             body.name = wanted
-            body.normalized_name = normalise_name(wanted)
 
 
 def link_river_fragments(db: Session) -> dict:

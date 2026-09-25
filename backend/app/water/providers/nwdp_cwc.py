@@ -78,6 +78,13 @@ class NWDPCWCProvider(NWDPCPCBProvider):
             cadence=Cadence.MONTHLY,
             access="public",
             implemented=True,
+            source_type="government",
+            observation_method="manual_grab_sample",
+            reliability_note=(
+                "Central Water Commission's own network, published on the same "
+                "portal as CPCB's. Rows reach April 2025, so it is the newer "
+                "of the two for the stations it covers."
+            ),
             notes=[
                 "Public CKAN datastore API; no key or registration required.",
                 "Carries observations into 2025, where the CPCB extracts stop "

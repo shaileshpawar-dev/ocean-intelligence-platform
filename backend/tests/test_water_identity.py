@@ -362,3 +362,33 @@ class TestTributaryAndSpelling:
         _fragment(db, source, "Satluj River", "satluj-river", [(31.10, 76.50)])
         _fragment(db, source, "Sutlej River", "sutlej-river", [(31.15, 76.60)])
         assert link_river_fragments(db)["merged"] == 1
+
+    def test_renaming_never_rewrites_the_identity_key(self, db):
+        """Regression: qualifying a name changed normalized_name.
+
+        ``normalized_name`` is the key every later match is made against.
+        Deriving it from the display name turned "AMRAVATI" into
+        "AMRAVATI RIVER", after which nothing matched the river again.
+        """
+        from app.models.water import DataSource, State
+        from app.water.ingestion import link_river_fragments
+
+        source = DataSource(key="t3", name="t", organisation="t")
+        db.add(source)
+        tn = State(code="TN", name="Tamil Nadu", slug="tamil-nadu")
+        db.add(tn)
+        db.flush()
+        near = _fragment(db, source, "Amravati River", "amravati-river", [(10.73, 77.52)])
+        near.normalized_name = "AMRAVATI"
+        far = _fragment(db, source, "Amravati River", "amravati-2", [(21.60, 73.00)])
+        far.normalized_name = "AMRAVATI"
+        far.state_id = tn.id
+        db.commit()
+
+        link_river_fragments(db)
+        bodies = db.query(WaterBody).filter(WaterBody.normalized_name == "AMRAVATI").all()
+        assert len(bodies) == 2, "both keep the canonical key"
+        assert {b.name for b in bodies} == {
+            "Amravati River",
+            "Amravati River (Tamil Nadu)",
+        }
