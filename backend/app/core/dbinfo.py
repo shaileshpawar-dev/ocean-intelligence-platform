@@ -83,21 +83,26 @@ def _probe(db_engine: Engine) -> BackendInfo:
     )
 
 
-@lru_cache(maxsize=1)
-def backend_info() -> BackendInfo:
-    """Probe the database once per process."""
+@lru_cache(maxsize=8)
+def backend_for(db_engine: Engine) -> BackendInfo:
+    """Probe one engine once. Cached, because it is asked per request."""
     try:
-        return _probe(engine)
+        return _probe(db_engine)
     except Exception as exc:  # reported, never fatal here
         logger.warning("database_probe_failed", extra={"error": str(exc)})
         return BackendInfo(
-            dialect=engine.dialect.name, server_version=None, postgis_version=None
+            dialect=db_engine.dialect.name, server_version=None, postgis_version=None
         )
 
 
-def spatial_sql_available() -> bool:
-    """Whether queries may use PostGIS functions."""
-    return backend_info().has_postgis
+def backend_info() -> BackendInfo:
+    """Probe the application's own database."""
+    return backend_for(engine)
+
+
+def spatial_sql_available(db_engine: Engine | None = None) -> bool:
+    """Whether queries on this engine may use PostGIS functions."""
+    return backend_for(db_engine or engine).has_postgis
 
 
 def report_backend() -> BackendInfo:

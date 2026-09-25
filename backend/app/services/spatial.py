@@ -21,11 +21,18 @@ BBox = tuple[float, float, float, float]  # (min_lat, min_lon, max_lat, max_lon)
 
 
 def available(db: Session) -> bool:
-    """Whether this session can run PostGIS SQL."""
+    """Whether *this session's* database can run PostGIS SQL.
+
+    The session's own bind is probed rather than the application engine: a
+    test or an offline job can legitimately hold a session on a different
+    database from the one the web app serves.
+    """
+    bind = db.bind if db.bind is not None else db.get_bind()
+    engine = getattr(bind, "engine", bind)
     return (
-        db.bind is not None
-        and db.bind.dialect.name == "postgresql"
-        and spatial_sql_available()
+        engine is not None
+        and engine.dialect.name == "postgresql"
+        and spatial_sql_available(engine)
     )
 
 

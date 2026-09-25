@@ -6,6 +6,9 @@
     python -m app.water.cli health
     python -m app.water.cli seed-standards
     python -m app.water.cli db upgrade | current | copy-from-sqlite | sync-geometry
+    python -m app.water.cli extract-osm --pbf data/raw/osm/india-latest.osm.pbf
+    python -m app.water.cli import-geometry --file data/processed/india-water.ndjson
+    python -m app.water.cli geometry-qa
     python -m app.water.cli reconcile
     python -m app.water.cli import-boundaries [--offline]
     python -m app.water.cli import-cities
@@ -138,6 +141,68 @@ def _db(action: str, sqlite_url: str | None) -> int:
         return 0
     print(f"Unknown db action {action!r}.")
     return 2
+
+
+def _extract_osm(pbf: str, out: str | None, cache: str | None) -> int:
+    """One pass over an OSM extract, writing named water features."""
+    from app.water.osm_extract import write_features
+
+    pbf_path = Path(pbf)
+    if not pbf_path.exists():
+        print(f"{pbf_path} not found. Download a regional extract first, e.g.")
+        print("  curl -L -o data/raw/osm/india-latest.osm.pbf \\")
+        print("       https://download.geofabrik.de/asia/india-latest.osm.pbf")
+        return 2
+    out_path = Path(out) if out else pbf_path.with_suffix(".water.ndjson")
+    # A country-sized extract holds more node locations than fit comfortably
+    # in memory, so the cache goes on disk unless told otherwise.
+    if cache is None:
+        big = pbf_path.stat().st_size > 400_000_000
+        cache = (
+            f"sparse_file_array,{out_path.with_suffix('.nodecache')}"
+            if big
+            else "flex_mem"
+        )
+    print(
+        f"Reading {pbf_path.name} ({pbf_path.stat().st_size / 1e6:.0f} MB), cache={cache}"
+    )
+    meta = write_features(pbf_path, out_path, cache=cache)
+    print(json.dumps(meta, indent=2))
+    return 0
+
+
+def _import_geometry(
+    path: str, water_types: list[str] | None, limit: int | None, only_missing: bool
+) -> int:
+    """Match bulk OSM water features to water bodies, with no network calls."""
+    from app.water.geometry_import import import_geometry
+
+    file_path = Path(path)
+    if not file_path.exists():
+        print(f"{file_path} not found. Run 'extract-osm' first.")
+        return 2
+    init_db()
+    with SessionLocal() as db:
+        summary = import_geometry(
+            db,
+            file_path,
+            water_types=water_types,
+            limit=limit,
+            only_missing=only_missing,
+        )
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
+def _geometry_qa(fix: bool) -> int:
+    """Report geometry that fails validation."""
+    from app.water.geometry_qa import run_checks
+
+    init_db()
+    with SessionLocal() as db:
+        report = run_checks(db, repair=fix)
+    print(json.dumps(report, indent=2, default=str))
+    return 0
 
 
 def _seed_standards() -> int:
@@ -312,6 +377,25 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("refresh-status", help="Recompute cached water-body statuses.")
     sub.add_parser("health", help="Probe every registered provider.")
     sub.add_parser("seed-standards", help="Write the reference catalogue to the DB.")
+    imp = sub.add_parser(
+        "import-geometry", help="Match bulk OSM features to water bodies (offline)."
+    )
+    imp.add_argument("--file", required=True, help="Extract .ndjson from extract-osm.")
+    imp.add_argument("--type", nargs="+", help="Only these water types.")
+    imp.add_argument("--limit", type=int)
+    imp.add_argument(
+        "--only-missing", action="store_true", help="Skip bodies already matched."
+    )
+    qa = sub.add_parser("geometry-qa", help="Validate stored geometry.")
+    qa.add_argument(
+        "--fix", action="store_true", help="Repair what can be repaired, and log it."
+    )
+    osm = sub.add_parser(
+        "extract-osm", help="Extract named water features from an OSM .pbf extract."
+    )
+    osm.add_argument("--pbf", required=True)
+    osm.add_argument("--out", help="Output .ndjson (default: alongside the .pbf).")
+    osm.add_argument("--cache", help="osmium node cache, e.g. flex_mem.")
     db_parser = sub.add_parser("db", help="Migrations and database transfer.")
     db_parser.add_argument(
         "action",
@@ -362,6 +446,12 @@ def main(argv: list[str] | None = None) -> int:
         return _refresh()
     if args.command == "reconcile":
         return _reconcile()
+    if args.command == "import-geometry":
+        return _import_geometry(args.file, args.type, args.limit, args.only_missing)
+    if args.command == "geometry-qa":
+        return _geometry_qa(args.fix)
+    if args.command == "extract-osm":
+        return _extract_osm(args.pbf, args.out, args.cache)
     if args.command == "db":
         return _db(args.action, args.sqlite_url)
     if args.command == "seed-standards":

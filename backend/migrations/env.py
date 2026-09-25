@@ -19,7 +19,10 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
+# A URL set by the caller (tests, or "alembic -x url=...") wins; otherwise the
+# application's own DATABASE_URL is used, so migrations and the app agree.
+if not config.get_main_option("sqlalchemy.url", None):
+    config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
 target_metadata = Base.metadata
 
 # PostGIS ships its own tables (spatial_ref_sys, the TIGER geocoder schema,
