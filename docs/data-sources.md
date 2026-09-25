@@ -66,13 +66,32 @@ Both were verified via search results quoting the criteria; the CPCB site's
 TLS certificate was expired at the time, so the PDF itself could not be
 fetched directly. The numeric values match across independent sources.
 
-## Geospatial sources (Phase 2)
+## Water-quality sources
+
+| Source | Agency | Coverage | Newest data | Identity |
+|---|---|---|---|---|
+| `cpcb_nwdp` | Central Pollution Control Board | 35 state/UT codes, 211 resources | mostly 2021 (a few stations 2025) | `River` empty — parsed from station names |
+| `cwc_nwdp` | Central Water Commission | 29 states, 169 fetchable resources | **2025** | `River`/`Tributary` populated — used directly |
+
+Both are CKAN datastore resources on the National Water Data Portal, public
+and unauthenticated. Neither overwrites the other: an observation belongs to
+one source and the UI shows which agency measured what, and when.
+
+Checked for newer data and **not** usable from this environment:
+India-WRIS (`indiawris.gov.in` resolves but every connection is reset),
+`rtwqms.cpcb.gov.in` (no such host), data.gov.in (requires an API key for the
+same CPCB tables). State pollution-control-board portals publish reports
+rather than machine-readable feeds; the Karnataka (KSPCB, to 2022) and Sikkim
+(2025–26) tables on NWDP are candidates for a future phase.
+
+## Geospatial sources (Phase 2, extended in Phase 3)
 
 Each verified live before use; access dates are 2026-09-21/22.
 
 | Source | Used for | Access | Licence |
 |---|---|---|---|
-| OpenStreetMap via Overpass API (`overpass-api.de`) | River lines, lake/reservoir polygons, matched to stations | Public, no key; heavily rate-limited | ODbL 1.0 |
+| **OpenStreetMap regional extract (Geofabrik, `india-latest.osm.pbf`)** | Bulk geometry: 42k named water lines, 31k named water areas, matched offline | Public download, ~1.7 GB | ODbL 1.0 |
+| OpenStreetMap via Overpass API (`overpass-api.de`) | One-off geometry refreshes only; replaced for bulk work | Public, no key; heavily rate-limited | ODbL 1.0 |
 | NRSC Bhuvan WMS (`bhuvan-vec1.nrsc.gov.in/bhuvan/wms`, layer `basemap:waterbody_DEM`) | Map overlay of surface water bodies | Public WMS; WFS disabled, so raster only | © NRSC/ISRO, attributed |
 | geoBoundaries IND ADM1 / ADM2 (commit `9469f09`) | State and district boundaries, city extents | Public GitHub release | CC BY 2.5 IN (ADM1), ODbL (ADM2) |
 | Microsoft Planetary Computer — Sentinel-2 L2A (STAC + data API) | Satellite scenes and an NDTI proxy for matched lakes | Public, no key | Copernicus Sentinel data, free and open |

@@ -54,57 +54,28 @@ cross-state fragment linking (`test_water_identity.py`).
 
 ## 3. Geometry
 
+**Phase 3 replaced the per-body Overpass calls with a bulk pipeline.** The
+full design is in [GEOMETRY_PIPELINE.md](GEOMETRY_PIPELINE.md); in short:
+one Geofabrik regional extract is read once (`cli extract-osm`), and matching
+runs entirely offline (`cli import-geometry`) by name cores, water-type
+affinity, station proximity and — for rivers — connectivity along shared
+endpoints. A national pass takes seconds instead of hours and makes no
+network requests.
+
+Storage is unchanged: GeoJSON plus full provenance in
+`water_body_geometries`, with the PostGIS `geom` column derived from it
+(`cli db sync-geometry`) and indexed with GIST. `cli geometry-qa` validates
+what was stored.
+
 ### Sources checked
 
 | Source | Result |
 |---|---|
-| **OpenStreetMap via Overpass** | Used. Named rivers, canals, lakes, reservoirs; ODbL. |
-| **NRSC Bhuvan** WMS (`basemap:waterbody_DEM`) | Renders national surface water bodies as raster. WFS is disabled (ServiceUnavailable), so it cannot supply vector shapes. Offered as a map overlay with attribution. |
-| **geoBoundaries** IND ADM1 / ADM2 | Used for state and district boundaries (see §5). |
-| India-WRIS / WBIS vector downloads | Not openly machine-readable; not used. |
-
-### Model (`water_body_geometries`)
-
-`geometry_type` (Point / LineString / MultiLineString / Polygon /
-MultiPolygon), GeoJSON, bounding box, and provenance: `source`,
-`source_ids` (OSM element ids), `source_licence`, `retrieved_at`, `version`
-(the OSM database timestamp Overpass reported), `confidence`, `match_method`,
-`match_notes`, `feature_count`, `clipped`.
-
-### Matching (`geometry.py`)
-
-For each body: a window around each station (rivers 6 km, lakes 2.5 km) is
-queried for water features of the right kind that carry a `name` or
-`name:en` tag. Names are matched **locally** against the body's name cores
-(type words removed; platform qualifiers like "(Bihar)" removed; known
-variants such as Ganges/Kaveri/Son added) across `name`, `name:en`,
-`alt_name`, `official_name`, `int_name`, `old_name`. A candidate is accepted
-only when a station lies on or near it (rivers ≤ 2 km, lakes ≤ 1 km).
-
-- **Rivers are monitored reaches**: lines are clipped to the station windows,
-  not drawn source-to-sea. The UI says so.
-- **Ambiguity is refused**: if a station is equally close to two same-named
-  lakes, the body is marked `ambiguous` and gets no geometry.
-- Outcomes are recorded per body (`geometry_status`): matched, no candidates,
-  not near stations, ambiguous, no station coordinates, name too generic,
-  unsupported type, source error. The detail page shows the reason.
-- `cli fetch-geometry [--type lake reservoir] [--state MH] [--slug …]` runs
-  politely: one request at a time, pauses, back-off after errors, a 75 s hard
-  deadline per request. The public Overpass instance rate-limits heavily; a
-  full national pass takes hours and some bodies end as `source_error`, to be
-  retried on the next pass.
-
-Two bugs found and fixed while running this against real data are pinned by
-tests: a server-side key regex that made every query a full tag scan (the
-main source of timeouts), and `out tags geom`, which drops relation members
-so no lake mapped as a multipolygon could ever match.
-
-### Station ↔ geometry relationship
-
-Each station gets `relationship_type` (`within_geometry`, `on_geometry`,
-`near_geometry`, `name_match_only`, or `name_match` when no shape exists) and
-`geometry_distance_m`. A station named for a river but kilometres from its
-shape is shown as exactly that.
+| **OpenStreetMap regional extract (Geofabrik)** | Used. Named rivers, canals, lakes, reservoirs; ODbL. |
+| OpenStreetMap via Overpass API | Phase 2 approach; still supported for one-off refreshes, no longer used for bulk. |
+| **NRSC Bhuvan** WMS (`basemap:waterbody_DEM`) | Map overlay only: WFS is disabled, so it cannot supply vector shapes. |
+| **geoBoundaries** IND ADM1 / ADM2 | State and district boundaries (see §5). |
+| India-WRIS / WBIS | Unreachable from this environment (connection reset at the transport layer); not used. |
 
 ## 4. River stretches
 
@@ -168,6 +139,22 @@ Sentinel-2 L2A via Microsoft Planetary Computer (STAC search + data API).
   `SATELLITE_OBSERVED`, no unit, `calibrated: false`, with its caveat.
   It is never compared with a standard or placed beside CPCB laboratory
   turbidity as if comparable.
+
+### Persistence
+
+The **evidence** is in the database (`water_images`): scene id, sensor,
+acquisition date, footprint, cover fractions, the derived index and its
+provenance. Only the *picture* is a URL, rendered on demand by the imagery
+service. So:
+
+- a fresh container shows every processed scene immediately, with no
+  reprocessing and no downloads at start-up;
+- if the imagery service is unreachable, the record still reads correctly
+  and the page simply has no picture;
+- no image binaries sit in PostgreSQL. If a deployment wants to stop
+  depending on the external renderer, the chips belong in S3 (see
+  [PRODUCTION_ARCHITECTURE.md](PRODUCTION_ARCHITECTURE.md)); nothing else
+  changes, because the row already carries the metadata.
 
 Rivers are not attempted (centrelines; 10 m pixels do not isolate most
 channels). Example outcomes: Hussain Sagar accepted a 16 Jun 2026 scene
