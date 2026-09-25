@@ -61,43 +61,59 @@ body classified, and what the platform derives.
 
 ```mermaid
 flowchart LR
-    SRC["CPCB surface-water data<br/>NWDP public API · 35 states"] --> ING["Ingestion<br/>validate · normalise · identity · reconcile"]
-    ING --> DB[("2.6k water bodies · 4k stations<br/>582k observations")]
-    OSM["OpenStreetMap (Overpass)"] --> GEO["Geometry matching<br/>name + station proximity"]
+    CPCB["CPCB surface water<br/>NWDP · 35 states · to 2021"] --> ING["Ingestion jobs<br/>validate · normalise · identity · reconcile"]
+    CWC["CWC surface water<br/>NWDP · 29 states · to 2025"] --> ING
+    OSM["OpenStreetMap extract<br/>(Geofabrik .osm.pbf)"] --> GEO["Geometry import<br/>offline name + proximity match"]
     GB["geoBoundaries ADM1/ADM2"] --> BND["States · districts · cities"]
     S2["Sentinel-2 L2A<br/>Planetary Computer"] --> SAT["Satellite evidence<br/>per-lake cloud/water checks"]
-    STD["Reference catalogue<br/>EP 1986 item 93 · CPCB A–E"] --> ENG["Status engine<br/>4 evidence layers"]
+    ING --> DB[("PostgreSQL 16 + PostGIS 3.4<br/>observations · geometry · boundaries")]
     GEO --> DB
     BND --> DB
     SAT --> DB
-    DB --> ENG --> API["FastAPI /api/v1"]
+    DB --> ENG["Status engine<br/>4 evidence layers"] --> API["FastAPI /api/v1"]
     DB --> QA["Water Q&A (no LLM)"] --> API
     API --> MAP["India water map"]
     API --> PAGES["Water body · state · city · station pages"]
 ```
 
+The jobs on the left run on their own schedule. The application on the right
+**serves what they produced** — a fresh container connects to the database
+and answers; it never ingests, matches geometry or downloads scenes.
+
 ### The honest centre of the product
 
-Most state extracts on the portal end in 2020–2021 (a few Meghalaya stations
-run to 2025). So every water body shows two things, never merged:
+Two agencies publish on the same portal, and they disagree about *when*:
+CPCB's extracts mostly stop in 2021, the Central Water Commission's run to
+2025. Both are kept, neither overwrites the other, and every water body shows
+what is known and when:
 
-| | Mithi River, Mumbai |
+| | Brahmaputra River |
 |---|---|
-| **Current data availability** | Latest available observation 02 Dec 2021 — *current condition cannot be established from this dataset* |
-| **Latest measured status** | *High concern* **as of 02 Dec 2021**, compared against the EP 1986 bathing-water criteria (faecal coliform 4.4× the limit) |
+| **Current data availability** | *Cannot be established from this dataset* — newest observation 05 Jun 2025, 477 days old |
+| **Newest source** | CWC Surface Water Quality, 05 Jun 2025 |
+| **Also measured by** | CPCB Surface Water Quality, to 01 Jan 2025 |
+| **Latest measured status** | *Elevated* as measured, against the EP 1986 bathing-water criteria |
+
+The trend chart draws one line per agency and never joins them: the gap
+between CPCB's last sample and CWC's next one is not a trend.
 
 ## Real data
 
-- **CPCB Surface Water Quality (Manual)** via the National Water Data Portal:
-  all 35 state/UT codes, 211 resources, **582,192 observations, 4,000
-  stations, ~2,600 water bodies**, zero ingestion errors.
-  Live counts: [DATASET_COVERAGE.md](docs/DATASET_COVERAGE.md).
-- **OpenStreetMap** geometry for rivers and lakes, accepted only where CPCB
-  stations lie on or near it, with OSM ids, licence and retrieval time.
+- **CPCB Surface Water Quality (Manual)** — all 35 state/UT codes, 582,192
+  observations, mostly to 2021.
+- **CWC Surface Water Quality (Manual)** — the Central Water Commission's own
+  network on the same portal, 29 states, **observations into 2025**, with the
+  `River` and `Tributary` columns populated (CPCB leaves them empty).
+- **OpenStreetMap**, from a Geofabrik regional extract read once offline:
+  42k named water lines and 31k named water areas, matched to water bodies by
+  name, type and station proximity, with OSM ids, licence and extract version.
 - **geoBoundaries** state and district boundaries; **35 cities** defined as
-  documented groupings of whole districts.
+  documented groupings of whole districts, with real polygon extents.
 - **Sentinel-2 L2A** scenes for matched lakes, kept only when the lake itself
-  is clear of cloud. [Sources and what was not usable](docs/data-sources.md).
+  is clear of cloud.
+
+Live counts: [DATASET_COVERAGE.md](docs/DATASET_COVERAGE.md).
+[Sources and what was not usable](docs/data-sources.md).
 
 ## Status, not a score
 
@@ -161,34 +177,47 @@ added fields.
 
 ## Run it locally
 
+SQLite is fine for development:
+
 ```bash
 python -m venv .venv && source .venv/Scripts/activate
 pip install -r backend/requirements-dev.txt
-cd frontend && npm install && npm run build && cd ..
-cd backend
-python -m app.water.cli ingest --all           # ~12 min, public source, no key
-python -m app.water.cli import-boundaries      # geoBoundaries, cached under data/raw
-python -m app.water.cli import-cities
-python -m app.water.cli fetch-geometry --type lake reservoir pond   # slow: public Overpass
-python -m app.water.cli fetch-imagery
-python -m app.water.cli coverage --markdown ../docs/DATASET_COVERAGE.md
+cd frontend && npm install && npm run build && cd ../backend
+python -m app.water.cli db upgrade
+python -m app.water.cli seed-standards
+python -m app.water.cli ingest --states MH DL      # public sources, no key
 uvicorn app.main:app --port 8000
 ```
 
-Open <http://localhost:8000/app/map>. `cli --help` lists `reconcile`,
-`seed-standards`, `import-classifications` and `refresh-status`.
+For the production-like stack (PostgreSQL + PostGIS, jobs separate from the
+app), see [INGESTION.md](docs/INGESTION.md) for the full order and
+[PRODUCTION_ARCHITECTURE.md](docs/PRODUCTION_ARCHITECTURE.md) for the shape:
+
+```bash
+docker compose up -d db                 # PostGIS
+docker compose run --rm migrate         # schema to head
+docker compose run --rm jobs python -m app.water.cli ingest --all
+docker compose up -d backend            # serves; never ingests
+```
+
+Open <http://localhost:8000/app/map>. `cli --help` lists every job:
+`extract-osm`, `import-geometry`, `geometry-qa`, `fetch-imagery`,
+`import-boundaries`, `import-cities`, `reconcile`, `coverage`, `db …`.
 
 ## Deployment
 
-V2 is **not deployed**; the public demo above is V1 and was not changed.
-See the readiness notes in [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md).
+**Not deployed.** The public demo above is V1 and was not changed. The
+staging stack runs locally; what remains before production is listed in
+[IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md).
 
 ## Water limitations
 
-Old data (current condition cannot be established almost anywhere); parsed
-identity; partial geometry coverage limited by the public Overpass service;
-no official polluted-stretch data loaded; no designated uses recorded; the
-satellite value is an uncalibrated proxy; cities are district groupings.
+Even the newest source is months old, so "current condition" is still
+reported as unestablished; CPCB identity is parsed from station names;
+geometry covers the named water bodies OSM knows and refuses ambiguous
+matches; no official polluted-stretch classification is loaded (CPCB
+publishes it as PDF); the satellite value is an uncalibrated index, not
+turbidity; cities are documented district groupings.
 [Full list](docs/limitations.md#8-india-water-intelligence).
 
 ---

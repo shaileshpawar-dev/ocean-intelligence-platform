@@ -248,65 +248,72 @@ the point of the project.
 
 ## 8. India water intelligence
 
-**Data age.** Most state extracts on the National Water Data Portal end in
-2020–2021; ten Meghalaya stations run to January 2025. For almost every water
-body the current condition cannot be established, and the UI says exactly
-that. The "latest measured status" is a dated statement about that sample.
+**Data age.** CPCB's published extracts mostly end in 2020–2021. The Central
+Water Commission's extracts on the same portal run to **April–June 2025**, so
+for the water bodies CWC covers the newest observation is months rather than
+years old — but still older than the monthly cadence both agencies declare.
+The platform therefore continues to say "current condition cannot be
+established" for almost every water body, and names the newest source and its
+date. Nothing here is real-time; no source the platform can reach is.
 
-**Coverage.** All 35 state/UT codes the source lists are ingested (211
-resources, 582,192 observations, 4,000 stations). See
-[DATASET_COVERAGE.md](DATASET_COVERAGE.md). Ladakh and Andaman & Nicobar have
-boundaries but no CPCB resource in the catalogue.
+**Two sources, not one truth.** CPCB and CWC sample different stations by
+different programmes. Their observations are stored separately, shown as
+separate series, and never averaged. Where both measure a parameter the
+status uses the most recent value and says which agency produced it. The
+platform does not rank agencies: `source_type`, `observation_method` and a
+reliability note are recorded as facts.
 
-**Identity is parsed, not supplied.** The source's `River` column is empty,
-so water bodies are resolved from station names by rules. About a quarter of
-stations sit on bodies typed "Unclassified" because the label names no water
-body; ~100 stations resolve to no body. Untyped same-named bodies are not
-linked across states (generic names would cause false merges), so e.g.
-"Damanganga" can appear more than once. River/canal fragments are linked by a
-150 km station-to-station rule, which could in principle join two distinct
-same-named rivers that close together.
+**Coverage.** CPCB: 35 state/UT codes. CWC: 29. See
+[DATASET_COVERAGE.md](DATASET_COVERAGE.md) for the counts, which are computed
+from the database.
 
-**Standards.** Rivers are compared against the EP Rules 1986 bathing-water
-criteria because that is what CPCB uses to identify polluted stretches; the
-UI states that basis. No designated use is recorded for any water body, so
-lakes, coastal points and groundwater show "Reference comparison
-unavailable". IS 10500 (groundwater/drinking) is not loaded. The CPCB
-designated-best-use PDF was unreachable; class values were cross-checked from
-independent sources.
+**Identity is still parsed for CPCB.** CPCB's `River` column is empty, so its
+water bodies come from station names. CWC populates `River` and `Tributary`,
+which is stronger evidence, and a station named for a tributary now resolves
+to the tributary. Untyped same-named bodies are not linked across states, so
+generic names can still appear more than once.
 
-**Polluted river stretches.** CPCB's PRS report could not be retrieved in a
-machine-readable form. The importer exists; no official classification is
-loaded, so `POLLUTED_STRETCH` currently appears nowhere.
-
-**Geometry.** Shapes come from OpenStreetMap and are accepted only when
-stations are on or near them. Coverage is partial: the public Overpass
-service rate-limits heavily, so a national pass takes hours and ends with
-bodies in `source_error` to retry; others have no named OSM feature near
-their stations. Rivers are drawn as monitored reaches, not whole courses.
-Bhuvan's water-body layer is a raster overlay only (its WFS is disabled).
-Boundaries (geoBoundaries 2011/2021) are not the official boundaries of
+**Geometry** comes from an OpenStreetMap regional extract, matched offline by
+name, water-type affinity and station proximity, with connectivity for rivers.
+Coverage is partial: many small ponds and unclassified bodies have no named
+OSM feature near their stations, and some matches are refused as ambiguous
+rather than guessed. Shapes are OSM's, not a survey; boundaries are
+geoBoundaries (2011 states, 2021 districts), not the official boundaries of
 India.
 
-**Cities** are curated district groupings (35 cities), not municipal
-boundaries; "near a city" is measured from the bounding box of its
-districts.
+**Standards.** Rivers are compared against the EP Rules 1986 bathing-water
+criteria, which is what CPCB uses to identify polluted stretches; everything
+else says "reference comparison unavailable" unless a designated use is
+recorded or chosen. IS 10500 (drinking/groundwater) is not loaded. No
+official polluted-stretch classification is loaded: CPCB publishes it as PDF
+and the import path is there, waiting for a machine-readable table.
 
-**Satellite.** One path: Sentinel-2 L2A for matched lake polygons, strict
-per-lake cloud/water checks. Many lakes have no accepted scene (monsoon
-cloud, dry reservoirs, outlines larger than the current water). The NDTI
-value is an uncalibrated relative proxy with no unit; it is not turbidity
-and is never compared with a standard. Rivers are not attempted. No
-official or field photographs are integrated (the model supports them).
+**Units.** Conversions are applied only where they are exact. Both agencies
+label conductivity mS/cm while publishing µS/cm magnitudes; the platform
+resolves that by magnitude and flags the observation `unit_assumed_us_cm`
+rather than multiplying every reading by a thousand. A unit it cannot convert
+is stored unconverted and flagged `unit_not_convertible`, never compared.
 
-**Geometry helpers** are planar approximations in pure Python (no GEOS);
-adequate for the kilometre-scale decisions made here. A PostGIS path is
-documented in [POSTGIS_MIGRATION.md](POSTGIS_MIGRATION.md) and not executed.
+**Satellite.** One path: Sentinel-2 L2A for lakes with a matched polygon,
+with strict per-lake cloud and water checks. The stored value is an
+uncalibrated index (NDTI) with no unit — not turbidity, never compared with a
+standard or with CPCB's NTU. Scene pictures are rendered on demand by the
+imagery service; if that service is unreachable the stored evidence (scene,
+date, cover fractions, index) still displays.
 
-**Q&A.** Intent routing and place resolution are rule-based; unusual
-phrasings fail towards "no evidence", never towards an invented answer. No
-language model is used on the water path.
+**Database.** PostgreSQL 16 + PostGIS 3.4 is the production target and is
+what the spatial queries run on; SQLite remains for development and tests,
+where the Python geometry helpers are used instead. The two paths are
+exercised by the same test suite, but only PostGIS is exercised against the
+full national dataset.
+
+**Deployment.** Nothing is deployed. The staging stack runs locally under
+`docker compose`; AWS outbound access to the portals, OSM mirrors and the
+imagery service has not been verified from inside a VPC.
 
 **Not implemented:** status-history population, user-reported issues,
-pollution-source context, basin boundaries, automated scheduling of
-ingestion/geometry refresh.
+pollution-source attribution, basin boundaries, vector tiles, scheduled
+ingestion (the jobs exist and are idempotent; nothing schedules them yet).
+
+**Q&A.** Rule-based routing and entity resolution; no language model is used
+on the water path. Unusual phrasings fail towards "no evidence".
