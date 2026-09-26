@@ -169,3 +169,62 @@ class TestAnswersExplainTheConflict:
             "Older Agency Water Quality",
         }
         assert by_source["Newer Agency Water Quality"]["latest"].startswith("2025")
+
+
+class TestFreshnessFollowsTheNewestSource:
+    """An hourly sensor reading must not be judged by a monthly cadence.
+
+    Until a real-time source existed every source was monthly, so the
+    freshness assessment used CPCB's cadence for everything. With sensor data
+    in the database that produced "within the source's monthly reporting
+    cadence" about a reading twenty minutes old.
+    """
+
+    def test_the_cadence_comes_from_the_source_that_measured_it(self, db, monkeypatch):
+        from app.models.water import DataSource
+        from app.services.water_service import _cadence_for_measurements
+        from app.water.freshness import Cadence
+        from app.water.status import Measurement
+        from sqlalchemy import select
+
+        db.add(
+            DataSource(
+                key="sensor",
+                name="Sensor Agency",
+                organisation="Sensors",
+                expected_cadence="hourly",
+            )
+        )
+        db.add(
+            DataSource(
+                key="lab",
+                name="Lab Agency",
+                organisation="Labs",
+                expected_cadence="monthly",
+            )
+        )
+        db.commit()
+
+        old = Measurement(
+            parameter_key="bod",
+            value=12.0,
+            observed_at=OLD,
+            unit="mg/L",
+            source="Lab Agency",
+        )
+        new = Measurement(
+            parameter_key="ph",
+            value=7.9,
+            observed_at=NEW,
+            unit="pH",
+            source="Sensor Agency",
+        )
+        assert _cadence_for_measurements(db, [old, new]) is Cadence.HOURLY
+        assert _cadence_for_measurements(db, [old]) is Cadence.MONTHLY
+        assert db.scalar(select(DataSource).where(DataSource.key == "sensor"))
+
+    def test_no_measurements_falls_back_rather_than_guessing(self, db):
+        from app.services.water_service import _cadence_for_measurements
+        from app.water.freshness import Cadence
+
+        assert _cadence_for_measurements(db, []) in set(Cadence)

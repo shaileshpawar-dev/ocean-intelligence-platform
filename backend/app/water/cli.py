@@ -86,7 +86,11 @@ def _reconcile() -> int:
 
     from app.models.water import WaterBody
     from app.services.water_service import refresh_cached_statuses
-    from app.water.ingestion import _recompute_denormalised, link_river_fragments
+    from app.water.ingestion import (
+        _recompute_denormalised,
+        link_river_fragments,
+        prune_empty_bodies,
+    )
 
     init_db()
     with SessionLocal() as db:
@@ -100,6 +104,8 @@ def _reconcile() -> int:
             json.dumps(
                 {
                     "river_fragments_linked": linked["merged"],
+                    # Records left holding nothing after an identity change.
+                    "empty_bodies_pruned": prune_empty_bodies(db),
                     "statuses_refreshed": refresh_cached_statuses(db),
                 }
             )

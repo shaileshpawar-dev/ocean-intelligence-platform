@@ -52,6 +52,7 @@ from app.models.water import (
     WaterQualityObservation,
 )
 from app.water.matching import (
+    CONFIDENCE,
     DRAIN_TO_RIVER_KM,
     RIVER_LINK_KM,
     MatchResult,
@@ -466,7 +467,38 @@ def ingest_provider(
     db.add(run)
     db.commit()
 
-    plans = provider.plans(states=states)
+    try:
+        plans = provider.plans(states=states)
+    except ProviderUnavailableError as exc:
+        # The source could not even be asked what it holds. Record it against
+        # the run and leave every existing observation exactly where it is.
+        run.finished_at = datetime.now(UTC)
+        run.status = "failed"
+        run.errors = [f"provider unavailable while planning: {exc}"[:500]]
+        source.last_error = str(exc)[:500]
+        source.is_available = False
+        db.commit()
+        logger.error(
+            "ingest_planning_failed",
+            extra={"provider": provider_key, "error": str(exc)[:200]},
+        )
+        return {
+            "run_id": run.run_id,
+            "source": provider_key,
+            "status": "failed",
+            "started_at": run.started_at.isoformat(),
+            "finished_at": run.finished_at.isoformat(),
+            "plans_total": 0,
+            "plans_completed": 0,
+            "records_seen": 0,
+            "records_inserted": 0,
+            "records_duplicate": 0,
+            "stations_created": 0,
+            "water_bodies_created": 0,
+            "stations_reassigned": 0,
+            "errors": run.errors,
+        }
+
     if max_plans is not None:
         plans = plans[:max_plans]
 
@@ -635,6 +667,119 @@ def _record_resource_state(db: Session, state: SourceResourceState, counts: dict
     state.last_error = None
 
 
+def _body_is_corroborated(db: Session, match: MatchResult, state: State | None) -> bool:
+    """Whether something outside the label supports the water body it names.
+
+    Finding a body with that name is not enough on its own: a label that
+    invented a body on a previous run would find its own invention and count
+    it as proof. So corroboration is either
+
+    * the body has mapped geometry -- someone matched it to a real feature; or
+    * the identity came from a source field, not from parsing the label.
+
+    Anything else falls through to the geometry check, which can put the
+    station on the river it actually stands on.
+    """
+    from app.models.water_geo import WaterBodyGeometry
+
+    if match.method.startswith("source_"):
+        return True
+
+    key = merge_key(match, state.code if state else None)
+    stmt = select(WaterBody).where(
+        WaterBody.normalized_name == match.normalized_name,
+        WaterBody.water_type == match.water_type,
+    )
+    if key[2]:
+        stmt = stmt.where(WaterBody.state_id == (state.id if state else None))
+    body = db.scalar(stmt)
+    if body is None:
+        return False
+    return (
+        db.scalar(
+            select(WaterBodyGeometry.id).where(WaterBodyGeometry.water_body_id == body.id)
+        )
+        is not None
+    )
+
+
+def _body_for(
+    db: Session,
+    registry: _Registry,
+    match: MatchResult,
+    state: State | None,
+    district: District | None,
+    sample: ObservationRow,
+) -> WaterBody | None:
+    """The water body a station belongs to, by name or, failing that, by place.
+
+    The rule is: **never invent a water body for a station that stands on one
+    already mapped.** CPCB's real-time stations are named for the place rather
+    than the water -- "Road Bridge on Gandak, Hajipur", "Sahebganj", "Farakka
+    Barrage, Road Bridge" -- and taking those labels literally created water
+    bodies called "Road" and "Farakka Barrage". So:
+
+    * a label that resolves to a water body **already in the database** is
+      believed, and the station joins it;
+    * otherwise, if the station stands within a kilometre of a mapped river,
+      that river is the answer, recorded as ``spatial_nearest_geometry`` with
+      the distance so the claim can be checked and overturned;
+    * otherwise the label is taken at face value, creating a new body, or the
+      station stays unclassified -- which for two of the forty is the truth.
+
+    The first rule is what keeps the source's own word on top: "River Ganga,
+    U/s of Narora Barrage on LGC" stays the Ganga, though the nearest mapped
+    line is the Hindon 34 m away.
+    """
+    if sample.latitude is None or sample.longitude is None:
+        return registry.water_body(
+            match, state, district, sample.latitude, sample.longitude
+        )
+
+    named = match.is_identified and match.method != "unclassified"
+    if named and _body_is_corroborated(db, match, state):
+        return registry.water_body(
+            match, state, district, sample.latitude, sample.longitude
+        )
+
+    from app.services import spatial
+
+    found = spatial.nearest_mapped_body(db, sample.latitude, sample.longitude)
+    if found is None:
+        return registry.water_body(
+            match, state, district, sample.latitude, sample.longitude
+        )
+
+    body_id, metres = found
+    body = db.get(WaterBody, body_id)
+    if body is None:
+        return registry.water_body(
+            match, state, district, sample.latitude, sample.longitude
+        )
+
+    # Rewrite the match so the station's position descriptor and the body's
+    # provenance both record how this was decided.
+    match.name = body.name
+    match.normalized_name = body.normalized_name
+    match.water_type = body.water_type
+    match.method = "spatial_nearest_geometry"
+    match.confidence = CONFIDENCE["spatial_nearest_geometry"]
+    match.notes = [
+        *match.notes,
+        f"Station stands {metres:.0f} m from the mapped {body.name}; its own "
+        "label names no water body.",
+    ]
+    logger.info(
+        "station_identified_by_geometry",
+        extra={
+            "station": sample.station_name[:80],
+            "water_body": body.slug,
+            "metres": metres,
+        },
+    )
+    return body
+
+
 def _ingest_plan(
     db: Session,
     provider: WaterDataProvider,
@@ -695,10 +840,8 @@ def _ingest_plan(
         sample = group[0]
         state = registry.state(sample.state_name, sample.state_code)
         district = registry.district(state, sample.district)
-        body = registry.water_body(
-            matches[name], state, district, sample.latitude, sample.longitude
-        )
         match = matches[name]
+        body = _body_for(db, registry, match, state, district, sample)
         station = registry.station(sample, body, state, district, match.position)
         if body is not None and match.aliases:
             known = list(body.aliases or [])
@@ -786,12 +929,43 @@ def _merge_into(db: Session, source: WaterBody, target: WaterBody) -> None:
         db.query(model).filter(model.water_body_id == source.id).update(
             {model.water_body_id: target.id}, synchronize_session=False
         )
-    # A geometry matched to either fragment describes only part of the merged
-    # body; both are dropped so the next geometry pass matches the whole.
+    # A shape matched to either fragment describes only part of the merged
+    # body, so it has to be re-matched -- but deleting it first would take the
+    # river off the map until the geometry job next runs, which on a schedule
+    # can be a day. Keep one shape (the survivor's if it has one), drop the
+    # duplicate, and mark the body for re-matching.
+    kept = db.scalar(
+        select(WaterBodyGeometry)
+        .where(WaterBodyGeometry.water_body_id == target.id)
+        .limit(1)
+    )
+    if kept is None:
+        moved = db.scalar(
+            select(WaterBodyGeometry)
+            .where(WaterBodyGeometry.water_body_id == source.id)
+            .limit(1)
+        )
+        if moved is not None:
+            moved.water_body_id = target.id
+            # Flush before the bulk delete below, or the session still thinks
+            # this row belongs to the source and the delete strands it.
+            db.flush()
+            kept = moved
     db.query(WaterBodyGeometry).filter(
-        WaterBodyGeometry.water_body_id.in_([source.id, target.id])
+        WaterBodyGeometry.water_body_id == source.id
     ).delete(synchronize_session=False)
-    target.geometry_status = "not_attempted"
+    # "stale_after_merge" is a match that was true of a fragment and has not
+    # been re-checked against the whole. import-geometry --only-missing picks
+    # it up, because it is not "matched".
+    target.geometry_status = "stale_after_merge" if kept is not None else "not_attempted"
+    logger.info(
+        "merge_geometry",
+        extra={
+            "target": target.slug,
+            "source": source.slug,
+            "kept_geometry": kept is not None,
+        },
+    )
     db.query(WaterBodyStatusHistory).filter(
         WaterBodyStatusHistory.water_body_id == source.id
     ).delete(synchronize_session=False)
@@ -801,6 +975,50 @@ def _merge_into(db: Session, source: WaterBody, target: WaterBody) -> None:
             aliases.append(name)
     target.aliases = aliases
     db.delete(source)
+
+
+def prune_empty_bodies(db: Session) -> int:
+    """Delete water bodies that hold nothing at all, and say how many.
+
+    A corrected identity moves a station off the body its label invented,
+    leaving a record with no stations and no observations. Such a body is not
+    a gap in the data -- it is an artefact of a superseded reading of a label
+    -- so it goes. Anything holding a station, an observation, a geometry, a
+    classification or a satellite scene stays, whatever its name looks like.
+    """
+    from app.models.water_geo import SourceClassification, WaterBodyGeometry, WaterImage
+
+    empty = db.scalars(
+        select(WaterBody).where(
+            ~select(MonitoringStation.id)
+            .where(MonitoringStation.water_body_id == WaterBody.id)
+            .exists(),
+            ~select(WaterQualityObservation.id)
+            .where(WaterQualityObservation.water_body_id == WaterBody.id)
+            .exists(),
+            ~select(WaterBodyGeometry.id)
+            .where(WaterBodyGeometry.water_body_id == WaterBody.id)
+            .exists(),
+            ~select(SourceClassification.id)
+            .where(SourceClassification.water_body_id == WaterBody.id)
+            .exists(),
+            ~select(WaterImage.id)
+            .where(WaterImage.water_body_id == WaterBody.id)
+            .exists(),
+        )
+    ).all()
+    for body in empty:
+        db.query(WaterBodyStatusHistory).filter(
+            WaterBodyStatusHistory.water_body_id == body.id
+        ).delete(synchronize_session=False)
+        db.delete(body)
+    if empty:
+        db.commit()
+        logger.info(
+            "pruned_empty_water_bodies",
+            extra={"count": len(empty), "slugs": [b.slug for b in empty][:20]},
+        )
+    return len(empty)
 
 
 def _reconcile_untyped(db: Session) -> dict:

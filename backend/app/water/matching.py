@@ -74,6 +74,9 @@ CONFIDENCE = {
     "source_sub_basin": 0.55,
     "station_name_parse": 0.75,
     "type_propagated": 0.6,
+    # The station's own label named nothing; its coordinates put it on a
+    # mapped river. Good evidence, but weaker than being told.
+    "spatial_nearest_geometry": 0.6,
     "unclassified": 0.4,
 }
 

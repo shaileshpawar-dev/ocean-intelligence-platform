@@ -441,3 +441,38 @@ class TestSpatialQueries:
         checks = set(report["by_check"])
         assert "invalid_source_geometry" in checks
         assert "invalid_geometry" not in checks
+
+    def test_a_station_is_identified_by_the_river_it_stands_on(self, pg: Session):
+        """When the label names no water body, the coordinates decide.
+
+        CPCB's real-time stations are named for the place -- "Road Bridge on
+        Gandak, Hajipur", "Sahebganj" -- so reading the label literally
+        invented water bodies called "Road". A station 100 m from the mapped
+        Mithi is on the Mithi, and the distance is recorded so the claim can
+        be checked.
+        """
+        self._fixture(pg)
+        from app.services import spatial
+
+        # The Mithi's geometry in the fixture runs from (72.84,19.04) to
+        # (72.86,19.06). A point beside it:
+        found = spatial.nearest_mapped_body(pg, 19.0405, 72.8405)
+        assert found is not None
+        body_id, metres = found
+        assert body_id == 1, "the mapped Mithi, not the far river"
+        assert metres < 200
+
+    def test_nothing_is_claimed_when_no_geometry_is_near(self, pg: Session):
+        """Two of the forty real-time stations are like this; they stay unresolved."""
+        self._fixture(pg)
+        from app.services import spatial
+
+        assert spatial.nearest_mapped_body(pg, 22.0, 79.0) is None
+
+    def test_the_search_radius_is_honoured(self, pg: Session):
+        self._fixture(pg)
+        from app.services import spatial
+
+        far_point = (19.20, 72.84)  # ~18 km north of the Mithi fixture
+        assert spatial.nearest_mapped_body(pg, *far_point, max_metres=1000) is None
+        assert spatial.nearest_mapped_body(pg, *far_point, max_metres=30000) is not None

@@ -80,6 +80,32 @@ def _cadence_for(db: Session, source_key: str = "cpcb_nwdp") -> Cadence:
         return Cadence.UNKNOWN
 
 
+def _cadence_for_measurements(db: Session, measurements: list[Measurement]) -> Cadence:
+    """The cadence of whichever source produced the newest measurement.
+
+    A water body can hold hourly sensor readings and decade-old laboratory
+    samples at once. Judging the newest reading against another source's
+    cadence produced sentences like "within the source's monthly reporting
+    cadence" about a value taken twenty minutes ago.
+    """
+    if not measurements:
+        return _cadence_for(db)
+    newest = max(measurements, key=lambda m: m.observed_at)
+    if not newest.source:
+        return _cadence_for(db)
+    source = db.scalar(
+        select(DataSource).where(
+            or_(DataSource.name == newest.source, DataSource.key == newest.source)
+        )
+    )
+    if source is None:
+        return _cadence_for(db)
+    try:
+        return Cadence(source.expected_cadence)
+    except ValueError:
+        return Cadence.UNKNOWN
+
+
 # ---------------------------------------------------------------------------
 # Status
 # ---------------------------------------------------------------------------
@@ -204,7 +230,7 @@ def _classify(
             measurements,
             reference=selection,
             classifications=classifications,
-            cadence=_cadence_for(db),
+            cadence=_cadence_for_measurements(db, measurements),
             now=newest,
         )
         # With the clock stopped at the sample date the freshness sentence
@@ -226,7 +252,7 @@ def _classify(
         measurements,
         reference=selection,
         classifications=classifications,
-        cadence=_cadence_for(db),
+        cadence=_cadence_for_measurements(db, measurements),
     )
 
 
@@ -775,7 +801,7 @@ def station_detail(db: Session, station_id: int) -> dict | None:
             "comparison": compare(meta, value, selection.standard).to_dict(),
         }
 
-    cadence = _cadence_for(db)
+    cadence = _cadence_for_measurements(db, measurements)
     present = evaluate(measurements, reference=selection, cadence=cadence)
     historical = (
         evaluate(

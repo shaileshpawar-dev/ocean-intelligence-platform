@@ -274,9 +274,18 @@ class TestRiverFragmentLinking:
             )
             == 4
         )
-        # A geometry of one fragment does not describe the merged river.
-        assert db.scalar(select(func.count(WaterBodyGeometry.id))) == 0
-        assert rivers[0].geometry_status == "not_attempted"
+        # A geometry matched to one fragment does not describe the whole
+        # merged river, so it must be re-matched -- but it is kept, and moved
+        # to the survivor, rather than deleted. Deleting it took the Ganga and
+        # its 134 stations off the map the moment an unrelated ingest ran a
+        # reconcile, and nothing put it back until the geometry job next ran.
+        # Incomplete is not the same as wrong.
+        remaining = db.scalars(select(WaterBodyGeometry)).all()
+        assert len(remaining) == 1
+        assert remaining[0].water_body_id == a.id, "moved to the surviving body"
+        assert rivers[0].geometry_status == "stale_after_merge", (
+            "flagged for the next geometry pass, which treats it as missing"
+        )
 
     def test_qualifier_dropped_when_whole_group_merges(self, db):
         from app.water.ingestion import link_river_fragments

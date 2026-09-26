@@ -14,12 +14,14 @@ from app.water.providers.base import (
     ProviderUnavailableError,
     WaterDataProvider,
 )
+from app.water.providers.cpcb_rtwqms import CPCBRealTimeProvider
 from app.water.providers.nwdp_cpcb import NWDPCPCBProvider
 from app.water.providers.nwdp_cwc import NWDPCWCProvider
 
 PROVIDERS: dict[str, type[WaterDataProvider]] = {
     "cpcb_nwdp": NWDPCPCBProvider,
     "cwc_nwdp": NWDPCWCProvider,
+    "cpcb_rtwqms": CPCBRealTimeProvider,
 }
 
 

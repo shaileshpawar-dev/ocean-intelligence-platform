@@ -118,6 +118,47 @@ def bodies_within_radius(
     return [(int(r[0]), round(float(r[1]), 2)) for r in rows]
 
 
+def nearest_mapped_body(
+    db: Session, latitude: float, longitude: float, *, max_metres: float = 1000.0
+) -> tuple[int, float] | None:
+    """The mapped water body a point stands on, with its distance in metres.
+
+    Used when a station's name identifies no water body. Only mapped
+    geometry counts -- a shape someone drew from OpenStreetMap and that this
+    platform matched -- so the answer is always traceable to a feature, and
+    the distance travels with it so a reader can judge it.
+
+    Returns ``None`` when nothing is mapped within ``max_metres``, which is
+    the honest outcome for a station in a place the map does not cover.
+    """
+    if not available(db):
+        return None
+    row = db.execute(
+        text(
+            """
+            SELECT g.water_body_id,
+                   ST_Distance(
+                       g.geom::geography,
+                       ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography
+                   ) AS metres
+              FROM water_body_geometries g
+             WHERE g.geom IS NOT NULL
+               AND ST_DWithin(
+                       g.geom::geography,
+                       ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography,
+                       :metres
+                   )
+             ORDER BY metres
+             LIMIT 1
+            """
+        ),
+        {"lat": latitude, "lon": longitude, "metres": max_metres},
+    ).first()
+    if row is None:
+        return None
+    return int(row[0]), round(float(row[1]), 1)
+
+
 def bodies_near_city(
     db: Session,
     city_id: int,
