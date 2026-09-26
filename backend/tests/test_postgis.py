@@ -386,3 +386,60 @@ class TestSpatialQueries:
         near = spatial.stations_near_city(pg, city_id=1, radius_km=25)
         assert near is not None
         assert 9 in [i for i, _ in near]
+
+    def test_derived_geometry_is_valid_even_when_the_source_is_not(self, pg: Session):
+        """A self-intersecting OSM polygon must not break spatial queries.
+
+        `geometry-qa --fix` used to repair the derived column, and the next
+        `db sync-geometry` re-derived it from the GeoJSON and put the flaw
+        back. Validity belongs in the derivation; the stored GeoJSON stays as
+        retrieved and the QA report still names the source as invalid.
+        """
+        self._fixture(pg)
+        from app.db.transfer import sync_geometry
+
+        bowtie = (
+            '{"type":"Polygon","coordinates":'
+            "[[[72.80,19.00],[72.90,19.10],[72.90,19.00],[72.80,19.10],"
+            "[72.80,19.00]]]}"
+        )
+        pg.execute(
+            text(
+                "INSERT INTO water_body_geometries (water_body_id, geometry_type, "
+                " geojson, min_lat, min_lon, max_lat, max_lon, source, source_ids, "
+                " retrieved_at, confidence, match_method, match_notes, feature_count, "
+                " clipped, created_at, updated_at) VALUES "
+                "(2,'Polygon',:gj,19.00,72.80,19.10,72.90,'osm','[]',:t,'high','t',"
+                " '[]',1,false,:t,:t)"
+            ),
+            {"gj": bowtie, "t": WHEN},
+        )
+        pg.commit()
+
+        assert not pg.execute(
+            text("SELECT ST_IsValid(ST_GeomFromGeoJSON(:gj))"), {"gj": bowtie}
+        ).scalar_one(), "the fixture must be an invalid polygon"
+
+        sync_geometry(pg)
+
+        assert pg.execute(
+            text(
+                "SELECT ST_IsValid(geom) FROM water_body_geometries "
+                "WHERE water_body_id = 2"
+            )
+        ).scalar_one(), "the derived geometry must be usable"
+        assert (
+            pg.execute(
+                text(
+                    "SELECT geojson FROM water_body_geometries WHERE water_body_id = 2"
+                )
+            ).scalar_one()
+            == bowtie
+        ), "the stored GeoJSON is the provenance copy and must not be rewritten"
+
+        from app.water.geometry_qa import run_checks
+
+        report = run_checks(pg)
+        checks = set(report["by_check"])
+        assert "invalid_source_geometry" in checks
+        assert "invalid_geometry" not in checks

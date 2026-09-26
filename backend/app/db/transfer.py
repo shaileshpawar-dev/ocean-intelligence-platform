@@ -24,6 +24,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from sqlalchemy import Engine, Table, create_engine, delete, func, insert, select, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from app.core.logging import get_logger
@@ -115,9 +116,15 @@ def _reset_sequences(target: Engine, tables: list[Table]) -> None:
 SYNC_STATEMENTS: list[tuple[str, str]] = [
     (
         "water_body_geometries",
+        # ST_MakeValid at derivation, not afterwards: OpenStreetMap polygons
+        # are occasionally self-intersecting (Vembanad Lake is), which makes
+        # ST_Contains and ST_Intersects unreliable, and a repair applied to
+        # this column later is undone the next time it is derived. The stored
+        # GeoJSON keeps the shape exactly as retrieved, and geometry-qa
+        # reports the source as invalid so the flaw is not hidden.
         """
         UPDATE water_body_geometries
-           SET geom = ST_SetSRID(ST_GeomFromGeoJSON(geojson), 4326)
+           SET geom = ST_MakeValid(ST_SetSRID(ST_GeomFromGeoJSON(geojson), 4326))
          WHERE geojson IS NOT NULL
 
         """,
@@ -183,11 +190,62 @@ def sync_geometry(db: Session) -> dict[str, int]:
         return {}
     updated: dict[str, int] = {}
     for table, statement in SYNC_STATEMENTS:
-        result = db.execute(text(statement))
-        updated[table] = result.rowcount or 0
+        updated[table] = _sync_one(db, table, statement)
     db.commit()
     logger.info("geometry_synced", extra=updated)
     return updated
+
+
+def _sync_one(db: Session, table: str, statement: str) -> int:
+    """Run one derivation, falling back to row by row if a row is unreadable.
+
+    ``ST_GeomFromGeoJSON`` raises on text it cannot parse, and one such row
+    would otherwise abort the derivation for every other row in the table --
+    a whole national geometry sync lost to a single bad record. The fast
+    set-based update is tried first inside a savepoint; if it fails, the rows
+    are done individually and the unreadable ones are skipped and counted.
+    ``cli geometry-qa`` reports them under ``unparseable_geojson``.
+    """
+    savepoint = db.begin_nested()
+    try:
+        result = db.execute(text(statement))
+        savepoint.commit()
+        return result.rowcount or 0
+    except DBAPIError as exc:
+        savepoint.rollback()
+        logger.warning(
+            "geometry_sync_fallback",
+            extra={"table": table, "error": str(exc.orig)[:200]},
+        )
+
+    per_row = statement.replace(
+        "WHERE geojson IS NOT NULL", "WHERE geojson IS NOT NULL AND id = :row_id"
+    )
+    if per_row == statement:  # not a GeoJSON-derived table; nothing to salvage
+        raise
+
+    ids = [
+        row[0]
+        for row in db.execute(
+            text(f"SELECT id FROM {table} WHERE geojson IS NOT NULL")
+        )
+    ]
+    done = 0
+    skipped = 0
+    for row_id in ids:
+        row_savepoint = db.begin_nested()
+        try:
+            db.execute(text(per_row), {"row_id": row_id})
+            row_savepoint.commit()
+            done += 1
+        except DBAPIError:
+            row_savepoint.rollback()
+            skipped += 1
+    if skipped:
+        logger.warning(
+            "geometry_sync_skipped_rows", extra={"table": table, "rows": skipped}
+        )
+    return done
 
 
 def city_extents_from_districts(db: Session) -> int:

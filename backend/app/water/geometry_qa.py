@@ -189,30 +189,72 @@ def _station_checks(
             )
 
 
-def _postgis_checks(db: Session, report: Report, *, repair: bool) -> None:
-    if db.bind is None or db.bind.dialect.name != "postgresql":
+def _postgis_checks(
+    db: Session, report: Report, readable: list[int], *, repair: bool
+) -> None:
+    """Topology checks, over the geometries the structural pass could read.
+
+    ``readable`` matters: ``ST_GeomFromGeoJSON`` raises on text it cannot
+    parse, and a row like that would abort the whole check. Those rows are
+    already reported as ``unparseable_geojson``.
+    """
+    if db.bind is None or db.bind.dialect.name != "postgresql" or not readable:
         return
+    # The check is on the stored GeoJSON, which is the shape as retrieved and
+    # is never rewritten. The derived geom column is made valid when it is
+    # derived (see db/transfer.py), so a flaw in the source stays reported
+    # while spatial queries still work.
     invalid = db.execute(
         text(
             """
-            SELECT w.slug, w.name, ST_IsValidReason(g.geom)
+            SELECT w.slug,
+                   w.name,
+                   ST_IsValidReason(ST_GeomFromGeoJSON(g.geojson)) AS reason
               FROM water_body_geometries g
               JOIN water_bodies w ON w.id = g.water_body_id
-             WHERE g.geom IS NOT NULL AND NOT ST_IsValid(g.geom)
+             WHERE g.id = ANY(:readable)
+               AND NOT ST_IsValid(ST_GeomFromGeoJSON(g.geojson))
             """
-        )
+        ),
+        {"readable": readable},
     ).all()
     for slug, name, reason in invalid:
-        report.add(Finding(slug, name, "invalid_geometry", str(reason), repaired=repair))
-    if repair and invalid:
-        db.execute(
-            text(
-                "UPDATE water_body_geometries SET geom = ST_MakeValid(geom) "
-                "WHERE geom IS NOT NULL AND NOT ST_IsValid(geom)"
+        report.add(
+            Finding(
+                slug,
+                name,
+                "invalid_source_geometry",
+                f"{reason} (the derived geometry column is repaired with "
+                "ST_MakeValid; the stored GeoJSON is left as retrieved)",
+                repaired=False,
             )
         )
-        db.commit()
-        logger.info("geometry_repaired", extra={"count": len(invalid)})
+
+    unusable = db.execute(
+        text(
+            "SELECT COUNT(*) FROM water_body_geometries "
+            "WHERE geom IS NOT NULL AND NOT ST_IsValid(geom)"
+        )
+    ).scalar_one()
+    if unusable:
+        report.add(
+            Finding(
+                "-",
+                f"{unusable} derived geometries",
+                "invalid_geometry",
+                "the derived column is invalid; run 'db sync-geometry'",
+                repaired=repair,
+            )
+        )
+        if repair:
+            db.execute(
+                text(
+                    "UPDATE water_body_geometries SET geom = ST_MakeValid(geom) "
+                    "WHERE geom IS NOT NULL AND NOT ST_IsValid(geom)"
+                )
+            )
+            db.commit()
+            logger.info("geometry_repaired", extra={"count": unusable})
 
     wrong_srid = db.execute(
         text(
@@ -235,11 +277,13 @@ def run_checks(db: Session, *, repair: bool = False) -> dict:
         )
     ).all()
     seen_ids: dict[str, str] = {}
+    readable: list[int] = []
     for row, body in rows:
         report.checked += 1
         geometry = _structural_checks(row, body, report)
         if geometry is None:
             continue
+        readable.append(row.id)
         _station_checks(db, row, body, geometry, report)
         for element in row.source_ids or []:
             if element in seen_ids and seen_ids[element] != body.slug:
@@ -252,7 +296,7 @@ def run_checks(db: Session, *, repair: bool = False) -> dict:
                     )
                 )
             seen_ids[element] = body.slug
-    _postgis_checks(db, report, repair=repair)
+    _postgis_checks(db, report, readable, repair=repair)
     logger.info(
         "geometry_qa", extra={"checked": report.checked, "findings": len(report.findings)}
     )
