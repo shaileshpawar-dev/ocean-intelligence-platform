@@ -226,9 +226,7 @@ def _sync_one(db: Session, table: str, statement: str) -> int:
 
     ids = [
         row[0]
-        for row in db.execute(
-            text(f"SELECT id FROM {table} WHERE geojson IS NOT NULL")
-        )
+        for row in db.execute(text(f"SELECT id FROM {table} WHERE geojson IS NOT NULL"))
     ]
     done = 0
     skipped = 0

@@ -430,9 +430,7 @@ class TestSpatialQueries:
         ).scalar_one(), "the derived geometry must be usable"
         assert (
             pg.execute(
-                text(
-                    "SELECT geojson FROM water_body_geometries WHERE water_body_id = 2"
-                )
+                text("SELECT geojson FROM water_body_geometries WHERE water_body_id = 2")
             ).scalar_one()
             == bowtie
         ), "the stored GeoJSON is the provenance copy and must not be rewritten"

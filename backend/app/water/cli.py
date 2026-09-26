@@ -194,8 +194,13 @@ def _import_geometry(
     if not file_path.exists():
         print(f"{file_path} not found. Run 'extract-osm' first.")
         return 2
+    from app.water.jobs import GEOMETRY, record_job
+
     init_db()
-    with SessionLocal() as db:
+    with (
+        SessionLocal() as db,
+        record_job(db, GEOMETRY, source_key="osm_extract") as counters,
+    ):
         summary = import_geometry(
             db,
             file_path,
@@ -203,6 +208,17 @@ def _import_geometry(
             limit=limit,
             only_missing=only_missing,
         )
+        counters.records_seen = summary.get("bodies_considered", 0)
+        counters.records_inserted = summary.get("matched", 0)
+        counters.records_skipped = (
+            summary.get("no_candidates", 0)
+            + summary.get("not_near_stations", 0)
+            + summary.get("no_station_coordinates", 0)
+        )
+        counters.records_rejected = summary.get("ambiguous", 0) + summary.get(
+            "name_too_generic", 0
+        )
+        counters.detail = summary
     print(json.dumps(summary, indent=2))
     return 0
 
@@ -304,11 +320,15 @@ def _fetch_imagery(slugs: list[str] | None, limit: int | None) -> int:
 
     from app.models.water import WaterBody
     from app.models.water_geo import WaterBodyGeometry
+    from app.water.jobs import SATELLITE, record_job
     from app.water.satellite import fetch_imagery
 
     init_db()
     counts: dict[str, int] = {}
-    with SessionLocal() as db:
+    with (
+        SessionLocal() as db,
+        record_job(db, SATELLITE, source_key="sentinel2_l2a") as counters,
+    ):
         query = (
             select(WaterBody)
             .join(WaterBodyGeometry, WaterBodyGeometry.water_body_id == WaterBody.id)
@@ -319,11 +339,87 @@ def _fetch_imagery(slugs: list[str] | None, limit: int | None) -> int:
             query = select(WaterBody).where(WaterBody.slug.in_(slugs))
         if limit:
             query = query.limit(limit)
-        for body in db.scalars(query).all():
+        bodies = db.scalars(query).all()
+        for body in bodies:
             outcome = fetch_imagery(db, body)
             counts[outcome.status] = counts.get(outcome.status, 0) + 1
             print(f"{body.slug}: {outcome.status} -- {outcome.detail}")
+        counters.records_seen = len(bodies)
+        counters.records_inserted = counts.get("retrieved", 0)
+        # A lake with no cloud-free scene over it is skipped, not failed:
+        # nothing was wrong, the sky was in the way.
+        counters.records_skipped = counts.get("no_scene", 0)
+        counters.records_rejected = sum(
+            n for status, n in counts.items() if status not in {"retrieved", "no_scene"}
+        )
+        counters.detail = dict(counts)
     print(json.dumps(counts, indent=2))
+    return 0
+
+
+def _reindex_water_rag() -> int:
+    """Seed the reference regions and the research corpus, and check retrieval.
+
+    This is what start-up used to do on every boot. On a server database it is
+    a job instead: the rows are the same for every task, so one writer is
+    enough, and a container must not be the thing that writes them.
+    """
+    from app.demo.seed import bootstrap
+    from app.rag.service import build_index, corpus_size, ingest_seed_corpus
+    from app.water.jobs import RAG_INDEX, record_job
+
+    init_db()
+    with SessionLocal() as db, record_job(db, RAG_INDEX, source_key="seed_corpus") as c:
+        bootstrap(db)
+        summary = ingest_seed_corpus(db)
+        documents, chunks = corpus_size(db)
+        # Build the index once here so a broken corpus fails in the job rather
+        # than on a user's first question.
+        index = build_index(db)
+        summary["indexed_chunks"] = len(index.chunks)
+        c.records_seen = summary.get("seed_documents", 0)
+        c.records_inserted = summary.get("chunks_written", 0)
+        c.detail = {**summary, "documents": documents, "chunks": chunks}
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
+def _jobs(limit: int, job_type: str | None) -> int:
+    """Recent job runs, newest first."""
+    from sqlalchemy import select
+
+    from app.models.water import IngestionRun
+
+    init_db()
+    with SessionLocal() as db:
+        query = select(IngestionRun).order_by(IngestionRun.started_at.desc())
+        if job_type:
+            query = query.where(IngestionRun.job_type == job_type)
+        rows = db.scalars(query.limit(limit)).all()
+        runs = [
+            {
+                "job_id": r.run_id,
+                "job_type": r.job_type,
+                "source": r.source_key,
+                "status": r.status,
+                "started_at": r.started_at.isoformat() if r.started_at else None,
+                "finished_at": r.finished_at.isoformat() if r.finished_at else None,
+                "seconds": (
+                    round((r.finished_at - r.started_at).total_seconds(), 1)
+                    if r.finished_at and r.started_at
+                    else None
+                ),
+                "records_seen": r.records_seen,
+                "records_inserted": r.records_inserted,
+                "records_updated": r.records_updated,
+                "records_skipped": r.records_skipped,
+                "records_duplicate": r.records_duplicate,
+                "records_rejected": r.records_rejected,
+                "errors": r.errors,
+            }
+            for r in rows
+        ]
+    print(json.dumps(runs, indent=2))
     return 0
 
 
@@ -382,28 +478,52 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="app.water.cli")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    ingest = sub.add_parser("ingest", help="Ingest CPCB observations from NWDP.")
-    group = ingest.add_mutually_exclusive_group(required=True)
-    group.add_argument("--states", nargs="+", help="State codes, e.g. MH DL KA.")
-    group.add_argument("--all", action="store_true", help="All 35 states (slow).")
-    ingest.add_argument(
-        "--full",
-        action="store_true",
-        help="Re-read every resource, ignoring the stored row counts.",
-    )
-    ingest.add_argument(
-        "--reassign-identity",
-        action="store_true",
-        help=(
-            "Move stations whose water body the current identity rule resolves "
-            "differently, and list every move. For use after the rule changes; "
-            "an ordinary ingest never re-points a station."
+    # Two spellings of one command. "sync-water-data" is the name the
+    # deployment uses -- a scheduler runs a command, and "ingest" alone does
+    # not say what it ingests -- while "ingest" is what the Phase 2 and
+    # Phase 3 documentation says, so both work.
+    for _name, _help in (
+        ("ingest", "Ingest water-quality observations from a provider."),
+        (
+            "sync-water-data",
+            "Ingest water-quality observations (the scheduled job's name).",
         ),
+    ):
+        ingest = sub.add_parser(_name, help=_help)
+        group = ingest.add_mutually_exclusive_group(required=True)
+        group.add_argument("--states", nargs="+", help="State codes, e.g. MH DL KA.")
+        group.add_argument("--all", action="store_true", help="All 35 states (slow).")
+        ingest.add_argument(
+            "--full",
+            action="store_true",
+            help="Re-read every resource, ignoring the stored row counts.",
+        )
+        ingest.add_argument(
+            "--reassign-identity",
+            action="store_true",
+            help=(
+                "Move stations whose water body the current identity rule "
+                "resolves differently, and list every move. For use after the "
+                "rule changes; an ordinary ingest never re-points a station."
+            ),
+        )
+        ingest.add_argument(
+            "--provider",
+            default="cpcb_nwdp",
+            help="Registered provider key (cpcb_nwdp, cwc_nwdp).",
+        )
+
+    jobs = sub.add_parser("jobs", help="Recent job runs (any type), newest first.")
+    jobs.add_argument("--limit", type=int, default=10)
+    jobs.add_argument(
+        "--type",
+        dest="job_type",
+        help="ingestion, geometry, satellite, rag_index or boundaries.",
     )
-    ingest.add_argument(
-        "--provider",
-        default="cpcb_nwdp",
-        help="Registered provider key (cpcb_nwdp, cwc_nwdp).",
+
+    sub.add_parser(
+        "reindex-water-rag",
+        help="Seed reference regions and the research corpus, then build the index.",
     )
 
     sub.add_parser("refresh-status", help="Recompute cached water-body statuses.")
@@ -456,11 +576,17 @@ def main(argv: list[str] | None = None) -> int:
     classifications.add_argument(
         "--reference", required=True, help="Where the table was taken from."
     )
-    imagery = sub.add_parser(
-        "fetch-imagery", help="Retrieve Sentinel-2 scenes for matched lakes."
-    )
-    imagery.add_argument("--slug", nargs="+", help="Only these water bodies.")
-    imagery.add_argument("--limit", type=int, help="At most this many bodies.")
+    # Same command, two names: "process-satellite" is what the scheduler runs.
+    for _name, _help in (
+        ("fetch-imagery", "Retrieve Sentinel-2 scenes for matched lakes."),
+        (
+            "process-satellite",
+            "Retrieve and score Sentinel-2 scenes (the scheduled job's name).",
+        ),
+    ):
+        imagery = sub.add_parser(_name, help=_help)
+        imagery.add_argument("--slug", nargs="+", help="Only these water bodies.")
+        imagery.add_argument("--limit", type=int, help="At most this many bodies.")
     geometry = sub.add_parser(
         "fetch-geometry", help="Match OSM geometry to water bodies (Overpass)."
     )
@@ -472,13 +598,17 @@ def main(argv: list[str] | None = None) -> int:
     coverage.add_argument("--markdown", help="Write DATASET_COVERAGE.md to this path.")
 
     args = parser.parse_args(argv)
-    if args.command == "ingest":
+    if args.command in {"ingest", "sync-water-data"}:
         return _ingest(
             None if args.all else [s.upper() for s in args.states],
             args.provider,
             incremental=not args.full,
             reassign_identity=args.reassign_identity,
         )
+    if args.command == "jobs":
+        return _jobs(args.limit, args.job_type)
+    if args.command == "reindex-water-rag":
+        return _reindex_water_rag()
     if args.command == "refresh-status":
         return _refresh()
     if args.command == "reconcile":
@@ -499,7 +629,7 @@ def main(argv: list[str] | None = None) -> int:
         return _import_cities()
     if args.command == "import-classifications":
         return _import_classifications(args.file, args.source, args.year, args.reference)
-    if args.command == "fetch-imagery":
+    if args.command in {"fetch-imagery", "process-satellite"}:
         return _fetch_imagery(args.slug, args.limit)
     if args.command == "fetch-geometry":
         return _fetch_geometry(args.state, args.slug, args.limit, args.type)

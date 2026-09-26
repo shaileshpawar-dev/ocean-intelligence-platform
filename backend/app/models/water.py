@@ -505,6 +505,13 @@ class IngestionRun(Base, TimestampMixin):
     run_id: Mapped[str] = mapped_column(String(48), unique=True, index=True)
     source_key: Mapped[str] = mapped_column(String(64), index=True)
 
+    job_type: Mapped[str] = mapped_column(
+        String(32), default="ingestion", server_default="ingestion", index=True
+    )
+    """Which kind of job this row records: ``ingestion``, ``geometry``,
+    ``satellite``, ``rag_index`` or ``boundaries``. The table predates the
+    others and keeps its name."""
+
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -517,6 +524,10 @@ class IngestionRun(Base, TimestampMixin):
     records_inserted: Mapped[int] = mapped_column(Integer, default=0)
     records_updated: Mapped[int] = mapped_column(Integer, default=0)
     records_duplicate: Mapped[int] = mapped_column(Integer, default=0)
+    records_skipped: Mapped[int] = mapped_column(Integer, default=0)
+    """Records the job deliberately did not process -- a resource whose row
+    count is unchanged since the last sync, a lake with no cloud-free scene.
+    Distinct from rejected, which means the record was unusable."""
 
     stations_created: Mapped[int] = mapped_column(Integer, default=0)
     water_bodies_created: Mapped[int] = mapped_column(Integer, default=0)

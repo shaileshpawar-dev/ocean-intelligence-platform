@@ -1664,6 +1664,67 @@ def overview(db: Session) -> dict:
     }
 
 
+def job_runs(db: Session, *, limit: int = 20, job_type: str | None = None) -> dict:
+    """Recent job runs plus, per job type, when it last succeeded.
+
+    The second half is the part worth having: a list of runs says what
+    happened, but "ingestion last succeeded 9 hours ago, satellite 6 days ago"
+    is what tells you whether the data behind the pages is being maintained.
+    """
+    from app.models.water import IngestionRun
+
+    query = select(IngestionRun).order_by(IngestionRun.started_at.desc())
+    if job_type:
+        query = query.where(IngestionRun.job_type == job_type)
+    rows = db.scalars(query.limit(limit)).all()
+
+    last_success = {
+        row.job_type: _as_utc(row.last_success).isoformat()
+        for row in db.execute(
+            select(
+                IngestionRun.job_type,
+                func.max(IngestionRun.finished_at).label("last_success"),
+            )
+            .where(IngestionRun.status == "success")
+            .group_by(IngestionRun.job_type)
+        ).all()
+        if row.last_success is not None
+    }
+
+    return {
+        "last_success_by_job": last_success,
+        "runs": [
+            {
+                "job_id": run.run_id,
+                "job_type": run.job_type,
+                "source": run.source_key,
+                "status": run.status,
+                "started_at": _iso(run.started_at),
+                "finished_at": _iso(run.finished_at),
+                "duration_seconds": (
+                    round((run.finished_at - run.started_at).total_seconds(), 1)
+                    if run.finished_at and run.started_at
+                    else None
+                ),
+                "records_seen": run.records_seen,
+                "records_inserted": run.records_inserted,
+                "records_updated": run.records_updated,
+                "records_skipped": run.records_skipped,
+                "records_duplicate": run.records_duplicate,
+                "records_rejected": run.records_rejected,
+                "errors": run.errors or [],
+            }
+            for run in rows
+        ],
+    }
+
+
+def _iso(value: datetime | None) -> str | None:
+    """Timestamp as UTC ISO-8601, or None."""
+    converted = _as_utc(value) if value else None
+    return converted.isoformat() if converted else None
+
+
 def data_quality(db: Session) -> dict[str, Any]:
     """Counts by quality flag, so data problems are visible not hidden."""
     rows = db.execute(

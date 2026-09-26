@@ -136,6 +136,7 @@ class TestProductionGuards:
         assert ready.label == "PostgreSQL 16.4 + PostGIS 3.4"
         assert ready.spatial_ready is True
         assert "WITHOUT PostGIS" in BackendInfo("postgresql", "16.4", None).label
-        assert "migrations have not run" in BackendInfo(
-            "postgresql", "16.4", "3.4", geometry_columns=0
-        ).label
+        assert (
+            "migrations have not run"
+            in BackendInfo("postgresql", "16.4", "3.4", geometry_columns=0).label
+        )

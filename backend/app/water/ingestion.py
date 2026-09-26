@@ -536,6 +536,9 @@ def ingest_provider(
     _recompute_district_centroids(db)
 
     run.finished_at = datetime.now(UTC)
+    # Resources whose row count was unchanged since the last sync: skipped on
+    # purpose, which is not the same as rejected.
+    run.records_skipped = skipped
     run.stations_created = registry.created_stations
     run.water_bodies_created = registry.created_bodies
     run.errors = errors

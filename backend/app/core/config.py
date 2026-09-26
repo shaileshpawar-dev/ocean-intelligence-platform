@@ -48,6 +48,22 @@ class Settings(BaseSettings):
     database_url: str = f"sqlite:///{(REPO_ROOT / 'data' / 'oip.db').as_posix()}"
     db_echo: bool = False
 
+    # Connection pool. Ignored on SQLite, which has no server to pool against.
+    db_pool_size: int = 5
+    """Connections kept open per process. Five per task against an RDS
+    instance allowing ~100 leaves room for the ingestion jobs."""
+
+    db_max_overflow: int = 5
+    """Extra connections allowed under burst, closed again when idle."""
+
+    db_pool_timeout: int = 30
+    """Seconds to wait for a free connection before failing the request."""
+
+    db_pool_recycle: int = 900
+    """Recycle a connection after this many seconds. Below the idle timeout
+    of a managed instance, so the pool never hands out a socket the server
+    has already dropped."""
+
     # -- CORS --------------------------------------------------------------
     # Comma-separated list. Defaults to local dev origins, never "*".
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"

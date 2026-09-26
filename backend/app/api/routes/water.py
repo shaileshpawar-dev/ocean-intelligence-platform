@@ -479,6 +479,21 @@ def water_quality_report(db: DbSession) -> dict:
     return ws.data_quality(db)
 
 
+@router.get("/water-jobs", summary="Recent offline job runs")
+def water_jobs(
+    db: DbSession,
+    limit: int = Query(20, ge=1, le=100),
+    job_type: str | None = Query(None, description="ingestion, geometry, satellite…"),
+) -> dict:
+    """What the offline jobs did, and when each kind last succeeded.
+
+    Read-only and small on purpose: enough to answer "is the data being
+    refreshed, and did last night's run work?" without a console. The web
+    application never runs these jobs -- it only reports what they recorded.
+    """
+    return ws.job_runs(db, limit=limit, job_type=job_type)
+
+
 # ---------------------------------------------------------------------------
 # Water intelligence Q&A
 # ---------------------------------------------------------------------------
