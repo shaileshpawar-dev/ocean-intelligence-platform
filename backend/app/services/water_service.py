@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import ColumnElement, Select, func, or_, select, tuple_
 from sqlalchemy.orm import Session
 
 from app.models.enums import WaterStatus
@@ -83,12 +83,36 @@ def _cadence_for(db: Session, source_key: str = "cpcb_nwdp") -> Cadence:
 # ---------------------------------------------------------------------------
 # Status
 # ---------------------------------------------------------------------------
+def _only_latest_per_parameter(scope: ColumnElement, value: int) -> ColumnElement[bool]:
+    """Keep only each parameter's most recent observation within ``scope``.
+
+    ``scope`` is the column that bounds the question --
+    ``WaterQualityObservation.water_body_id`` for a water body,
+    ``station_id`` for one station. Ties (two stations, or two agencies,
+    reporting the same parameter at the same instant) survive this filter and
+    are resolved by the caller, which keeps the first row it sees.
+    """
+    newest = (
+        select(
+            WaterQualityObservation.parameter,
+            func.max(WaterQualityObservation.observed_at),
+        )
+        .where(scope == value)
+        .group_by(WaterQualityObservation.parameter)
+    )
+    return tuple_(
+        WaterQualityObservation.parameter,
+        WaterQualityObservation.observed_at,
+    ).in_(newest)
+
+
 def compute_status(
     db: Session,
     body: WaterBody,
     *,
     reference: str | None = None,
     as_of_observation: bool = False,
+    measurements: list[Measurement] | None = None,
 ) -> StatusResult:
     """Compute a water body's status from its most recent observations.
 
@@ -111,7 +135,19 @@ def compute_status(
             and discarding it would throw away the actual finding. The two
             are returned as separate fields and the historical one is always
             rendered with its date attached.
+        measurements: already-read latest measurements, to avoid reading them
+            twice when both the present-tense and the as-measured verdict are
+            wanted for the same water body. They are the same rows either
+            way; only the interpretation differs.
     """
+    if measurements is None:
+        measurements = latest_measurements(db, body)
+    selection = reference_for(body, reference)
+    return _classify(db, body, measurements, selection, as_of_observation)
+
+
+def latest_measurements(db: Session, body: WaterBody) -> list[Measurement]:
+    """The most recent measurement of every parameter on this water body."""
     rows = db.execute(
         select(
             WaterQualityObservation.parameter,
@@ -124,8 +160,8 @@ def compute_status(
         )
         .join(DataSource, DataSource.id == WaterQualityObservation.source_id)
         .where(WaterQualityObservation.water_body_id == body.id)
+        .where(_only_latest_per_parameter(WaterQualityObservation.water_body_id, body.id))
         .order_by(WaterQualityObservation.observed_at.desc())
-        .limit(4000)
     ).all()
 
     latest: dict[str, Measurement] = {}
@@ -146,8 +182,17 @@ def compute_status(
             source=source_name or source_key,
         )
 
-    measurements = list(latest.values())
-    selection = reference_for(body, reference)
+    return list(latest.values())
+
+
+def _classify(
+    db: Session,
+    body: WaterBody,
+    measurements: list[Measurement],
+    selection: ReferenceSelection,
+    as_of_observation: bool,
+) -> StatusResult:
+    """Turn measurements into a status against the chosen reference."""
     classifications = classifications_for(db, body)
 
     if as_of_observation and measurements:
@@ -222,12 +267,15 @@ def refresh_cached_statuses(db: Session, *, limit: int | None = None) -> int:
 
     updated = 0
     for body in db.scalars(stmt):
-        result = compute_status(db, body)
+        measured = latest_measurements(db, body)
+        result = compute_status(db, body, measurements=measured)
         body.cached_status = str(result.status)
         # Colouring every feature NO_RECENT_DATA would make the map true but
         # useless. The historical band is cached alongside so the map can show
         # what the last measurement found, labelled with its date.
-        historical = compute_status(db, body, as_of_observation=True)
+        historical = compute_status(
+            db, body, as_of_observation=True, measurements=measured
+        )
         body.cached_historical_status = str(historical.status)
         updated += 1
     db.commit()
@@ -470,12 +518,18 @@ def get_water_body_detail(
     if body is None:
         return None
 
-    status = compute_status(db, body, reference=reference)
+    # Read each parameter's latest measurement once: the two verdicts below
+    # differ only in how they read the same rows.
+    measured = latest_measurements(db, body)
+    status = compute_status(db, body, reference=reference, measurements=measured)
+    source_records = sources_for_body(db, body)
     # The present-tense verdict may be NO_RECENT_DATA while the measurements
     # themselves show a clear exceedance. Both are reported: one answers
     # "what is it like now?" (honestly, "we do not know"), the other answers
     # "what did the last measurement show?" -- always carrying its date.
-    historical = compute_status(db, body, reference=reference, as_of_observation=True)
+    historical = compute_status(
+        db, body, reference=reference, as_of_observation=True, measurements=measured
+    )
     stations = db.scalars(
         select(MonitoringStation)
         .where(MonitoringStation.water_body_id == body.id)
@@ -508,23 +562,35 @@ def get_water_body_detail(
         "reference": reference_for(body, reference).to_dict(),
         "designated_use_recorded": body.designated_use,
         "stations": summarise_stations(db, list(stations)),
-        "sources": sources_for_body(db, body),
-        **_geography(db, body, status),
+        "sources": source_records,
+        **_geography(db, body, status, source_records),
     }
 
 
-def _geography(db: Session, body: WaterBody, status: StatusResult) -> dict:
-    """Phase 2 layers: geometry, data quality, availability, sources panel."""
+def _geography(
+    db: Session,
+    body: WaterBody,
+    status: StatusResult,
+    source_records: list[dict] | None = None,
+) -> dict:
+    """Phase 2 layers: geometry, data quality, availability, sources panel.
+
+    ``source_records`` is the page's own ``sources_for_body`` result. Passing
+    it in avoids aggregating every observation of the water body a second
+    time, which on the Ganga's 347k rows cost 384 ms.
+    """
     from app.services import geo_service as gs
     from app.water.satellite import images_for
 
     status_dict = status.to_dict()
     sources = latest_by_source(db, body)
     geometry = gs.water_body_geometry(db, body)
+    if source_records is None:
+        source_records = sources_for_body(db, body)
     partial = {
         "imagery": images_for(db, body),
         "geometry": geometry,
-        "sources": sources_for_body(db, body),
+        "sources": source_records,
         "reference": reference_for(body).to_dict(),
         "latest_available_status": None,
     }
@@ -572,8 +638,8 @@ def latest_parameters(
             MonitoringStation.id == WaterQualityObservation.station_id,
         )
         .where(WaterQualityObservation.water_body_id == body.id)
+        .where(_only_latest_per_parameter(WaterQualityObservation.water_body_id, body.id))
         .order_by(WaterQualityObservation.observed_at.desc())
-        .limit(6000)
     ).all()
 
     from app.water.standards import compare
@@ -676,8 +742,8 @@ def station_detail(db: Session, station_id: int) -> dict | None:
             WaterQualityObservation.source_reference,
         )
         .where(WaterQualityObservation.station_id == station.id)
+        .where(_only_latest_per_parameter(WaterQualityObservation.station_id, station.id))
         .order_by(WaterQualityObservation.observed_at.desc())
-        .limit(4000)
     ).all()
 
     body = db.get(WaterBody, station.water_body_id) if station.water_body_id else None
