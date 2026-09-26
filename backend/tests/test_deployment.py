@@ -140,3 +140,55 @@ class TestProductionGuards:
             "migrations have not run"
             in BackendInfo("postgresql", "16.4", "3.4", geometry_columns=0).label
         )
+
+
+class TestTheBackendProbeNoticesAMigration:
+    """The one question whose answer changes under a running process.
+
+    The deployment order is: start the task, then run the migrate job. With a
+    permanently cached probe the task reported "0 of 6 geometry columns
+    exist" for the rest of its life while serving a migrated database.
+    """
+
+    def test_the_probe_result_expires(self, monkeypatch):
+        from app.core import dbinfo
+
+        dbinfo.forget_backend_cache()
+        calls = {"n": 0}
+
+        def counted(_engine):
+            calls["n"] += 1
+            return BackendInfo("postgresql", "16.4", "3.4", geometry_columns=calls["n"])
+
+        monkeypatch.setattr(dbinfo, "_probe_uncached", counted)
+
+        clock = {"t": 1000.0}
+        monkeypatch.setattr(dbinfo, "monotonic", lambda: clock["t"])
+
+        engine = object()
+        assert dbinfo.backend_for(engine).geometry_columns == 1
+        assert dbinfo.backend_for(engine).geometry_columns == 1, "cached"
+        assert calls["n"] == 1
+
+        clock["t"] += dbinfo.PROBE_TTL_SECONDS + 1
+        assert dbinfo.backend_for(engine).geometry_columns == 2, "re-probed"
+        assert calls["n"] == 2
+        dbinfo.forget_backend_cache()
+
+    def test_forgetting_the_cache_forces_a_fresh_probe(self, monkeypatch):
+        from app.core import dbinfo
+
+        dbinfo.forget_backend_cache()
+        calls = {"n": 0}
+
+        def counted(_engine):
+            calls["n"] += 1
+            return BackendInfo("postgresql", "16.4", "3.4", geometry_columns=6)
+
+        monkeypatch.setattr(dbinfo, "_probe_uncached", counted)
+        engine = object()
+        dbinfo.backend_for(engine)
+        dbinfo.forget_backend_cache()
+        dbinfo.backend_for(engine)
+        assert calls["n"] == 2
+        dbinfo.forget_backend_cache()

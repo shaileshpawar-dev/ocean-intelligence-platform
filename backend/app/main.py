@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.routes import (
     analytics,
@@ -67,19 +68,34 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             bootstrap(db)
             ingest_seed_corpus(db)
     else:
-        with SessionLocal() as db:
-            from app.rag.service import corpus_size
+        # Report, never fail. A database that has not been migrated yet is a
+        # deployment in progress, not a reason to exit: the task stays up and
+        # /health/ready keeps answering 503 until the schema is there.
+        try:
+            with SessionLocal() as db:
+                from app.rag.service import corpus_size
 
-            documents, chunks = corpus_size(db)
-        logger.info(
-            "corpus_present",
-            extra={"documents": documents, "chunks": chunks},
-        )
-        if not documents:
+                documents, chunks = corpus_size(db)
+        except SQLAlchemyError as exc:
             logger.warning(
-                "corpus_empty",
-                extra={"fix": "run 'python -m app.water.cli reindex-water-rag'"},
+                "corpus_unavailable",
+                extra={
+                    "error": type(exc).__name__,
+                    "fix": (
+                        "run 'python -m app.water.cli db upgrade' then "
+                        "'reindex-water-rag'"
+                    ),
+                },
             )
+        else:
+            logger.info(
+                "corpus_present", extra={"documents": documents, "chunks": chunks}
+            )
+            if not documents:
+                logger.warning(
+                    "corpus_empty",
+                    extra={"fix": "run 'python -m app.water.cli reindex-water-rag'"},
+                )
 
     # Optional: rebuild water data from the real source when the database
     # starts empty (WATER_BOOTSTRAP_STATES). Runs in the background.

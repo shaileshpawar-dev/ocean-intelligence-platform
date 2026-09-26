@@ -1,0 +1,638 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+# OceanAI India Water Intelligence -- staging.
+#
+# Internet -> ALB -> ECS Fargate (FastAPI) -> RDS PostgreSQL + PostGIS,
+# with S3 for durable evidence assets and EventBridge running the jobs.
+#
+# This template has NOT been deployed. It is written to be deployed, reviewed
+# and costed, and `scripts/aws_staging_deploy.sh` drives it end to end; but no
+# resource described here exists in the account. Anything this file claims
+# about behaviour in AWS is a design statement, not a measurement.
+#
+# Two deliberate choices worth knowing before reading:
+#
+# * **No NAT gateway.** Tasks run in public subnets with a public IP so they
+#   can reach ECR, the CPCB portals and S3. A NAT gateway would cost about
+#   $33/month -- more than the database -- to buy an egress path the security
+#   group already controls: nothing may reach a task except the load
+#   balancer. The account's existing services are built the same way.
+# * **No database password anywhere in here.** RDS generates one into Secrets
+#   Manager and the task reads it as a secret at start-up. The template, the
+#   repository and the task's environment never hold it.
+
+Description: >-
+  OceanAI water intelligence staging: ALB, ECS Fargate service, RDS
+  PostgreSQL/PostGIS, S3 evidence bucket, EventBridge-scheduled jobs.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: Existing VPC to deploy into.
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: >-
+      Two or more public subnets in different availability zones. Public
+      because the tasks need outbound access and there is no NAT gateway.
+
+  ImageUri:
+    Type: String
+    Description: >-
+      ECR image URI for the backend, e.g.
+      550481058737.dkr.ecr.ap-south-1.amazonaws.com/oceanai/backend:staging-<sha>.
+
+  DbInstanceClass:
+    Type: String
+    Default: db.t4g.micro
+    AllowedValues: [db.t4g.micro, db.t4g.small, db.t4g.medium]
+    Description: >-
+      db.t4g.micro (1 GB RAM) holds the national dataset and serves staging
+      traffic; the heaviest water-body page will be slower than on the
+      development machine. db.t4g.small if that proves too tight.
+
+  DbAllocatedStorage:
+    Type: Number
+    Default: 20
+    MinValue: 20
+    Description: >-
+      GB of gp3. The full national dataset -- 4.6M observations with indexes
+      -- sits comfortably under 20 GB; storage autoscaling raises it if not.
+
+  TaskCpu:
+    Type: String
+    Default: "256"
+    AllowedValues: ["256", "512", "1024"]
+
+  TaskMemory:
+    Type: String
+    Default: "512"
+    AllowedValues: ["512", "1024", "2048"]
+
+  DesiredCount:
+    Type: Number
+    Default: 1
+    Description: Staging runs one task. Two would double the Fargate cost.
+
+  LogRetentionDays:
+    Type: Number
+    Default: 7
+    Description: Short retention: staging logs are for debugging a deploy.
+
+Resources:
+  # ---------------------------------------------------------------------
+  # Networking. Three security groups, each allowing exactly one hop.
+  # ---------------------------------------------------------------------
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Public HTTP(S) in to the load balancer.
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP. Terminate TLS here once a certificate exists.
+      Tags:
+        - Key: project
+          Value: oceanai-water-staging
+
+  ServiceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: >-
+        The application tasks. Inbound only from the load balancer -- the
+        public IP a task carries for egress is not reachable.
+      VpcId: !Ref VpcId
+      Tags:
+        - Key: project
+          Value: oceanai-water-staging
+
+  ServiceIngressFromAlb:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref ServiceSecurityGroup
+      IpProtocol: tcp
+      FromPort: 8000
+      ToPort: 8000
+      SourceSecurityGroupId: !Ref AlbSecurityGroup
+      Description: ALB to application.
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: >-
+        PostgreSQL. Reachable only from the application tasks; never from the
+        internet, and 0.0.0.0/0 appears nowhere in this group.
+      VpcId: !Ref VpcId
+      Tags:
+        - Key: project
+          Value: oceanai-water-staging
+
+  DatabaseIngressFromService:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DatabaseSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref ServiceSecurityGroup
+      Description: Application and jobs to the database.
+
+  # ---------------------------------------------------------------------
+  # Database
+  # ---------------------------------------------------------------------
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Staging database subnets.
+      SubnetIds: !Ref SubnetIds
+
+  DbSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: OceanAI staging database credentials.
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "oip"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        # The URL is assembled in the container, but keep the characters
+        # shell- and URL-safe so nothing has to be escaped anywhere.
+        ExcludeCharacters: '"@/\:%+&?# '
+
+  Database:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: oceanai-water-staging
+      Engine: postgres
+      # PostGIS ships with RDS PostgreSQL; the migration runs
+      # CREATE EXTENSION postgis, which rds_superuser may do.
+      EngineVersion: "16.4"
+      DBInstanceClass: !Ref DbInstanceClass
+      AllocatedStorage: !Ref DbAllocatedStorage
+      MaxAllocatedStorage: 100
+      StorageType: gp3
+      StorageEncrypted: true
+      MasterUsername: !Sub "{{resolve:secretsmanager:${DbSecret}:SecretString:username}}"
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DbSecret}:SecretString:password}}"
+      DBName: oip
+      MultiAZ: false
+      PubliclyAccessible: false
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: "18:30-19:00"
+      PreferredMaintenanceWindow: "sun:19:30-sun:20:30"
+      CopyTagsToSnapshot: true
+      EnablePerformanceInsights: false
+      DeletionProtection: false
+      Tags:
+        - Key: project
+          Value: oceanai-water-staging
+
+  DbSecretAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties:
+      SecretId: !Ref DbSecret
+      TargetId: !Ref Database
+      TargetType: AWS::RDS::DBInstance
+
+  # ---------------------------------------------------------------------
+  # Evidence bucket. Metadata stays in PostgreSQL; only objects live here.
+  # ---------------------------------------------------------------------
+  EvidenceBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub "oceanai-water-staging-evidence-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-old-versions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 30
+      Tags:
+        - Key: project
+          Value: oceanai-water-staging
+
+  EvidenceBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref EvidenceBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyUnencryptedTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !Sub "${EvidenceBucket.Arn}"
+              - !Sub "${EvidenceBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+  # ---------------------------------------------------------------------
+  # IAM. Two roles: one for the agent that starts the task, one for the
+  # code inside it. Neither is administrative.
+  # ---------------------------------------------------------------------
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: read-db-secret
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref DbSecret
+
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: evidence-objects-only
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # Objects in one bucket, and listing that bucket. No other
+              # bucket, no bucket administration, nothing else in AWS.
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub "${EvidenceBucket.Arn}/*"
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt EvidenceBucket.Arn
+      Tags:
+        - Key: project
+          Value: oceanai-water-staging
+
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: run-the-job-tasks
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: ecs:RunTask
+                Resource: !Ref JobTaskDefinition
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource:
+                  - !GetAtt ExecutionRole.Arn
+                  - !GetAtt TaskRole.Arn
+
+  # ---------------------------------------------------------------------
+  # Compute
+  # ---------------------------------------------------------------------
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: oceanai-water-staging
+      ClusterSettings:
+        - Name: containerInsights
+          Value: disabled
+
+  WebLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/oceanai-water-staging/web
+      RetentionInDays: !Ref LogRetentionDays
+
+  JobLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/oceanai-water-staging/jobs
+      RetentionInDays: !Ref LogRetentionDays
+
+  WebTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: oceanai-water-staging-web
+      RequiresCompatibilities: [FARGATE]
+      NetworkMode: awsvpc
+      Cpu: !Ref TaskCpu
+      Memory: !Ref TaskMemory
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      ContainerDefinitions:
+        - Name: web
+          Image: !Ref ImageUri
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8000
+          Environment:
+            - Name: ENVIRONMENT
+              Value: staging
+            - Name: LOG_FORMAT
+              Value: json
+            - Name: DEMO_MODE
+              Value: "false"
+            # Empty, and this is the point: a task must never ingest.
+            - Name: WATER_BOOTSTRAP_STATES
+              Value: ""
+            - Name: WATER_EVIDENCE_BUCKET
+              Value: !Ref EvidenceBucket
+            - Name: PGHOST
+              Value: !GetAtt Database.Endpoint.Address
+            - Name: PGDATABASE
+              Value: oip
+          Secrets:
+            - Name: PGUSER
+              ValueFrom: !Sub "${DbSecret}:username::"
+            - Name: PGPASSWORD
+              ValueFrom: !Sub "${DbSecret}:password::"
+          # DATABASE_URL is assembled from the parts so the password is only
+          # ever a secret reference, never a template or console value.
+          EntryPoint: ["/bin/sh", "-c"]
+          Command:
+            - >-
+              export DATABASE_URL="postgresql+psycopg://$PGUSER:$PGPASSWORD@$PGHOST:5432/$PGDATABASE"
+              && exec uvicorn app.main:app --host 0.0.0.0 --port 8000
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref WebLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: web
+          HealthCheck:
+            # Liveness: restarting cannot fix an unreachable database.
+            Command:
+              - CMD-SHELL
+              - >-
+                python -c "import urllib.request,sys;
+                sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/v1/health/live',
+                timeout=4).status==200 else 1)"
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 20
+
+  JobTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: oceanai-water-staging-jobs
+      RequiresCompatibilities: [FARGATE]
+      NetworkMode: awsvpc
+      # Jobs get more memory than the web task: the geometry import holds an
+      # index of named OSM features while it matches.
+      Cpu: "512"
+      Memory: "2048"
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      ContainerDefinitions:
+        - Name: job
+          Image: !Ref ImageUri
+          Essential: true
+          Environment:
+            - Name: ENVIRONMENT
+              Value: staging
+            - Name: LOG_FORMAT
+              Value: json
+            - Name: WATER_EVIDENCE_BUCKET
+              Value: !Ref EvidenceBucket
+            - Name: PGHOST
+              Value: !GetAtt Database.Endpoint.Address
+            - Name: PGDATABASE
+              Value: oip
+          Secrets:
+            - Name: PGUSER
+              ValueFrom: !Sub "${DbSecret}:username::"
+            - Name: PGPASSWORD
+              ValueFrom: !Sub "${DbSecret}:password::"
+          EntryPoint: ["/bin/sh", "-c"]
+          # Overridden per schedule; the default is harmless.
+          Command:
+            - >-
+              export DATABASE_URL="postgresql+psycopg://$PGUSER:$PGPASSWORD@$PGHOST:5432/$PGDATABASE"
+              && python -m app.water.cli jobs --limit 5
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref JobLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: job
+
+  # ---------------------------------------------------------------------
+  # Load balancer
+  # ---------------------------------------------------------------------
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: oceanai-water-staging-alb
+      Scheme: internet-facing
+      Type: application
+      Subnets: !Ref SubnetIds
+      SecurityGroups:
+        - !Ref AlbSecurityGroup
+      Tags:
+        - Key: project
+          Value: oceanai-water-staging
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: oceanai-water-staging-tg
+      Port: 8000
+      Protocol: HTTP
+      TargetType: ip
+      VpcId: !Ref VpcId
+      # Readiness, not liveness: a task whose database is unreachable, or
+      # whose migrations have not run, answers 503 here and is taken out of
+      # rotation instead of serving errors.
+      HealthCheckPath: /api/v1/health/ready
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: "200"
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "15"
+
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  Service:
+    Type: AWS::ECS::Service
+    DependsOn: Listener
+    Properties:
+      ServiceName: oceanai-water-staging-web
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref WebTaskDefinition
+      DesiredCount: !Ref DesiredCount
+      LaunchType: FARGATE
+      HealthCheckGracePeriodSeconds: 60
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 100
+        MaximumPercent: 200
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          # Public IP for egress only: to ECR, the CPCB portals and S3.
+          # Inbound is governed by the security group above.
+          AssignPublicIp: ENABLED
+          Subnets: !Ref SubnetIds
+          SecurityGroups:
+            - !Ref ServiceSecurityGroup
+      LoadBalancers:
+        - ContainerName: web
+          ContainerPort: 8000
+          TargetGroupArn: !Ref TargetGroup
+
+  # ---------------------------------------------------------------------
+  # Schedules. Each one runs a command in the job task definition; the cadence
+  # follows the source, not a convention.
+  # ---------------------------------------------------------------------
+  RealTimeSyncSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: oceanai-water-staging-sync-realtime
+      Description: CPCB real-time analysers publish hourly.
+      ScheduleExpression: "rate(1 hour)"
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      Target:
+        Arn: !GetAtt Cluster.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        EcsParameters:
+          TaskDefinitionArn: !Ref JobTaskDefinition
+          LaunchType: FARGATE
+          NetworkConfiguration:
+            AwsvpcConfiguration:
+              AssignPublicIp: ENABLED
+              Subnets: !Ref SubnetIds
+              SecurityGroups:
+                - !Ref ServiceSecurityGroup
+        Input: !Sub |
+          {"containerOverrides":[{"name":"job","command":["/bin/sh","-c",
+          "export DATABASE_URL=\"postgresql+psycopg://$PGUSER:$PGPASSWORD@$PGHOST:5432/$PGDATABASE\" && python -m app.water.cli sync-water-data --provider cpcb_rtwqms --all"]}]}
+
+  ManualSyncSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: oceanai-water-staging-sync-manual
+      Description: >-
+        CPCB and CWC manual extracts change monthly at most; weekly is
+        already generous, and an unchanged resource costs one request.
+      ScheduleExpression: "cron(0 20 ? * SUN *)"
+      FlexibleTimeWindow:
+        Mode: FLEXIBLE
+        MaximumWindowInMinutes: 60
+      Target:
+        Arn: !GetAtt Cluster.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        EcsParameters:
+          TaskDefinitionArn: !Ref JobTaskDefinition
+          LaunchType: FARGATE
+          NetworkConfiguration:
+            AwsvpcConfiguration:
+              AssignPublicIp: ENABLED
+              Subnets: !Ref SubnetIds
+              SecurityGroups:
+                - !Ref ServiceSecurityGroup
+        Input: !Sub |
+          {"containerOverrides":[{"name":"job","command":["/bin/sh","-c",
+          "export DATABASE_URL=\"postgresql+psycopg://$PGUSER:$PGPASSWORD@$PGHOST:5432/$PGDATABASE\" && python -m app.water.cli sync-water-data --provider cpcb_nwdp --all && python -m app.water.cli sync-water-data --provider cwc_nwdp --all"]}]}
+
+  SatelliteSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: oceanai-water-staging-satellite
+      Description: >-
+        Sentinel-2 revisits every five days and most passes are rejected for
+        cloud, so weekly is the useful rate.
+      ScheduleExpression: "cron(0 21 ? * SAT *)"
+      FlexibleTimeWindow:
+        Mode: FLEXIBLE
+        MaximumWindowInMinutes: 120
+      Target:
+        Arn: !GetAtt Cluster.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        EcsParameters:
+          TaskDefinitionArn: !Ref JobTaskDefinition
+          LaunchType: FARGATE
+          NetworkConfiguration:
+            AwsvpcConfiguration:
+              AssignPublicIp: ENABLED
+              Subnets: !Ref SubnetIds
+              SecurityGroups:
+                - !Ref ServiceSecurityGroup
+        Input: !Sub |
+          {"containerOverrides":[{"name":"job","command":["/bin/sh","-c",
+          "export DATABASE_URL=\"postgresql+psycopg://$PGUSER:$PGPASSWORD@$PGHOST:5432/$PGDATABASE\" && python -m app.water.cli process-satellite --limit 80"]}]}
+
+Outputs:
+  ServiceUrl:
+    Description: Staging entry point.
+    Value: !Sub "http://${LoadBalancer.DNSName}"
+
+  DatabaseEndpoint:
+    Description: RDS endpoint, reachable only from the service security group.
+    Value: !GetAtt Database.Endpoint.Address
+
+  DatabaseSecretArn:
+    Description: Where the generated credentials live. Never printed.
+    Value: !Ref DbSecret
+
+  EvidenceBucketName:
+    Value: !Ref EvidenceBucket
+
+  JobTaskDefinitionArn:
+    Description: Run migrations and one-off jobs against this.
+    Value: !Ref JobTaskDefinition
+
+  ClusterName:
+    Value: !Ref Cluster

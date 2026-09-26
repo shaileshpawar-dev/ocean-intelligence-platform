@@ -54,14 +54,35 @@ def liveness() -> dict:
     }
 
 
+def _schema_present(db: Session) -> bool:
+    """Whether the migrations have been run against this database.
+
+    One cheap question -- does alembic_version exist? -- rather than
+    reflecting the whole schema on every readiness poll.
+    """
+    try:
+        db.execute(text("SELECT 1 FROM alembic_version LIMIT 1"))
+    except Exception:
+        return False
+    return True
+
+
 @router.get("/health/ready", summary="Readiness: can this task serve traffic?")
 def readiness(response: Response, db: Session = Depends(get_db)) -> dict:
-    """Query the database, and say no if it cannot be reached.
+    """Query the database, and say no if this task cannot serve from it.
 
-    Returns 503 when the database is unavailable so a load balancer stops
-    sending traffic here. The spatial backend is reported but does not gate
-    readiness: without PostGIS the application still serves, using the Python
-    fallback paths.
+    Two ways to be unready, both 503 so a load balancer stops sending traffic:
+
+    * the database cannot be reached at all;
+    * it can, but the migrations have not run against it -- a task deployed
+      before its migrate job answers every data request with an error, and
+      saying "ready" while reporting "0 of 6 geometry columns exist" is the
+      kind of half-truth this platform exists to avoid.
+
+    A **SQLite** backend is ready: that is development mode, where the models
+    are the schema. PostGIS being absent on a server backend degrades spatial
+    queries to the Python paths but does not stop the application serving, so
+    it is reported rather than gating.
     """
     from app.core.dbinfo import backend_info
 
@@ -77,6 +98,18 @@ def readiness(response: Response, db: Session = Depends(get_db)) -> dict:
         }
 
     info = backend_info()
+    if info.is_postgres and not _schema_present(db):
+        response.status_code = 503
+        return {
+            "status": "not_ready",
+            "reason": "schema_not_migrated",
+            "detail": (
+                "The database has no alembic_version table. Run the migrate "
+                "job ('python -m app.water.cli db upgrade') before serving."
+            ),
+            "database": info.label,
+            "checked_at": datetime.now(UTC).isoformat(),
+        }
     return {
         "status": "ready",
         "database": info.label,

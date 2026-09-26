@@ -89,3 +89,33 @@ class TestHealth:
         assert body["status"] == "ok"
         llm = next(c for c in body["components"] if c["name"].startswith("llm:"))
         assert llm["available"] is False
+
+
+class TestStartupAgainstAnUnmigratedDatabase:
+    """A deployment in progress must not become a crash loop.
+
+    Moving the seed writes out of start-up briefly made this worse than
+    before: the corpus count queried a table the migrations had not created
+    yet, the exception escaped the lifespan, and the container exited -- so
+    even liveness was gone. The task must stay up and report not-ready.
+    """
+
+    def test_a_missing_table_does_not_kill_start_up(self, monkeypatch):
+        from app.rag import service as rag_service
+
+        def missing(*args: object, **kwargs: object) -> None:
+            raise OperationalError("SELECT", {}, Exception("no such table"))
+
+        monkeypatch.setattr(rag_service, "corpus_size", missing)
+        # A PostgreSQL-shaped backend takes the reporting branch.
+        monkeypatch.setattr(
+            "app.core.database.engine.url",
+            type(
+                "U",
+                (),
+                {"get_backend_name": staticmethod(lambda: "postgresql")},
+            )(),
+            raising=False,
+        )
+        with TestClient(__import__("app.main", fromlist=["app"]).app) as started:
+            assert started.get("/api/v1/health/live").status_code == 200
