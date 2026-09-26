@@ -2,8 +2,248 @@
 
 Branch `feature/india-water-intelligence`, built on `main` at `738f1ca`
 (the published v1). **Nothing was deployed and the public v1 was not
-changed.** Phase 3 (below) builds on Phase 2, which builds on Phase 1; both
-are kept further down as the record of those changes.
+changed.** Phase 4 (below) builds on Phase 3, which builds on Phase 2 and
+Phase 1; each earlier phase is kept further down as the record of that
+change.
+
+---
+
+# PHASE 4 FINAL — operable, and current where the data is
+
+## Core changes
+
+Phase 3 made the platform persistent. Phase 4 made it operable: jobs that are
+tracked and scheduled, a web process that only serves, health endpoints a load
+balancer can act on, an object store for evidence, and — the change that
+alters what the product can say — a source that reports hourly.
+
+## Real-time CPCB source
+
+CPCB runs automatic analysers on the Ganga and its tributaries under Namami
+Gange and publishes them as plain JSON behind its dashboard at
+`rtwqmsdb1.cpcb.gov.in`: no key, no registration. Verified reachable from this
+environment and integrated end to end.
+
+| | |
+|---|---|
+| Stations | **40** (of 4,951) |
+| States | **6** — Uttarakhand, Uttar Pradesh, Haryana, Bihar, Jharkhand, West Bengal |
+| Water bodies reached | **26** (of 2,740) |
+| Cadence | **hourly** |
+| Parameters ingested | 9 of 12 published |
+| Not ingested | depth and stage (hydrology), total organic carbon (no registry entry) |
+
+**This is not nationwide real-time coverage.** It is the Ganga basin. For
+every other water body the platform still refuses to describe the present.
+
+The Ganga's page now reads *"High concern as of 26 Sep 2026 … 0 days ago,
+within the source's hourly reporting cadence"*, with CWC (22 May 2025) and
+CPCB manual (30 Dec 2021) listed beneath as older sources, unmerged.
+
+## Historical sources
+
+Unchanged and still whole: CPCB manual (582,192 observations, 35 state/UT
+codes, mostly to 2021) and CWC manual (4,017,920 observations, 29 states, to
+June 2025). The real-time source did not overwrite a single row of either; on
+the Ganga the three sit side by side with 176, 324,002 and 23,380
+observations.
+
+## Ingestion architecture
+
+Four job commands with the names the deployment uses — `sync-water-data`,
+`import-geometry`, `process-satellite`, `reindex-water-rag`, plus
+`archive-evidence` and `db upgrade`. The older names still work.
+
+Every job records a row in `ingestion_runs` with `job_type`, counts
+(seen / inserted / updated / skipped / duplicate / rejected), duration and
+errors. A failure is written down and re-raised; nothing is deleted, so the
+last good run stays queryable. `GET /api/v1/water-jobs` and `cli jobs` report
+recent runs and when each kind last succeeded.
+
+## Incremental sync
+
+Unchanged resources are skipped on a stored row count; the live feed reports
+no count and is always re-read, which is safe because the uniqueness key is
+(source, station, parameter, observed_at). Verified against the live feed:
+two consecutive runs, **356 seen, 0 inserted, 356 duplicates** each, every
+count identical afterwards, and **zero** duplicate groups across 4.6M rows.
+Seven regression tests cover the cursor, the key, `--full`, and a provider
+that reports no count at all.
+
+## Job scheduling
+
+EventBridge Scheduler rules in the template, each running a command in the job
+task definition at the cadence of its source: real-time hourly, manual
+extracts weekly, satellite weekly. **Configured, not running** — no AWS
+environment exists.
+
+## Database
+
+PostgreSQL 16.4 + PostGIS 3.4.3, Alembic-owned schema, now seven revisions.
+The web process creates nothing: on a server database `init_db()` only checks
+that `alembic_version` exists, because `create_all` cannot create the PostGIS
+columns and would produce a schema that looks complete and has no spatial
+support. Connection pool sized for RDS (5 + 5, recycled at 900 s, pre-ping).
+
+## PostGIS
+
+Unchanged in substance: 405 matched geometries, GIST indexes, spatial identity
+for stations whose names identify no water body — `nearest_mapped_body` within
+1 km, recorded with the distance. 21 PostGIS tests pass against a real server.
+
+## S3
+
+An object store with two backends behind one interface: a directory (the
+default, so a checkout needs no cloud account) and S3 (`WATER_EVIDENCE_BUCKET`).
+`cli archive-evidence` copies rendered scenes in and records
+backend/bucket/key/URI/size beside the metadata — never the bytes in
+PostgreSQL. Run for real against the local backend: three scenes, 1.2 MB and
+204 KB PNGs on disk, second run reported all three already archived.
+**The S3 path has never run against a real bucket.** Its four failure modes —
+denied, missing bucket, missing object, no boto3 — are covered against a stub,
+and each returns nothing and logs once rather than breaking a page.
+
+## RAG
+
+All six required questions answer from structured lookups with sources, dates
+and citations. The Ganga answers in the present tense from the real-time
+source while naming CWC's cut-off; the Mithi answers "1,759 days ago, too old
+to describe the present"; mercury returns no value and says so. A gap found
+and fixed: the parameter-intent items promised "dated per item" while carrying
+no date — the date was only in the citation.
+
+## Freshness
+
+Freshness is judged against the cadence of the source that produced the newest
+measurement, not a hard-coded monthly default — an hourly reading was being
+called "within the source's monthly reporting cadence". Three wordings written
+when everything was years old were corrected: the overview's "refuses to
+describe present condition from data this old", a water-body page that said
+both "supported by recent data" and "not a statement about today" about the
+same reading, and dates rendering in local time beside UTC sentences (one page
+showed "Sep 27" and "26 Sep" for one observation).
+
+## Map
+
+No regression. National geometry 515 ms / 287 KB, state view 11 ms, city
+17 ms, nearby 23 ms, clusters 23 ms. The AI → map handoff (highlight, focus,
+fly-to, panel) works for the Ganga, the Mithi, Mumbai and Maharashtra. One
+real fix: the Ganga's BOD trend returned 14,311 points and 2.5 MB; each source
+now keeps its 500 most recent measurements — capped per source so no agency's
+line disappears — giving 191 KB with all three series and a note stating what
+was trimmed.
+
+## Security
+
+No secrets in tracked files; `.env` ignored; no key material committed; a CI
+step greps for the shapes that leaked before. No `eval`/`exec`/`subprocess`,
+no user-controlled URL reaching a fetch, fixed outbound hosts. The one
+interpolated SQL identifier is now validated against the list it comes from.
+Container runs as uid 1000. The ALB ingress CIDR is a template parameter
+rather than a hard-coded `0.0.0.0/0`, because the API has no authentication
+and no rate limiting.
+
+## Performance
+
+Measured on 4,601,153 observations (PostgreSQL + PostGIS, median of 10):
+
+| Route | Median | p90 |
+|---|---|---|
+| `/health/live` | **2.1 ms** | 2.3 ms |
+| `/health/ready` | 5.9 ms | 6.9 ms |
+| Search | 55 ms | 58 ms |
+| Water body, typical (Mithi) | 32 ms | 43 ms |
+| Water body, heaviest (Ganga) | 647 ms | 729 ms |
+| National map geometries, z6 | 515 ms | 566 ms |
+| State map (Maharashtra) | 11 ms | 13 ms |
+| City (Mumbai) | 17 ms | 19 ms |
+| Nearby, 25 km | 23 ms | 28 ms |
+| RAG question | 210 ms | 231 ms |
+| Jobs | 9 ms | 10 ms |
+
+Essentially unchanged from Phase 3 (Ganga 654 → 647, geometries 527 → 515,
+nearby 27 → 23): the Phase 4 work cost nothing measurable.
+
+## Testing
+
+556 passed, 21 skipped; 21 PostGIS tests against a real PostGIS server; ruff,
+`tsc --noEmit` and ESLint clean; the test-isolation script passes. New this
+phase: object store (14), provider outage (6), real-time provider (9), health
+semantics (9), incremental sync (7), job records (8), trend capping (3).
+
+## Docker
+
+Builds at 341 MB, runs as uid 1000, reports `healthy`, liveness and readiness
+both correct, `alembic`/`sqlalchemy`/`osmium`/`httpx` present. The local stack
+test now builds **every** service image first — building only the backend left
+the migrate and jobs containers running last week's CLI, which silently
+invalidated a whole test run.
+
+## AWS Infrastructure
+
+`infra/aws/staging.yaml`: 26 resources — ALB, ECS Fargate service and job task
+definition, RDS PostgreSQL/PostGIS, S3 evidence bucket, three EventBridge
+schedules, three IAM roles, three security groups. Validated statically: parses
+as YAML, no dangling references, and accepted by
+`aws cloudformation validate-template`. Static validation caught a real bug — an
+unquoted colon in a `Description` that would have failed at deploy time.
+
+**AWS infrastructure code validated locally. AWS environment not created.**
+
+## Cost model
+
+From the AWS Pricing API for ap-south-1, on-demand, 730 hours — **estimated
+and configured, never billed**:
+
+| Item | Monthly |
+|---|---|
+| ALB | $17.45 (+ up to $5.84 LCU) |
+| RDS `db.t4g.micro` + 20 GB gp3 | $17.95 |
+| Fargate 0.25 vCPU / 0.5 GB | $9.47 |
+| CloudWatch Logs (7-day) | ~$1 |
+| S3, EventBridge | <$0.10 |
+| **Total** | **≈ $46/month** |
+
+No NAT gateway, which would add ~$33. Graviton would take the task to $5.30;
+dropping the ALB saves $17.45.
+
+## Known limitations
+
+Real-time coverage is 40 stations in 6 states, not the country. Sensors are
+not laboratories and a live feed does not mean every station in it is live.
+The Ganga page is 647 ms, over the 200 ms target, because it holds 7.5% of all
+observations. The S3 backend is unverified against AWS. Outbound access from
+inside a VPC to the CPCB portals is unverified. `db.t4g.micro` against the full
+dataset is untested. The geometry job's 1.7 GB OSM extract has no home in the
+AWS design. No TLS certificate, no authentication, no rate limiting.
+
+## Credentials/security actions required
+
+- The previously exposed **ngrok token** and **GCP service-account key** must
+  remain revoked and rotated. No replacement is committed anywhere.
+- **`synq-deployer` holds PowerUserAccess + IAMFullAccess** through the
+  `SYNQ-Deployers` group — far more than a deploy needs, and shared with other
+  projects in the account. Recommended: a deploy-scoped policy limited to
+  CloudFormation, ECS, ECR, RDS, ELB, S3, Logs, EventBridge and the specific
+  IAM roles. Not changed here, because it would affect SYNQ.
+- Before exposing staging: restrict `AllowedIngressCidr`, add a certificate,
+  and consider rate limiting `POST /water/ask`.
+
+## Deployment readiness
+
+**STAGING READY.** Not a production candidate: no AWS environment exists, so
+nothing about running there has been verified.
+
+## Exact next steps
+
+1. Deploy the staging stack (~$46/month) and verify what only AWS can verify:
+   outbound access to the CPCB portals from inside the VPC, `db.t4g.micro`
+   under the full dataset, and the S3 path.
+2. Give the geometry job a home for the 1.7 GB extract (S3 plus a download
+   step) so `import-geometry` can run in AWS.
+3. Cache the per-source summary on the water body at `refresh-status` time —
+   the one change that puts the Ganga page under 200 ms.
+4. Narrow the deployer credential, add a certificate, restrict the ingress.
 
 ---
 

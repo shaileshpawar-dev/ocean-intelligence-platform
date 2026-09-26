@@ -118,3 +118,46 @@ Each run writes an `ingestion_runs` row: run id, source, start and finish,
 status, records seen/valid/rejected/inserted/duplicate, stations and water
 bodies created, errors, and the plans skipped as unchanged. A failure in one
 resource is recorded against that resource and the run continues.
+
+## The real-time feed
+
+`cli sync-water-data --provider cpcb_rtwqms --all` reads CPCB's automatic
+analysers from `rtwqmsdb1.cpcb.gov.in` -- plain JSON behind the public
+dashboard, no key. 40 stations, 6 states, hourly, nine ingested parameters.
+
+Three things make it behave differently from the manual extracts:
+
+* **No cursor.** A live feed returns 40 records whether the readings are an
+  hour or a month old, so `resource_total` reports nothing and every run
+  re-reads. That is safe because the uniqueness key is (source, station,
+  parameter, observed_at): a second run in the same hour inserts nothing, and
+  the next hour inserts one row per series. Verified twice against the live
+  feed: 356 seen, 0 inserted, 356 duplicates, and zero duplicate groups across
+  4.6M rows.
+* **Identity comes from geometry.** Twenty-seven of the forty stations are
+  named for a place ("Road Bridge on Gandak, Hajipur", "Sahebganj"), so the
+  station is attached to the mapped river it stands within a kilometre of,
+  recorded as `spatial_nearest_geometry` with the distance. A label that names
+  a *corroborated* water body still wins. 38 of 40 resolve to named rivers;
+  two are more than 1.7 km from anything mapped and stay unclassified.
+* **Outages are recorded, not raised.** The feed intermittently returns a
+  truncated body. Three retries with backoff, then the run is marked failed
+  against the source, the previous data is untouched, and
+  `GET /api/v1/water-jobs` shows the failure.
+
+## Jobs and their schedules
+
+| Command | Cadence | Why |
+|---|---|---|
+| `sync-water-data --provider cpcb_rtwqms --all` | hourly | the analysers publish hourly |
+| `sync-water-data --provider cpcb_nwdp --all` | weekly | monthly extracts at most; unchanged resources cost one request each |
+| `sync-water-data --provider cwc_nwdp --all` | weekly | as above |
+| `import-geometry --file <extract>` | after an ingest that created water bodies | matches new bodies, and re-matches anything a merge left `stale_after_merge` |
+| `process-satellite --limit N` | weekly | Sentinel-2 revisits every five days; most passes are rejected for cloud |
+| `archive-evidence` | after `process-satellite` | copies rendered scenes into the object store |
+| `reindex-water-rag` | on deploy | seeds reference regions and the research corpus, and builds the index |
+| `db upgrade` | before any deploy that carries a migration | the web container never migrates |
+
+Every one of them writes a row in `ingestion_runs` with its type, counts and
+errors. `cli jobs` and `GET /api/v1/water-jobs` report them, including when
+each kind last succeeded -- the question that matters for a scheduled system.

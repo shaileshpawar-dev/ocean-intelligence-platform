@@ -70,6 +70,7 @@ fetched directly. The numeric values match across independent sources.
 
 | Source | Agency | Coverage | Newest data | Identity |
 |---|---|---|---|---|
+| `cpcb_rtwqms` | Central Pollution Control Board | **40 stations, 6 states** (Ganga basin only) | **hourly** | named for the place, resolved by the river they stand on |
 | `cpcb_nwdp` | Central Pollution Control Board | 35 state/UT codes, 211 resources | mostly 2021 (a few stations 2025) | `River` empty — parsed from station names |
 | `cwc_nwdp` | Central Water Commission | 29 states, 169 fetchable resources | **2025** | `River`/`Basin`/`Tributary` populated — read as drainage, not identity |
 

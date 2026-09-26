@@ -82,6 +82,17 @@ and answers; it never ingests, matches geometry or downloads scenes.
 
 ### The honest centre of the product
 
+Three sources, three different answers to "when". CPCB's hourly analysers can
+describe 26 water bodies right now; the two manual programmes describe the
+other 2,714 as they were, with the date attached. Nothing is merged:
+
+| | Ganga River | Mithi River |
+|---|---|---|
+| **Current condition** | Supported by recent data | Cannot be established from this dataset |
+| **Newest source** | CPCB Real-Time, 26 Sep 2026 (hourly) | CPCB Manual, 02 Dec 2021 |
+| **Also measured by** | CWC to 22 May 2025, CPCB Manual to 30 Dec 2021 | — |
+| **Latest measured status** | High concern, *recent enough to describe it now* | High concern, *not a statement about today* |
+
 Two agencies publish on the same portal, and they disagree about *when*:
 CPCB's extracts mostly stop in 2021, the Central Water Commission's run to
 2025. Both are kept, neither overwrites the other, and every water body shows
@@ -99,6 +110,13 @@ between CPCB's last sample and CWC's next one is not a trend.
 
 ## Real data
 
+- **CPCB Real-Time Water Quality Monitoring** — automatic analysers under
+  the Namami Gange programme, published as open JSON, reporting **hourly**.
+  **40 stations in 6 states** on the Ganga and its tributaries: Uttarakhand,
+  Uttar Pradesh, Haryana, Bihar, Jharkhand and West Bengal. This is *not*
+  nationwide real-time coverage — it is 40 of 4,951 monitoring stations, and
+  26 of 2,740 water bodies. For those, and only those, the platform answers a
+  present-tense question.
 - **CPCB Surface Water Quality (Manual)** — all 35 state/UT codes, 582,192
   observations, mostly to 2021.
 - **CWC Surface Water Quality (Manual)** — the Central Water Commission's own

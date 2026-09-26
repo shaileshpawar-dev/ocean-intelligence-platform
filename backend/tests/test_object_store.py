@@ -77,8 +77,12 @@ class _StubS3:
         self.objects: dict[tuple[str, str], bytes] = {}
         self.fail = fail
 
-    def put_object(  # noqa: N803
-        self, Bucket: str, Key: str, Body: bytes, **kwargs: object
+    def put_object(
+        self,
+        Bucket: str,  # noqa: N803 - boto3's own argument names
+        Key: str,  # noqa: N803
+        Body: bytes,  # noqa: N803
+        **kwargs: object,
     ) -> dict:
         if self.fail:
             raise self.fail

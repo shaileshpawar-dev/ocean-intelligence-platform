@@ -93,3 +93,42 @@ platform needs; the water sources are public and unauthenticated. It is
 supplied as an environment variable from the task definition, sourced from
 Secrets Manager. No credential is in the repository, the image, or
 `docker-compose.yml`.
+
+## Phase 4: what the application does at start-up
+
+Nothing expensive, and nothing that writes.
+
+On a server database `init_db()` creates no tables at all -- the PostGIS
+geometry columns come from hand-written migrations, so `create_all` would
+produce a schema that looks complete and has no spatial support. Start-up
+checks that `alembic_version` exists, logs the backend it is talking to, and
+serves. In `ENVIRONMENT=production` a missing schema is fatal with a message
+naming the migrate job; elsewhere the task stays up and reports itself
+not-ready.
+
+Seeding the reference regions and the research corpus is a job
+(`reindex-water-rag`), not a start-up step: those rows are identical for every
+task, and a container should not be the thing that writes them.
+
+Three health endpoints, because a load balancer and an orchestrator ask
+different questions:
+
+| Endpoint | Touches the database | 503 when |
+|---|---|---|
+| `/api/v1/health/live` | no | never -- restarting cannot fix a database |
+| `/api/v1/health/ready` | yes | unreachable, or migrations have not run |
+| `/api/v1/health` | yes | the database is unusable |
+
+The ALB health check uses **readiness**, so a task deployed before its migrate
+job is kept out of rotation rather than serving errors; the container health
+check uses **liveness**, so a database outage cannot start a restart loop.
+
+## Object storage
+
+The database holds evidence metadata and an object reference; the object store
+holds bytes. `WATER_EVIDENCE_BUCKET` selects S3, and its absence selects a
+local directory, which is the development default. A store that is
+unavailable, denied or empty returns nothing and logs once -- the water-body
+page still reads correctly, because the picture was always the least important
+part of the record. The S3 backend has **not** been exercised against a real
+bucket.

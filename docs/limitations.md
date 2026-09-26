@@ -248,13 +248,35 @@ the point of the project.
 
 ## 8. India water intelligence
 
-**Data age.** CPCB's published extracts mostly end in 2020–2021. The Central
-Water Commission's extracts on the same portal run to **April–June 2025**, so
-for the water bodies CWC covers the newest observation is months rather than
-years old — but still older than the monthly cadence both agencies declare.
-The platform therefore continues to say "current condition cannot be
-established" for almost every water body, and names the newest source and its
-date. Nothing here is real-time; no source the platform can reach is.
+**Data age, and the one exception.** CPCB's published extracts mostly end in
+2020–2021 and the Central Water Commission's run to April–June 2025. Since
+Phase 4 there is also **CPCB's real-time network**: automatic analysers
+reporting hourly, which the platform reads and which can describe a water body
+*now*.
+
+That exception is small and must not be read as more than it is:
+
+| | Covered |
+|---|---|
+| Stations | **40 of 4,951** |
+| Water bodies | **26 of 2,740** |
+| States | **6 of 35** (UK, UP, HR, BR, JH, WB) |
+| Rivers | the Ganga and its tributaries, not the whole country |
+| Parameters | 9 of the 12 series published; depth and stage are hydrology, and total organic carbon has no entry in the registry |
+
+For every other water body the platform still says "current condition cannot
+be established from this dataset", names the newest source and gives its date.
+**There is no nationwide real-time water-quality coverage in India that this
+platform can reach**, and it does not pretend otherwise.
+
+**Sensors are not laboratories.** The real-time values come from field
+analysers: they drift, they are cleaned on a schedule, and they go offline.
+The feed publishes each station's maintenance diary. A station that stops
+reporting keeps its last value in the feed, so **the feed being live does not
+mean every station in it is** — on the day it was integrated, 39 of 40 had
+reported within the hour and one had not reported for 24 days. Freshness is
+judged per observation from its own timestamp, never assumed from the source
+being live.
 
 **Two sources, not one truth.** CPCB and CWC sample different stations by
 different programmes. Their observations are stored separately, shown as
