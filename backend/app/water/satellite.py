@@ -42,9 +42,12 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.logging import get_logger
 from app.models.water import WaterBody
 from app.models.water_geo import WaterBodyGeometry, WaterImage
 from app.water import geo
+
+logger = get_logger(__name__)
 
 STAC_SEARCH_URL = "https://planetarycomputer.microsoft.com/api/stac/v1/search"
 DATA_API = "https://planetarycomputer.microsoft.com/api/data/v1"
@@ -283,6 +286,66 @@ def fetch_imagery(
     return outcome
 
 
+def archive_scene_image(
+    db: Session, image: WaterImage, *, timeout: int = 60
+) -> dict | None:
+    """Copy one scene's rendered image into the object store, once.
+
+    Returns the stored reference, or ``None`` when there is nothing to do or
+    the store would not take it. Idempotent: a scene already archived is left
+    alone, so the job can be re-run over everything without re-downloading.
+
+    The database keeps the reference, never the bytes.
+    """
+    from app.core.objects import evidence_key, get_object_store
+
+    meta = dict(image.image_metadata or {})
+    if meta.get("object"):
+        return meta["object"]
+    if not image.full_image_url or not image.scene_id:
+        return None
+
+    body = db.get(WaterBody, image.water_body_id)
+    if body is None:
+        return None
+
+    try:
+        response = httpx.get(image.full_image_url, timeout=timeout, follow_redirects=True)
+        response.raise_for_status()
+        payload = response.content
+        content_type = response.headers.get("content-type", "image/png")
+    except Exception as exc:
+        logger.warning(
+            "scene_archive_fetch_failed",
+            extra={"scene": image.scene_id, "error": str(exc)[:200]},
+        )
+        return None
+
+    if not payload:
+        return None
+
+    store = get_object_store()
+    ref = store.put(
+        evidence_key(body.slug, image.scene_id),
+        payload,
+        content_type=content_type,
+    )
+    if ref is None:
+        # Unavailable, denied, or misconfigured. The scene keeps its
+        # metadata and its rendered URL; nothing is recorded that is not true.
+        return None
+
+    meta["object"] = ref.to_dict()
+    image.image_metadata = meta
+    db.add(image)
+    db.commit()
+    logger.info(
+        "scene_archived",
+        extra={"scene": image.scene_id, "uri": ref.uri, "bytes": ref.size_bytes},
+    )
+    return meta["object"]
+
+
 def images_for(db: Session, body: WaterBody) -> list[dict]:
     """Stored imagery for the detail page, newest first."""
     rows = db.scalars(
@@ -306,6 +369,10 @@ def images_for(db: Session, body: WaterBody) -> list[dict]:
                 else None,
                 "thumbnail_url": r.thumbnail_url,
                 "full_image_url": r.full_image_url,
+                # Present only once the archive job has copied the rendered
+                # image into the object store; absent means "not archived",
+                # never "missing".
+                "object": meta.get("object"),
                 "bbox": [r.min_lon, r.min_lat, r.max_lon, r.max_lat],
                 "licence": r.licence,
                 "retrieved_at": r.retrieved_at.isoformat() if r.retrieved_at else None,

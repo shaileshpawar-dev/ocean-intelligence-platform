@@ -48,6 +48,15 @@ class Settings(BaseSettings):
     database_url: str = f"sqlite:///{(REPO_ROOT / 'data' / 'oip.db').as_posix()}"
     db_echo: bool = False
 
+    # -- Evidence objects --------------------------------------------------
+    water_evidence_bucket: str = ""
+    """S3 bucket for large evidence objects. Empty means the local directory
+    below is used, which is the development default and needs no cloud
+    account. The S3 path has never run against a real bucket."""
+
+    water_object_dir: str = "data/objects"
+    """Where the local object store keeps files when no bucket is set."""
+
     # Connection pool. Ignored on SQLite, which has no server to pool against.
     db_pool_size: int = 5
     """Connections kept open per process. Five per task against an RDS

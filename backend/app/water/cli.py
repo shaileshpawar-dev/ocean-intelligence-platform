@@ -429,6 +429,62 @@ def _jobs(limit: int, job_type: str | None) -> int:
     return 0
 
 
+def _archive_evidence(limit: int | None) -> int:
+    """Copy rendered scene images into the object store, once each.
+
+    The pictures are rendered on demand by an external service, which is why
+    the platform works with an empty store. This makes the evidence survive
+    that service: the bytes go to the object store and the reference goes
+    beside the metadata. Already-archived scenes are skipped, so it is safe to
+    re-run over everything.
+    """
+    from sqlalchemy import select
+
+    from app.core.objects import get_object_store
+    from app.models.water_geo import WaterImage
+    from app.water.jobs import SATELLITE, record_job
+    from app.water.satellite import archive_scene_image
+
+    init_db()
+    store = get_object_store()
+    with (
+        SessionLocal() as db,
+        record_job(db, SATELLITE, source_key="evidence_archive") as c,
+    ):
+        query = select(WaterImage).order_by(WaterImage.acquisition_date.desc())
+        if limit:
+            query = query.limit(limit)
+        images = list(db.scalars(query))
+        archived = skipped = failed = 0
+        for image in images:
+            before = (image.image_metadata or {}).get("object")
+            result = archive_scene_image(db, image)
+            if before is not None:
+                skipped += 1
+            elif result is not None:
+                archived += 1
+            else:
+                failed += 1
+        c.records_seen = len(images)
+        c.records_inserted = archived
+        c.records_skipped = skipped
+        c.records_rejected = failed
+        c.detail = {"backend": store.backend, "bucket": store.bucket}
+    print(
+        json.dumps(
+            {
+                "scenes": len(images),
+                "archived": archived,
+                "already_archived": skipped,
+                "unavailable": failed,
+                "backend": store.backend,
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
 def _health() -> int:
     from app.water.providers import all_providers
 
@@ -532,6 +588,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Seed reference regions and the research corpus, then build the index.",
     )
 
+    archive = sub.add_parser(
+        "archive-evidence",
+        help="Copy rendered satellite images into the object store.",
+    )
+    archive.add_argument("--limit", type=int, help="At most this many scenes.")
+
     sub.add_parser("refresh-status", help="Recompute cached water-body statuses.")
     sub.add_parser("health", help="Probe every registered provider.")
     sub.add_parser("seed-standards", help="Write the reference catalogue to the DB.")
@@ -615,6 +677,8 @@ def main(argv: list[str] | None = None) -> int:
         return _jobs(args.limit, args.job_type)
     if args.command == "reindex-water-rag":
         return _reindex_water_rag()
+    if args.command == "archive-evidence":
+        return _archive_evidence(args.limit)
     if args.command == "refresh-status":
         return _refresh()
     if args.command == "reconcile":

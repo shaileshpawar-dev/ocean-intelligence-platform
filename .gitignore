@@ -86,6 +86,10 @@ backend/app/static/app/
 *.db-wal
 *.db-shm
 data/raw/*
+# Evidence objects: the local object store. Bytes belong in a store, not
+# in git, and in a deployment this is an S3 bucket.
+data/objects/
+backend/data/objects/
 data/processed/*
 !data/**/.gitkeep
 
