@@ -105,8 +105,37 @@ class TestProductionGuards:
         info = report_backend()
         assert "development mode" in info.label
 
-    def test_backend_label_reads_plainly(self):
-        assert BackendInfo("postgresql", "16.4", "3.4").label == (
-            "PostgreSQL 16.4 + PostGIS 3.4"
+    def test_production_with_postgis_but_no_geometry_columns_fails_loudly(
+        self, monkeypatch
+    ):
+        """The extension alone is not a working spatial schema.
+
+        A database created by ``create_all`` has the extension (it is
+        installed in the template or by hand) and none of the geometry
+        columns, which the hand-written migration adds. Reporting that as
+        spatial-ready made every spatial query fail on a missing column.
+        """
+        monkeypatch.setattr(settings, "environment", "production")
+        monkeypatch.setattr(
+            "app.core.dbinfo.backend_info",
+            lambda: BackendInfo("postgresql", "16.4", "3.4", geometry_columns=0),
         )
+        with pytest.raises(
+            SpatialBackendUnavailableError, match="migrations have not been run"
+        ):
+            report_backend()
+
+    def test_a_partly_migrated_schema_is_not_spatial_ready(self):
+        partial = BackendInfo("postgresql", "16.4", "3.4", geometry_columns=3)
+        assert partial.has_postgis is True
+        assert partial.spatial_ready is False
+        assert "3 of 6 geometry columns" in partial.label
+
+    def test_backend_label_reads_plainly(self):
+        ready = BackendInfo("postgresql", "16.4", "3.4", geometry_columns=6)
+        assert ready.label == "PostgreSQL 16.4 + PostGIS 3.4"
+        assert ready.spatial_ready is True
         assert "WITHOUT PostGIS" in BackendInfo("postgresql", "16.4", None).label
+        assert "migrations have not run" in BackendInfo(
+            "postgresql", "16.4", "3.4", geometry_columns=0
+        ).label

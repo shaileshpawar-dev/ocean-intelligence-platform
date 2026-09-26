@@ -66,6 +66,41 @@ it again in a new environment.
    plus parity tests comparing Python and SQL results for distances and
    containment on the real data.
 
+## `create_all` is not the schema
+
+The six geometry columns are added by hand-written migrations, not by the
+SQLAlchemy models:
+
+| Table | Column | Type |
+|---|---|---|
+| `water_bodies` | `centroid_geom` | Point |
+| `water_body_geometries` | `geom` | Geometry |
+| `monitoring_stations` | `geom` | Point |
+| `admin_boundaries` | `geom` | MultiPolygon |
+| `cities` | `extent_geom` | MultiPolygon |
+| `water_images` | `footprint_geom` | Polygon |
+
+They are deliberately outside the models — they are PostgreSQL-only, derived
+from the stored GeoJSON, and Alembic's autogenerate is told to ignore them —
+so **a database created by `create_all` (what `init_db()` does) has the PostGIS
+extension and none of these columns**. Such a database answers
+`SELECT postgis_full_version()` happily and fails every spatial query on a
+column that is not there.
+
+The start-up probe therefore checks `geometry_columns` for all six, not just
+the extension:
+
+- fewer than six → `spatial_sql` is reported false, the application uses the
+  Python fallback paths, and the label says so
+  ("PostgreSQL 16.4 + PostGIS 3.4, but 0 of 6 geometry columns exist");
+- in `ENVIRONMENT=production` that state is fatal, naming `db upgrade` as the
+  fix.
+
+`python -m app.water.cli db upgrade` (the compose `migrate` job) is the only
+supported way to create or update the schema. Verified on a fresh database:
+the chain from base to head produces exactly those six registered geometry
+columns.
+
 ## Risks
 
 - SQLite stores naive datetimes; the code normalises to UTC on read
@@ -73,3 +108,8 @@ it again in a new environment.
   until every row is migrated.
 - The status cache columns (`cached_status`, `cached_historical_status`) must
   be refreshed after migration (`cli refresh-status`).
+- The test suite drops every table at teardown, so it must never be pointed at
+  a real database. `conftest` overwrites `DATABASE_URL` with its own temporary
+  SQLite file and refuses to run otherwise; `scripts/check_test_isolation.sh`
+  proves it against the live server. Use `TEST_POSTGIS_URL` to exercise
+  PostGIS: those tests create a throwaway database and drop only that.

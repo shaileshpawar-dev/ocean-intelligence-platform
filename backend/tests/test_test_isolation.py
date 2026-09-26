@@ -27,7 +27,7 @@ class TestTheSuiteRunsOnItsOwnDatabase:
         assert engine.url.host is None
 
     def test_an_exported_database_url_does_not_win(self):
-        """conftest overwrites rather than defaults, so this cannot be a server.
+        """The override in conftest wins, so this can never be a server.
 
         Proved end to end by `scripts/check_test_isolation.sh`, which exports a
         PostgreSQL DATABASE_URL, runs the suite and checks a marker table in
