@@ -92,10 +92,13 @@ UNMAPPED_SERIES: dict[str, str] = {
 
 #: The unit symbols the feed uses, normalised to what the registry expects.
 #: "---" means dimensionless (pH); the degree symbol arrives mis-encoded.
+# The registry spells water temperature "degC"; "deg C" is not
+# recognised, and a reading arrives flagged unit_not_convertible with no
+# normalised unit at all.
 UNIT_FIXES: dict[str, str] = {
     "---": "",
-    "\u00c2\u00b0C": "deg C",
-    "\u00b0C": "deg C",
+    "\u00c2\u00b0C": "degC",
+    "\u00b0C": "degC",
     "mS/cm": "mS/cm",
     "mg/l": "mg/L",
     "NTU": "NTU",

@@ -794,7 +794,11 @@ function MapPanel({ slug }: { slug: string }) {
           <div className="wmap-panel-block">
             <span className="wmap-panel-label">Latest measured status</span>
             {d.latest_available_status ? (
-              <LatestAvailableStatus detail={d.latest_available_status} observedAt={d.latest_observed_at} />
+              <LatestAvailableStatus
+                detail={d.latest_available_status}
+                observedAt={d.latest_observed_at}
+                describesNow={d.availability?.describes_present_state}
+              />
             ) : (
               <WaterStatusBadge status={null} />
             )}

@@ -77,7 +77,16 @@ Parameters:
   LogRetentionDays:
     Type: Number
     Default: 7
-    Description: Short retention: staging logs are for debugging a deploy.
+    Description: "Short retention: staging logs are for debugging a deploy."
+
+  AllowedIngressCidr:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: >-
+      Who may reach the load balancer. The application has no authentication
+      and no rate limiting, and POST /water/ask does real work per request,
+      so an internet-facing staging environment is worth restricting to an
+      office or VPN range rather than left at 0.0.0.0/0.
 
 Resources:
   # ---------------------------------------------------------------------
@@ -92,8 +101,10 @@ Resources:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: 0.0.0.0/0
-          Description: HTTP. Terminate TLS here once a certificate exists.
+          CidrIp: !Ref AllowedIngressCidr
+          Description: >-
+            HTTP from the allowed range. Terminate TLS here once a
+            certificate exists.
       Tags:
         - Key: project
           Value: oceanai-water-staging

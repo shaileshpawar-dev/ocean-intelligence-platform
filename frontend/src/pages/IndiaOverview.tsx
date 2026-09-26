@@ -85,15 +85,25 @@ export default function IndiaOverview() {
           <div>
             <p>
               The most recent observation anywhere in the ingested data is from{" "}
-              <strong>{formatDay(data.latest_observation_at)}</strong>.
+              <strong>{formatDay(data.latest_observation_at)}</strong>, and{" "}
+              <strong>
+                {(
+                  data.water_bodies - data.without_recent_data
+                ).toLocaleString()}
+              </strong>{" "}
+              of {data.water_bodies.toLocaleString()} water bodies have data
+              recent enough to describe them now.
             </p>
             <p className="muted-note">
-              CPCB's manual surface-water programme samples roughly monthly,
-              but the extracts published on the National Water Data Portal lag
-              well behind that. This platform therefore reports the{" "}
+              That small number is the whole picture. CPCB runs automatic
+              analysers on the Ganga and its tributaries that report hourly, so
+              those water bodies can be described in the present tense. Every
+              other water body here comes from manual sampling programmes whose
+              published extracts lag years behind — CPCB's mostly stop in 2021
+              — and for those the platform reports the{" "}
               <em>latest available</em> observation and its date, and refuses
-              to describe any water body's present condition from data this
-              old. Where you see a status, check the date attached to it.
+              to describe present condition from it. Where you see a status,
+              check the date attached to it.
             </p>
           </div>
         </div>

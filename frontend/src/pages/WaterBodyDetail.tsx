@@ -140,6 +140,7 @@ export default function WaterBodyDetail() {
             <LatestAvailableStatus
               detail={body.latest_available_status}
               observedAt={body.latest_observed_at}
+              describesNow={body.availability?.describes_present_state}
             />
           ) : (
             <p className="muted-note">

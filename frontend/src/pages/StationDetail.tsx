@@ -94,6 +94,9 @@ export default function StationDetail() {
             <LatestAvailableStatus
               detail={data.latest_available_status}
               observedAt={data.latest_observed_at}
+              describesNow={
+                data.latest_available_status?.describes_present_state
+              }
             />
           ) : (
             <p className="muted-note">No measurements recorded at this station.</p>

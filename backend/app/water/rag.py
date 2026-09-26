@@ -1510,6 +1510,14 @@ def _answer_parameter_filter(
                 "water_type": summary["water_type"],
                 "detail": detail,
                 "latest_available_status": summary.get("latest_available_status"),
+                # The date belongs on the item, not only in the citation: the
+                # limitation below promises each one is dated, and a status
+                # rendered without its date is the thing this platform exists
+                # to avoid. The parameter's own reading dates it when there is
+                # one; otherwise the water body's latest observation does.
+                "observed_at": (reading or {}).get("observed_at")
+                or summary.get("latest_observed_at"),
+                "latest_observed_at": summary.get("latest_observed_at"),
                 "cite": i + 1,
             }
         )

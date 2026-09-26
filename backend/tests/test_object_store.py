@@ -35,7 +35,9 @@ def local_store(tmp_path: Path) -> LocalObjectStore:
 
 class TestLocalStore:
     def test_put_returns_a_reference_that_describes_the_object(self, local_store):
-        ref = local_store.put("evidence/a/b/truecolour.png", PNG, content_type="image/png")
+        ref = local_store.put(
+            "evidence/a/b/truecolour.png", PNG, content_type="image/png"
+        )
         assert ref is not None
         assert ref.backend == "local"
         assert ref.key == "evidence/a/b/truecolour.png"
@@ -75,7 +77,9 @@ class _StubS3:
         self.objects: dict[tuple[str, str], bytes] = {}
         self.fail = fail
 
-    def put_object(self, Bucket: str, Key: str, Body: bytes, **kwargs: object) -> dict:  # noqa: N803
+    def put_object(  # noqa: N803
+        self, Bucket: str, Key: str, Body: bytes, **kwargs: object
+    ) -> dict:
         if self.fail:
             raise self.fail
         self.objects[(Bucket, Key)] = Body
@@ -110,7 +114,9 @@ class TestS3Store:
 
     def test_a_denied_upload_returns_none_rather_than_raising(self):
         """An IAM mistake must not become a 500 on a water-body page."""
-        store = S3ObjectStore("bucket-x", client=_StubS3(fail=PermissionError("AccessDenied")))
+        store = S3ObjectStore(
+            "bucket-x", client=_StubS3(fail=PermissionError("AccessDenied"))
+        )
         assert store.put("evidence/x.png", PNG) is None
 
     def test_a_missing_bucket_returns_none(self):

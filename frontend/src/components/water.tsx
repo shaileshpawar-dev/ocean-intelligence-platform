@@ -135,12 +135,20 @@ export function WaterStatusBadge({
 export function LatestAvailableStatus({
   detail,
   observedAt,
+  describesNow,
 }: {
   detail: StatusDetail | null | undefined;
   observedAt?: string | null;
+  /** Whether the reading is recent enough to describe the water body now.
+   *  Comes from the backend's freshness assessment, which judges the age
+   *  against the cadence of the source that produced it: hourly for the
+   *  real-time analysers, monthly for the manual programmes. */
+  describesNow?: boolean;
 }) {
   if (!detail) return null;
   const asOf = detail.as_of ?? observedAt ?? detail.freshness?.observed_at ?? null;
+  const present =
+    describesNow ?? detail.describes_present_state ?? false;
   return (
     <div className="latest-status">
       <div className="latest-status-head">
@@ -161,8 +169,17 @@ export function LatestAvailableStatus({
       <p className="latest-status-asof">
         <CalendarClock size={13} aria-hidden />
         <span>
-          As measured on <strong>{formatDay(asOf)}</strong> — not a statement
-          about this water body today.
+          {present ? (
+            <>
+              As measured on <strong>{formatDay(asOf)}</strong> — recent enough
+              to describe this water body now.
+            </>
+          ) : (
+            <>
+              As measured on <strong>{formatDay(asOf)}</strong> — not a
+              statement about this water body today.
+            </>
+          )}
         </span>
       </p>
     </div>
@@ -513,10 +530,14 @@ export function formatDay(iso: string | null | undefined): string {
   if (!iso) return "date unknown";
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "date unknown";
+  // UTC, because that is how observations are stored and how every sentence
+  // the backend writes about them is dated. Rendering in the reader's zone
+  // made one page show the same reading as "Sep 27" and "26 Sep".
   return date.toLocaleDateString(undefined, {
     day: "2-digit",
     month: "short",
     year: "numeric",
+    timeZone: "UTC",
   });
 }
 

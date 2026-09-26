@@ -944,6 +944,54 @@ def sources_for_body(db: Session, body: WaterBody) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Trends
 # ---------------------------------------------------------------------------
+def _trend_note(
+    points: list[dict], trimmed: dict[str, int], all_points: list[dict]
+) -> str | None:
+    """What a reader needs to know about the series they are looking at."""
+    if len(points) < 2:
+        return "Fewer than two observations; no trend can be drawn."
+    if not trimmed:
+        return None
+    parts = ", ".join(
+        f"{source} has {total:,} measurements"
+        for source, total in sorted(trimmed.items())
+    )
+    return (
+        f"Showing the most recent {MAX_TREND_POINTS_PER_SOURCE:,} measurements "
+        f"per source of {len(all_points):,} in total ({parts}). Each point is a "
+        "measurement; none is averaged or interpolated."
+    )
+
+
+#: Most points returned per source in one trend. A chart a few hundred pixels
+#: wide cannot show more, and the full count is always reported beside them.
+MAX_TREND_POINTS_PER_SOURCE = 500
+
+
+def _cap_per_source(
+    points: list[dict], per_source: int
+) -> tuple[list[dict], dict[str, int]]:
+    """Keep each source's most recent points, in time order.
+
+    Returns the kept points and, for each source that was trimmed, how many
+    measurements it actually has. Nothing is averaged or interpolated: these
+    are the same measurements, fewer of them.
+    """
+    by_source: dict[str, list[dict]] = defaultdict(list)
+    for point in points:
+        by_source[point.get("source") or "unknown"].append(point)
+
+    kept: list[dict] = []
+    trimmed: dict[str, int] = {}
+    for source, series in by_source.items():
+        if len(series) > per_source:
+            trimmed[source] = len(series)
+            series = series[-per_source:]
+        kept.extend(series)
+    kept.sort(key=lambda p: p["observed_at"])
+    return kept, trimmed
+
+
 def parameter_trend(
     db: Session,
     slug: str,
@@ -988,7 +1036,7 @@ def parameter_trend(
     )
 
     rows = db.execute(stmt).all()
-    points = [
+    all_points = [
         {
             "observed_at": _as_utc(observed_at).isoformat(),
             "value": normalized if normalized is not None else value,
@@ -1002,6 +1050,12 @@ def parameter_trend(
         for observed_at, normalized, value, flag, station, source_key, source_name in rows
         if (normalized if normalized is not None else value) is not None
     ]
+
+    # Keep each agency's most recent points. Capping the combined series
+    # instead would drop whole sources: the Ganga's newest 1,500 readings are
+    # all sensor and recent CWC data, and CPCB's line -- the reason the chart
+    # separates sources at all -- would vanish without a word.
+    points, trimmed = _cap_per_source(all_points, MAX_TREND_POINTS_PER_SOURCE)
 
     if days is not None and points:
         cutoff = datetime.now(UTC).timestamp() - days * 86400
@@ -1020,19 +1074,23 @@ def parameter_trend(
         "unit": meta.unit,
         "family": str(meta.family),
         "higher_is_worse": meta.higher_is_worse,
+        # point_count is what came back; measured_count is what exists. They
+        # differ when a long series was trimmed for the chart, and the
+        # difference is stated rather than left for a reader to notice.
         "point_count": len(points),
+        "measured_count": len(all_points),
+        "truncated": bool(trimmed),
+        "truncated_sources": trimmed,
+        "max_points_per_source": MAX_TREND_POINTS_PER_SOURCE,
         "points": points,
         "first_observed_at": points[0]["observed_at"] if points else None,
         "last_observed_at": points[-1]["observed_at"] if points else None,
+        "measured_from": all_points[0]["observed_at"] if all_points else None,
         "min": min(values) if values else None,
         "max": max(values) if values else None,
         "mean": round(sum(values) / len(values), 3) if values else None,
         "sufficient": len(points) >= 2,
-        "note": (
-            None
-            if len(points) >= 2
-            else "Fewer than two observations; no trend can be drawn."
-        ),
+        "note": _trend_note(points, trimmed, all_points),
     }
 
 

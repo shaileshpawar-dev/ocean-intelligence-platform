@@ -224,6 +224,13 @@ def _sync_one(db: Session, table: str, statement: str) -> int:
     if per_row == statement:  # not a GeoJSON-derived table; nothing to salvage
         raise
 
+    # The only interpolated identifier in the codebase, and it comes from
+    # SYNC_STATEMENTS rather than from a request -- but a table name that has
+    # to be spliced into SQL is worth checking against the list it came from,
+    # so a future caller cannot pass something else.
+    known_tables = {name for name, _ in SYNC_STATEMENTS}
+    if table not in known_tables:
+        raise ValueError(f"refusing to query an unknown table: {table!r}")
     ids = [
         row[0]
         for row in db.execute(text(f"SELECT id FROM {table} WHERE geojson IS NOT NULL"))

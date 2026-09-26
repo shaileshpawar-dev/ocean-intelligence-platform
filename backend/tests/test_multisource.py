@@ -228,3 +228,119 @@ class TestFreshnessFollowsTheNewestSource:
         from app.water.freshness import Cadence
 
         assert _cadence_for_measurements(db, []) in set(Cadence)
+
+
+class TestTrendStaysDrawable:
+    """A long series is trimmed per source, and says so.
+
+    The Ganga's BOD series is 14,311 measurements across three agencies: a
+    2.5 MB response for a chart a few hundred pixels wide. Capping the
+    combined series would have been worse than capping nothing -- the newest
+    1,500 points are all sensor and recent CWC readings, so CPCB's line, the
+    reason the chart separates sources at all, would have disappeared without
+    a word.
+    """
+
+    def _many(self, db, source_key: str, name: str, count: int, start_year: int):
+        from datetime import timedelta
+
+        from app.models.water import (
+            DataSource,
+            MonitoringStation,
+            WaterBody,
+            WaterQualityObservation,
+        )
+        from sqlalchemy import select
+
+        source = db.scalar(select(DataSource).where(DataSource.key == source_key))
+        if source is None:
+            source = DataSource(key=source_key, name=name, organisation=name)
+            db.add(source)
+            db.flush()
+        body = db.scalar(select(WaterBody).where(WaterBody.slug == "long-series"))
+        if body is None:
+            body = WaterBody(
+                slug="long-series",
+                name="Long Series River",
+                normalized_name="LONG SERIES",
+                water_type="river",
+                match_confidence=1.0,
+                match_method="test",
+                aliases=[],
+                source_ids={},
+            )
+            db.add(body)
+            db.flush()
+        station = MonitoringStation(
+            station_code=f"{source_key}:1",
+            name=f"{name} station",
+            slug=f"{source_key}-1",
+            source_id=source.id,
+            water_body_id=body.id,
+        )
+        db.add(station)
+        db.flush()
+        base = datetime(start_year, 1, 1, tzinfo=UTC)
+        db.add_all(
+            WaterQualityObservation(
+                source_id=source.id,
+                station_id=station.id,
+                water_body_id=body.id,
+                parameter="bod",
+                observed_at=base + timedelta(days=i),
+                value=2.0 + (i % 5),
+                normalized_value=2.0 + (i % 5),
+                unit="mg/L",
+                normalized_unit="mg/L",
+                quality_flag="ok",
+                retrieved_at=base,
+            )
+            for i in range(count)
+        )
+        db.commit()
+        return body
+
+    def test_each_source_keeps_its_own_most_recent_points(self, db):
+        from app.services.water_service import (
+            MAX_TREND_POINTS_PER_SOURCE,
+            parameter_trend,
+        )
+
+        self._many(db, "old_agency", "Old Agency", 900, 2010)
+        self._many(db, "new_agency", "New Agency", 700, 2024)
+
+        trend = parameter_trend(db, "long-series", "bod")
+        sources = {p["source"] for p in trend["points"]}
+        assert sources == {"old_agency", "new_agency"}, (
+            "capping the combined series would have dropped the older agency"
+        )
+        per_source = {
+            s: sum(1 for p in trend["points"] if p["source"] == s) for s in sources
+        }
+        assert per_source == {
+            "old_agency": MAX_TREND_POINTS_PER_SOURCE,
+            "new_agency": MAX_TREND_POINTS_PER_SOURCE,
+        }
+
+    def test_the_response_says_what_it_trimmed(self, db):
+        from app.services.water_service import parameter_trend
+
+        self._many(db, "old_agency", "Old Agency", 900, 2010)
+        trend = parameter_trend(db, "long-series", "bod")
+
+        assert trend["truncated"] is True
+        assert trend["measured_count"] == 900
+        assert trend["point_count"] == 500
+        assert trend["truncated_sources"] == {"old_agency": 900}
+        assert "most recent 500" in trend["note"]
+        assert "none is averaged or interpolated" in trend["note"]
+
+    def test_a_short_series_is_untouched_and_unannotated(self, db):
+        from app.services.water_service import parameter_trend
+
+        self._many(db, "small_agency", "Small Agency", 12, 2023)
+        trend = parameter_trend(db, "long-series", "bod")
+
+        assert trend["truncated"] is False
+        assert trend["point_count"] == 12 == trend["measured_count"]
+        assert trend["note"] is None

@@ -77,7 +77,7 @@ export default function WaterAI() {
     <>
       <PageHeader
         title="Ask about India's water"
-        subtitle="Answers are assembled from stored CPCB observations and the reference criteria, with every figure cited and dated. Nothing is estimated."
+        subtitle="Answers are assembled from stored observations — CPCB and CWC manual sampling, and CPCB's hourly real-time analysers — against the reference criteria, with every figure cited and dated. Nothing is estimated, and sources are never combined."
       />
 
       <SectionCard>
