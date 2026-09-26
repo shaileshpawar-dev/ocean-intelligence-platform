@@ -48,7 +48,16 @@ def bodies_within_radius(
     status: str | None = None,
     limit: int = 50,
 ) -> list[tuple[int, float]] | None:
-    """(water_body_id, distance_km) within a true circle, nearest first."""
+    """(water_body_id, distance_km) within a true circle, nearest first.
+
+    ``centroid_geom`` is derived by the ``db sync-geometry`` job, so a body
+    ingested since the last run has none. The lat/lon columns are written at
+    ingest and are the same position, so they stand in for it: without that
+    fallback a fresh staging stack answered "nothing near here" for water
+    bodies it was already serving, which the smoke test caught. The indexed
+    branch is kept separate from the fallback so the GIST index still does the
+    work for every row that has the derived column.
+    """
     if not available(db):
         return None
     rows = db.execute(
@@ -56,15 +65,34 @@ def bodies_within_radius(
             """
             SELECT id,
                    ST_Distance(
-                       centroid_geom::geography,
+                       COALESCE(
+                           centroid_geom,
+                           ST_SetSRID(ST_MakePoint(centroid_lon, centroid_lat), 4326)
+                       )::geography,
                        ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography
                    ) / 1000.0 AS km
               FROM water_bodies
-             WHERE centroid_geom IS NOT NULL
-               AND ST_DWithin(
-                       centroid_geom::geography,
-                       ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography,
-                       :metres
+             WHERE (
+                     (
+                       centroid_geom IS NOT NULL
+                       AND ST_DWithin(
+                               centroid_geom::geography,
+                               ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography,
+                               :metres
+                           )
+                     )
+                     OR (
+                       centroid_geom IS NULL
+                       AND centroid_lat IS NOT NULL
+                       AND centroid_lon IS NOT NULL
+                       AND ST_DWithin(
+                               ST_SetSRID(
+                                   ST_MakePoint(centroid_lon, centroid_lat), 4326
+                               )::geography,
+                               ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography,
+                               :metres
+                           )
+                     )
                    )
                AND (
                      CAST(:water_type AS text) IS NULL
@@ -101,6 +129,9 @@ def bodies_near_city(
 
     Distance is measured to the city polygon, so everything inside the city
     is at 0 km, which is what "in Mumbai" means.
+
+    ``centroid_geom`` falls back to the lat/lon written at ingest, so a water
+    body added since the last ``db sync-geometry`` is still found.
     """
     if not available(db):
         return None
@@ -108,14 +139,27 @@ def bodies_near_city(
         text(
             """
             SELECT w.id,
-                   ST_Distance(w.centroid_geom::geography, c.extent_geom::geography)
-                       / 1000.0 AS km
+                   ST_Distance(
+                       COALESCE(
+                           w.centroid_geom,
+                           ST_SetSRID(ST_MakePoint(w.centroid_lon, w.centroid_lat), 4326)
+                       )::geography,
+                       c.extent_geom::geography
+                   ) / 1000.0 AS km
               FROM water_bodies w
               JOIN cities c ON c.id = :city_id
-             WHERE w.centroid_geom IS NOT NULL
+             WHERE COALESCE(
+                       w.centroid_geom,
+                       ST_SetSRID(ST_MakePoint(w.centroid_lon, w.centroid_lat), 4326)
+                   ) IS NOT NULL
                AND c.extent_geom IS NOT NULL
                AND ST_DWithin(
-                       w.centroid_geom::geography, c.extent_geom::geography, :metres
+                       COALESCE(
+                           w.centroid_geom,
+                           ST_SetSRID(ST_MakePoint(w.centroid_lon, w.centroid_lat), 4326)
+                       )::geography,
+                       c.extent_geom::geography,
+                       :metres
                    )
              ORDER BY km
              LIMIT :limit
@@ -129,19 +173,39 @@ def bodies_near_city(
 def stations_near_city(
     db: Session, city_id: int, radius_km: float, *, limit: int = 200
 ) -> list[tuple[int, float]] | None:
-    """(station_id, distance_km) from a city's extent, nearest first."""
+    """(station_id, distance_km) from a city's extent, nearest first.
+
+    ``geom`` falls back to the lat/lon written at ingest, so a station added
+    since the last ``db sync-geometry`` is still found.
+    """
     if not available(db):
         return None
     rows = db.execute(
         text(
             """
             SELECT s.id,
-                   ST_Distance(s.geom::geography, c.extent_geom::geography) / 1000.0 AS km
+                   ST_Distance(
+                       COALESCE(
+                           s.geom,
+                           ST_SetSRID(ST_MakePoint(s.longitude, s.latitude), 4326)
+                       )::geography,
+                       c.extent_geom::geography
+                   ) / 1000.0 AS km
               FROM monitoring_stations s
               JOIN cities c ON c.id = :city_id
-             WHERE s.geom IS NOT NULL
+             WHERE COALESCE(
+                       s.geom,
+                       ST_SetSRID(ST_MakePoint(s.longitude, s.latitude), 4326)
+                   ) IS NOT NULL
                AND c.extent_geom IS NOT NULL
-               AND ST_DWithin(s.geom::geography, c.extent_geom::geography, :metres)
+               AND ST_DWithin(
+                       COALESCE(
+                           s.geom,
+                           ST_SetSRID(ST_MakePoint(s.longitude, s.latitude), 4326)
+                       )::geography,
+                       c.extent_geom::geography,
+                       :metres
+                   )
              ORDER BY km
              LIMIT :limit
             """

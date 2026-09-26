@@ -330,3 +330,59 @@ class TestSpatialQueries:
         groups = spatial.station_clusters(pg, None, cell_degrees=10.0)
         assert groups is not None
         assert sum(g["count"] for g in groups) == 2
+
+    def test_proximity_does_not_depend_on_the_sync_job(self, pg: Session):
+        """A body ingested since the last sync-geometry is still found.
+
+        ``centroid_geom`` is derived by ``db sync-geometry``; the lat/lon
+        columns are written at ingest. The staging smoke test caught the
+        earlier behaviour: a fresh stack with real data answered "nothing
+        near here" until a geometry job had run.
+        """
+        self._fixture(pg)
+        from app.services import spatial
+
+        # Exactly what an ingest leaves behind: a position, no derived column.
+        pg.execute(
+            text(
+                "INSERT INTO water_bodies (id, slug, name, normalized_name, "
+                " water_type, state_id, centroid_lat, centroid_lon, "
+                " match_confidence, match_method, aliases, source_ids, "
+                " geometry_status, station_count, observation_count, created_at, "
+                " updated_at) VALUES "
+                "(3,'just-ingested','Just Ingested River','JUST INGESTED','river',"
+                " 1,19.06,72.86,1.0,'t','[]','{}','unmatched',1,1,:t,:t)"
+            ),
+            {"t": WHEN},
+        )
+        pg.flush()
+        assert pg.execute(
+            text("SELECT centroid_geom IS NULL FROM water_bodies WHERE id = 3")
+        ).scalar_one(), "fixture must have no derived geometry"
+
+        found = spatial.bodies_within_radius(pg, 19.05, 72.85, 25.0)
+        assert found is not None
+        assert 3 in [i for i, _ in found], "ingested body must be within 25 km"
+        assert 2 not in [i for i, _ in found], "the far river is still excluded"
+        distance = next(km for i, km in found if i == 3)
+        assert distance == pytest.approx(1.5, abs=0.5)
+
+    def test_stations_near_city_do_not_depend_on_the_sync_job(self, pg: Session):
+        self._fixture(pg)
+        from app.services import spatial
+
+        pg.execute(
+            text(
+                "INSERT INTO monitoring_stations (id, station_code, name, slug, "
+                " source_id, water_body_id, state_id, latitude, longitude, "
+                " relationship_type, geo_quality, observation_count, created_at, "
+                " updated_at) VALUES "
+                "(9,'MH:NEW','New Station','new-station',1,1,1,19.05,72.85,"
+                " 'name_match','ok',1,:t,:t)"
+            ),
+            {"t": WHEN},
+        )
+        pg.flush()
+        near = spatial.stations_near_city(pg, city_id=1, radius_km=25)
+        assert near is not None
+        assert 9 in [i for i, _ in near]

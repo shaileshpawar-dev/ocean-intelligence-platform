@@ -176,7 +176,7 @@ class TestSubBasinLabelsAreTidied:
         assert "Bhagirathi-II (WB)*" in match.aliases
 
     def test_an_en_dashed_reach_number_is_also_stripped(self):
-        match = resolve("X", river="Ganga", tributary="Yamuna – II", basin="Ganga")
+        match = resolve("X", river="Ganga", tributary="Yamuna \u2013 II", basin="Ganga")
         assert match.name == "Yamuna River"
 
 
