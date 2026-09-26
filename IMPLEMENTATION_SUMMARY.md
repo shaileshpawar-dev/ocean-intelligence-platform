@@ -126,9 +126,12 @@ Two smaller findings from the same pass:
   "Banjara Kunta" versus "Banjara Lake" is a label clash, not a spelling
   variant. Shared elements: 21 → 6.
 
-Geometry QA over the national dataset: **523 findings → 212**. What remains is
-mostly the sub-basin limitation above (206 far stations, median 91 km), which
-is reported rather than repaired, and documented as a limitation.
+Geometry QA over the national dataset: **523 findings → 217** on the rebuilt
+data. What remains is 210 stations further than 25 km from their water body's
+shape -- the sub-basin limitation above, median 91 km, reported rather than
+repaired and documented as a limitation -- 6 OpenStreetMap elements shared by
+two water bodies, and 1 self-intersecting source polygon. No derived geometry
+is unusable.
 
 ## P3.6 What is in the database
 
@@ -198,8 +201,8 @@ from the water-body page (Godavari 1,305 ms → 257 ms).
 
 | Check | Result |
 |---|---|
-| Backend suite | 496 passed, 17 skipped |
-| PostGIS suite against a real PostGIS | 17 passed |
+| Backend suite | 496 passed, 18 skipped |
+| PostGIS suite against a real PostGIS | 18 passed |
 | Ruff (lint + format) | clean |
 | `tsc --noEmit`, ESLint (max-warnings 0) | clean |
 | Frontend build | succeeds |
