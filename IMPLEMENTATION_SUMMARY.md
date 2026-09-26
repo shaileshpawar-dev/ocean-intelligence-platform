@@ -130,7 +130,59 @@ Geometry QA over the national dataset: **523 findings → 212**. What remains is
 mostly the sub-basin limitation above (206 far stations, median 91 km), which
 is reported rather than repaired, and documented as a limitation.
 
-## P3.6 Deployment shape
+## P3.6 What is in the database
+
+Rebuilt from the sources in 41 minutes (jobs only; nothing was served from a
+half-loaded database):
+
+| | |
+|---|---|
+| Observations | **4,600,112** |
+| Monitoring stations | 4,911 |
+| Water bodies | 2,731 |
+| Water bodies with a matched PostGIS geometry | 405 |
+| Identity taken from a sub-basin (confidence 0.55) | 124 |
+| State and district boundaries | 771 |
+| Cities (documented district groupings) | 35 |
+| Sentinel-2 scenes accepted | 17 (105 lakes had no clear scene) |
+
+| Source | Observations | Stations | Range |
+|---|---|---|---|
+| CWC Surface Water Quality (Manual) | 4,017,920 | 911 | 01 Aug 1963 – **05 Jun 2025** |
+| CPCB Surface Water Quality (Manual) | 582,192 | 4,000 | 01 Jan 2018 – 01 Jan 2025 |
+
+Zero ingestion errors on both national runs, and zero identity reassignments:
+the rule reads the drainage columns correctly at ingest, so the correction is
+not needed on a fresh load.
+
+## P3.7 Performance (PostgreSQL + PostGIS, 4.6M observations, median of 10)
+
+| Route | Median | p90 | Payload |
+|---|---|---|---|
+| `/health` | 3 ms | 6 ms | 1 KB |
+| `/map/water-bodies` national | 63 ms | 127 ms | 368 KB |
+| `/map/water-bodies` city viewport | 7 ms | 20 ms | 6 KB |
+| `/map/geometries` national, zoom 6 | 527 ms | 547 ms | 287 KB |
+| `/map/geometries` city, zoom 11 | 25 ms | 28 ms | 10 KB |
+| `/map/station-clusters` national | 23 ms | 31 ms | 12 KB |
+| `/map/near` 25 km | 27 ms | 33 ms | 24 KB |
+| `/boundaries/states` | 79 ms | 93 ms | 185 KB |
+| Water body, typical (Mithi) | 45 ms | 48 ms | 30 KB |
+| Water body, heaviest (Ganga, 347k observations) | 654 ms | 669 ms | 246 KB |
+| Station detail | 25 ms | 26 ms | 57 KB |
+| Q&A | 215 ms | 234 ms | 2 KB |
+
+Against the targets: map viewport sub-second (worst 527 ms), nearby well under
+100 ms (27 ms), water-body lookup under 200 ms for every body except the Ganga,
+which holds 7.5% of all observations and answers in 654 ms. Start-up is
+immediate: the container connects and serves; it loads nothing.
+
+Phase 3 changes that moved these: server-side geometry simplification
+(national geometry 546 KB → 287 KB), the boundary byte cache (528 ms → 79 ms),
+server-side station clustering (280 ms → 23 ms), and removing duplicated reads
+from the water-body page (Godavari 1,305 ms → 257 ms).
+
+## P3.8 Deployment shape
 
 - `docker-compose.yml` is the staging stack: PostGIS, a one-shot `migrate`
   job, a one-shot `jobs` profile for ingestion/geometry/imagery, and a
@@ -142,11 +194,11 @@ is reported rather than repaired, and documented as a limitation.
 - The runtime image is 338 MB, runs as uid 1000, and carries no build
   toolchain, no Node and no ML extras.
 
-## P3.7 Verification
+## P3.9 Verification
 
 | Check | Result |
 |---|---|
-| Backend suite | 491 passed, 17 skipped |
+| Backend suite | 496 passed, 17 skipped |
 | PostGIS suite against a real PostGIS | 17 passed |
 | Ruff (lint + format) | clean |
 | `tsc --noEmit`, ESLint (max-warnings 0) | clean |
@@ -155,8 +207,9 @@ is reported rather than repaired, and documented as a limitation.
 | Migration chain on an empty database | base → head, six registered geometry columns |
 | Staging smoke test | passes, including restart persistence |
 | Security scan | no secrets, no f-string SQL, no eval/exec/subprocess, fixed outbound hosts |
+| Acceptance tests | 13 of 14 run and passing; test 14 is the suite itself |
 
-## P3.8 Two defects the verification itself found
+## P3.10 Three defects the verification itself found
 
 **The staging smoke test found a real bug.** On PostgreSQL, `/map/near` and the
 near-city queries read only the derived columns that `db sync-geometry` writes,
@@ -178,6 +231,18 @@ against anything but its own temporary SQLite file;
 PostgreSQL database, running the full suite pointed at that database, and
 failing if the marker is gone. The same incident is why the start-up probe now
 checks for the geometry columns instead of trusting the extension.
+
+**The performance work found a data-honesty bug.** Chasing a slow page showed
+that the three "latest value of every parameter" queries read only the few
+thousand most recent rows and deduplicated in Python. On a long river that
+window does not reach the last time a rarely-sampled parameter was measured,
+so the parameter vanished from the page and was then listed as *not
+measured*: the Teesta was hiding 20 of its 37 parameters, the Ganga 11 of 39,
+the Godavari 8 of 38 — and `compute_status` used the same capped read, so a
+status could be computed without the parameter that exceeds its limit. Each
+parameter's latest observation is now selected in SQL, over every row. Five
+regression tests build a history longer than the old caps; all five fail
+against the previous code.
 
 ---
 
