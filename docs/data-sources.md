@@ -89,6 +89,33 @@ differ — every Odisha row, `Basin="Brahmani and Baitarni"`,
 to conclude, is in
 [water-geospatial.md](water-geospatial.md#2-canonical-identity).
 
+## Phase 5 source survey (26–27 September 2026)
+
+The question was whether any further **recent water-quality observations** can
+be obtained for India. Every candidate below was queried directly, not read
+about. The answer is no: the three sources already integrated are all that is
+publicly accessible, and the "26 of 2,740 water bodies with current data"
+figure is a property of what India publishes, not a gap in this platform.
+
+| Source | Access | Schema | Coverage | Freshness | Verdict |
+|---|---|---|---|---|---|
+| CPCB real-time analysers | public JSON, no key | known | 40 stations, 6 states | **hourly** | **integrated** |
+| CPCB manual (NWDP) | public CKAN | known | 35 state/UT codes | to 2021 | **integrated** |
+| CWC manual (NWDP) | public CKAN | known | 29 states | to Jun 2025 | **integrated** |
+| **CGWB groundwater quality** (NWDP) | public CKAN, "Other (Open)" | *identical* to the ingested ones | 62 resources, every state/UT, ~10–15k rows per large state | **newest row 2018**; the 2021–2025 resources exist but hold **0 rows** | not integrated: no currency gain, and the platform's question is about rivers and lakes |
+| **Sikkim surface water** (NWDP) | public CKAN, non-commercial | different: `NAME OF STATION`, `MONTH`, `PARAMETER`, `READING` | 1 state, 604 rows | labelled 2025–26 | not integrated: month-only dates ("Dec-25"), no coordinates, readings such as "Nil" — nothing that can be placed on a map or given an observation time |
+| **Karnataka (KSPCB)** (NWDP) | public CKAN, licence unspecified | different: location name + district, real dates, real parameters | 1 state, 1,451 rows | 2005–2022 | not integrated: older than the CPCB extract already held, and no coordinates |
+| State surface-water departments (NWDP) | public CKAN | known | many states, **to 2026** | current | **out of scope**: these are water *level*, discharge, wind, solar and temperature telemetry — hydrology, not water quality |
+| **MPCB water-quality portal** | page loads; its own data script `demoCMS/js/demoPage.js` returns **404** | n/a | Maharashtra, 73 stations incl. the Mithi | claims 2000–2026 | not integrated: the portal's data retrieval is broken on the publisher's side, so there is nothing to read |
+| MPCB polluted river stretches | page loads | per-river **PDF**, priority I–V for 49 rivers | Maharashtra | updated Mar 2025 | see [limitations](limitations.md): an official classification exists but only as PDFs |
+| DPCC (Delhi) | **no DNS** | — | — | — | unavailable from this environment |
+| UEPPCB (Uttarakhand) | **no DNS** | — | — | — | unavailable |
+| India-WRIS | **connection reset** | — | — | — | unavailable (unchanged since Phase 3) |
+
+Two things follow, and both are stated on the overview page rather than buried
+here: **there is no nationwide real-time water-quality feed in India that this
+platform can reach**, and the platform already consumes every accessible one.
+
 Checked for newer data and **not** usable from this environment:
 India-WRIS (`indiawris.gov.in` resolves but every connection is reset),
 `rtwqms.cpcb.gov.in` (no such host), data.gov.in (requires an API key for the

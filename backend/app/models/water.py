@@ -256,6 +256,20 @@ class WaterBody(Base, TimestampMixin):
     )
     station_count: Mapped[int] = mapped_column(Integer, default=0)
     observation_count: Mapped[int] = mapped_column(Integer, default=0)
+
+    summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    """Per-source counts and the latest measurement of every parameter,
+    computed by the refresh-status job. A cache: every reader recomputes when
+    it is missing or stale, so it can never make an answer wrong."""
+
+    summary_observation_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    """The observation count the summary was built from. When it no longer
+    matches, the summary predates an ingest and is recomputed."""
+
+    summary_computed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     cached_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     """Last computed present-tense :class:`WaterStatus`. Advisory; the detail
     endpoint always recomputes from observations so a stale cache cannot

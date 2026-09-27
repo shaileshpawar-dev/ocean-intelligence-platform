@@ -653,6 +653,16 @@ def _month_key(db: Session, column: ColumnElement) -> ColumnElement:
     return func.strftime("%Y-%m", column)
 
 
+def _parse_iso(value: str | None) -> datetime | None:
+    """An ISO timestamp from the cached summary, or None."""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
 def data_quality(db: Session, body: WaterBody, status_detail: dict) -> dict:
     """HIGH / MODERATE / LIMITED / INSUFFICIENT from objective metadata.
 
@@ -661,22 +671,32 @@ def data_quality(db: Session, body: WaterBody, status_detail: dict) -> dict:
     out on purpose -- it has its own panel -- so old but thorough monitoring
     is not confused with thin monitoring.
     """
-    first, last, months = db.execute(
-        select(
-            func.min(WaterQualityObservation.observed_at),
-            func.max(WaterQualityObservation.observed_at),
-            func.count(
-                func.distinct(_month_key(db, WaterQualityObservation.observed_at))
-            ),
-        ).where(WaterQualityObservation.water_body_id == body.id)
-    ).one()
-    measured = set(
-        db.scalars(
-            select(WaterQualityObservation.parameter)
-            .where(WaterQualityObservation.water_body_id == body.id)
-            .distinct()
+    # The span, the month count and the measured parameters all come from
+    # the cached summary when it is current: computing them here cost 285 ms
+    # of the Ganga's 376 ms page. The queries remain as the fallback.
+    cached = ws.summary_for(db, body)
+    if cached.get("parameters"):
+        first = _parse_iso(cached.get("first_observed_at"))
+        last = _parse_iso(cached.get("latest_observed_at"))
+        months = cached.get("sampling_months", 0)
+        measured = {entry["parameter"] for entry in cached["parameters"]}
+    else:
+        first, last, months = db.execute(
+            select(
+                func.min(WaterQualityObservation.observed_at),
+                func.max(WaterQualityObservation.observed_at),
+                func.count(
+                    func.distinct(_month_key(db, WaterQualityObservation.observed_at))
+                ),
+            ).where(WaterQualityObservation.water_body_id == body.id)
+        ).one()
+        measured = set(
+            db.scalars(
+                select(WaterQualityObservation.parameter)
+                .where(WaterQualityObservation.water_body_id == body.id)
+                .distinct()
+            )
         )
-    )
     core = [p for p in CORE_PARAMETERS if p in measured]
     stations = list(
         db.scalars(

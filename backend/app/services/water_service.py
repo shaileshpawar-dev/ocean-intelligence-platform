@@ -173,7 +173,25 @@ def compute_status(
 
 
 def latest_measurements(db: Session, body: WaterBody) -> list[Measurement]:
-    """The most recent measurement of every parameter on this water body."""
+    """The most recent measurement of every parameter on this water body.
+
+    Served from the cached summary when it is current. On the Ganga the query
+    below reads 347k observations and costs 630 ms; the cache holds the forty
+    rows it distils to.
+    """
+    if summary_is_current(body) and (body.summary or {}).get("measurements") is not None:
+        return [
+            Measurement(
+                parameter_key=entry["parameter"],
+                value=entry["value"],
+                observed_at=datetime.fromisoformat(entry["observed_at"]),
+                unit=entry.get("unit"),
+                source=entry.get("source"),
+            )
+            for entry in body.summary["measurements"]
+            if entry.get("observed_at")
+        ]
+
     rows = db.execute(
         select(
             WaterQualityObservation.parameter,
@@ -282,6 +300,313 @@ def classifications_for(db: Session, body: WaterBody) -> list[ClassificationRef]
     ]
 
 
+def summary_is_current(body: WaterBody) -> bool:
+    """Whether this body's cached summary still describes its observations.
+
+    The observation count is the test: it changes whenever an ingest adds a
+    row, and it is already maintained. A summary built from a different count
+    predates that ingest.
+    """
+    return (
+        body.summary is not None
+        and body.summary_observation_count == body.observation_count
+    )
+
+
+def build_summary(db: Session, body: WaterBody) -> dict:
+    """Compute everything the detail page and the RAG read repeatedly.
+
+    One pass over the water body's observations, producing what four separate
+    aggregates used to produce per request: the latest measurement of every
+    parameter, the per-source counts and recency, and the observation span.
+    """
+    per_source = [
+        {
+            "key": row.key,
+            "name": row.name,
+            "organisation": row.organisation,
+            "source_type": row.source_type,
+            "observation_method": row.observation_method,
+            "expected_cadence": row.expected_cadence,
+            "reliability_note": row.reliability_note,
+            "url": row.url,
+            "dataset": row.dataset,
+            "licence": row.licence,
+            "observation_count": int(row.observations or 0),
+            "parameter_count": int(row.parameters or 0),
+            "first_observed_at": _iso(row.first_observed),
+            "latest_observed_at": _iso(row.latest_observed),
+            "retrieved_at": _iso(row.retrieved),
+        }
+        for row in db.execute(
+            select(
+                DataSource.key,
+                DataSource.name,
+                DataSource.organisation,
+                DataSource.source_type,
+                DataSource.observation_method,
+                DataSource.expected_cadence,
+                DataSource.reliability_note,
+                DataSource.url,
+                DataSource.dataset,
+                DataSource.licence,
+                func.count(WaterQualityObservation.id).label("observations"),
+                func.count(func.distinct(WaterQualityObservation.parameter)).label(
+                    "parameters"
+                ),
+                func.min(WaterQualityObservation.observed_at).label("first_observed"),
+                func.max(WaterQualityObservation.observed_at).label("latest_observed"),
+                func.max(WaterQualityObservation.retrieved_at).label("retrieved"),
+            )
+            .join(DataSource, DataSource.id == WaterQualityObservation.source_id)
+            .where(WaterQualityObservation.water_body_id == body.id)
+            .group_by(DataSource.id)
+        ).all()
+    ]
+    per_source.sort(key=lambda entry: entry["latest_observed_at"] or "", reverse=True)
+
+    measurements = [
+        {
+            "parameter": m.parameter_key,
+            "value": m.value,
+            "unit": m.unit,
+            "observed_at": _iso(m.observed_at),
+            "source": m.source,
+        }
+        for m in latest_measurements(db, body)
+    ]
+
+    span = db.execute(
+        select(
+            func.min(WaterQualityObservation.observed_at),
+            func.max(WaterQualityObservation.observed_at),
+        ).where(WaterQualityObservation.water_body_id == body.id)
+    ).one()
+
+    return {
+        "version": 1,
+        "sources": per_source,
+        "measurements": measurements,
+        "first_observed_at": _iso(span[0]),
+        "latest_observed_at": _iso(span[1]),
+        "parameter_count": len(measurements),
+    }
+
+
+def _month_key(db: Session, column: ColumnElement) -> ColumnElement:
+    """A month bucket for counting distinct sampling months, per dialect."""
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        return func.date_trunc("month", column)
+    return func.strftime("%Y-%m", column)
+
+
+def build_all_summaries(db: Session) -> dict[int, dict]:
+    """Every water body's summary, in two set-based queries.
+
+    Building these one body at a time turned a 25-second job into a
+    twenty-minute one. Grouping by ``water_body_id`` instead does the whole
+    country in about seven seconds.
+    """
+    sources = {
+        row.id: row
+        for row in db.execute(
+            select(
+                DataSource.id,
+                DataSource.key,
+                DataSource.name,
+                DataSource.organisation,
+                DataSource.source_type,
+                DataSource.observation_method,
+                DataSource.expected_cadence,
+                DataSource.reliability_note,
+                DataSource.url,
+                DataSource.dataset,
+                DataSource.licence,
+            )
+        ).all()
+    }
+
+    per_body: dict[int, dict] = {}
+
+    for row in db.execute(
+        select(
+            WaterQualityObservation.water_body_id,
+            WaterQualityObservation.source_id,
+            func.count(WaterQualityObservation.id),
+            func.count(func.distinct(WaterQualityObservation.parameter)),
+            func.min(WaterQualityObservation.observed_at),
+            func.max(WaterQualityObservation.observed_at),
+            func.max(WaterQualityObservation.retrieved_at),
+        )
+        .where(WaterQualityObservation.water_body_id.is_not(None))
+        .group_by(
+            WaterQualityObservation.water_body_id,
+            WaterQualityObservation.source_id,
+        )
+    ).all():
+        body_id, source_id, count, parameters, first, last, retrieved = row
+        source = sources.get(source_id)
+        if source is None:
+            continue
+        entry = per_body.setdefault(
+            body_id, {"version": 1, "sources": [], "measurements": []}
+        )
+        entry["sources"].append(
+            {
+                "key": source.key,
+                "name": source.name,
+                "organisation": source.organisation,
+                "source_type": source.source_type,
+                "observation_method": source.observation_method,
+                "expected_cadence": source.expected_cadence,
+                "reliability_note": source.reliability_note,
+                "url": source.url,
+                "dataset": source.dataset,
+                "licence": source.licence,
+                "observation_count": int(count or 0),
+                "parameter_count": int(parameters or 0),
+                "first_observed_at": _iso(first),
+                "latest_observed_at": _iso(last),
+                "retrieved_at": _iso(retrieved),
+            }
+        )
+
+    # The latest measurement of every parameter, for every body, in one pass.
+    newest = (
+        select(
+            WaterQualityObservation.water_body_id,
+            WaterQualityObservation.parameter,
+            func.max(WaterQualityObservation.observed_at).label("observed_at"),
+        )
+        .where(WaterQualityObservation.water_body_id.is_not(None))
+        .group_by(
+            WaterQualityObservation.water_body_id,
+            WaterQualityObservation.parameter,
+        )
+    )
+    for row in db.execute(
+        select(
+            WaterQualityObservation.water_body_id,
+            WaterQualityObservation.parameter,
+            WaterQualityObservation.normalized_value,
+            WaterQualityObservation.value,
+            WaterQualityObservation.normalized_unit,
+            WaterQualityObservation.observed_at,
+            DataSource.name,
+        )
+        .join(DataSource, DataSource.id == WaterQualityObservation.source_id)
+        .where(
+            tuple_(
+                WaterQualityObservation.water_body_id,
+                WaterQualityObservation.parameter,
+                WaterQualityObservation.observed_at,
+            ).in_(newest)
+        )
+    ).all():
+        body_id, parameter, normalized, value, unit, observed_at, source_name = row
+        entry = per_body.setdefault(
+            body_id, {"version": 1, "sources": [], "measurements": []}
+        )
+        # Ties (two stations at the same instant) keep the first seen, which
+        # is what the per-request path does too.
+        if any(m["parameter"] == parameter for m in entry["measurements"]):
+            continue
+        entry["measurements"].append(
+            {
+                "parameter": parameter,
+                "value": normalized if normalized is not None else value,
+                "unit": unit,
+                "observed_at": _iso(observed_at),
+                "source": source_name,
+            }
+        )
+
+    # Per-parameter counts and spans: what the trend selector offers and
+    # what the data-quality panel counts.
+    for row in db.execute(
+        select(
+            WaterQualityObservation.water_body_id,
+            WaterQualityObservation.parameter,
+            func.count(WaterQualityObservation.id),
+            func.min(WaterQualityObservation.observed_at),
+            func.max(WaterQualityObservation.observed_at),
+        )
+        .where(WaterQualityObservation.water_body_id.is_not(None))
+        .group_by(
+            WaterQualityObservation.water_body_id,
+            WaterQualityObservation.parameter,
+        )
+    ).all():
+        body_id, parameter, count, first, last = row
+        entry = per_body.setdefault(
+            body_id, {"version": 1, "sources": [], "measurements": []}
+        )
+        entry.setdefault("parameters", []).append(
+            {
+                "parameter": parameter,
+                "point_count": int(count or 0),
+                "first_observed_at": _iso(first),
+                "last_observed_at": _iso(last),
+            }
+        )
+
+    # Distinct months sampled, which the data-quality panel reports.
+    for row in db.execute(
+        select(
+            WaterQualityObservation.water_body_id,
+            func.count(
+                func.distinct(_month_key(db, WaterQualityObservation.observed_at))
+            ),
+        )
+        .where(WaterQualityObservation.water_body_id.is_not(None))
+        .group_by(WaterQualityObservation.water_body_id)
+    ).all():
+        body_id, months = row
+        entry = per_body.setdefault(
+            body_id, {"version": 1, "sources": [], "measurements": []}
+        )
+        entry["sampling_months"] = int(months or 0)
+
+    for entry in per_body.values():
+        entry.setdefault("parameters", [])
+        entry.setdefault("sampling_months", 0)
+        entry["sources"].sort(
+            key=lambda item: item["latest_observed_at"] or "", reverse=True
+        )
+        firsts = [
+            s["first_observed_at"] for s in entry["sources"] if s["first_observed_at"]
+        ]
+        lasts = [
+            s["latest_observed_at"] for s in entry["sources"] if s["latest_observed_at"]
+        ]
+        entry["first_observed_at"] = min(firsts) if firsts else None
+        entry["latest_observed_at"] = max(lasts) if lasts else None
+        entry["parameter_count"] = len(entry["measurements"])
+
+    return per_body
+
+
+def store_summary(db: Session, body: WaterBody) -> dict:
+    """Build the summary and record what it was built from."""
+    summary = build_summary(db, body)
+    body.summary = summary
+    body.summary_observation_count = body.observation_count
+    body.summary_computed_at = datetime.now(UTC)
+    return summary
+
+
+def summary_for(db: Session, body: WaterBody) -> dict:
+    """The cached summary, or a freshly computed one.
+
+    Never returns a stale answer: a summary built before the latest ingest is
+    recomputed here rather than served. The recomputation is not stored,
+    because a request is not the place to write; the job will store it.
+    """
+    if summary_is_current(body):
+        return body.summary
+    return build_summary(db, body)
+
+
 def refresh_cached_statuses(db: Session, *, limit: int | None = None) -> int:
     """Recompute and store ``cached_status`` for map and list views.
 
@@ -291,8 +616,19 @@ def refresh_cached_statuses(db: Session, *, limit: int | None = None) -> int:
     if limit is not None:
         stmt = stmt.limit(limit)
 
+    # Every body's summary up front, in two queries rather than three per
+    # body. This is what the detail page and the RAG read instead of
+    # aggregating a river's whole history per request.
+    summaries = build_all_summaries(db)
+    now = datetime.now(UTC)
+
     updated = 0
     for body in db.scalars(stmt):
+        body.summary = summaries.get(
+            body.id, {"version": 1, "sources": [], "measurements": []}
+        )
+        body.summary_observation_count = body.observation_count
+        body.summary_computed_at = now
         measured = latest_measurements(db, body)
         result = compute_status(db, body, measurements=measured)
         body.cached_status = str(result.status)
@@ -841,7 +1177,14 @@ def latest_by_source(db: Session, body: WaterBody) -> list[dict]:
 
     This is what makes "the CPCB extract stops in 2021 but CWC sampled it in
     2025" visible instead of being flattened into one date.
+
+    Served from the cached summary when it is current; the aggregate below is
+    the fallback, and on the Ganga it costs 240 ms.
     """
+    cached = summary_for(db, body)
+    if cached.get("sources") is not None:
+        return [dict(entry) for entry in cached["sources"]]
+
     rows = db.execute(
         select(
             DataSource.key,
@@ -894,7 +1237,29 @@ def latest_by_source(db: Session, body: WaterBody) -> list[dict]:
 
 
 def sources_for_body(db: Session, body: WaterBody) -> list[dict]:
-    """Which sources contributed observations to this water body."""
+    """Which sources contributed observations to this water body.
+
+    Same cached summary as :func:`latest_by_source`, shaped for the provenance
+    panel. The aggregate below is the fallback.
+    """
+    cached = summary_for(db, body)
+    if cached.get("sources") is not None:
+        return [
+            {
+                "key": entry["key"],
+                "name": entry["name"],
+                "organisation": entry["organisation"],
+                "url": entry.get("url"),
+                "dataset": entry.get("dataset"),
+                "licence": entry.get("licence"),
+                "expected_cadence": entry.get("expected_cadence"),
+                "observation_count": entry.get("observation_count"),
+                "latest_observed_at": entry.get("latest_observed_at"),
+                "retrieved_at": entry.get("retrieved_at"),
+            }
+            for entry in cached["sources"]
+        ]
+
     rows = db.execute(
         select(
             DataSource.key,
@@ -1095,10 +1460,35 @@ def parameter_trend(
 
 
 def available_parameters(db: Session, slug: str) -> list[dict]:
-    """Which parameters have enough history on this body to plot."""
+    """Which parameters have enough history on this body to plot.
+
+    From the cached summary when it is current; the aggregate below is the
+    fallback, and costs 104 ms on the Ganga.
+    """
     body = db.scalar(select(WaterBody).where(WaterBody.slug == slug))
     if body is None:
         return []
+
+    cached = summary_for(db, body)
+    if cached.get("parameters"):
+        out = []
+        for entry in cached["parameters"]:
+            meta = BY_KEY.get(entry["parameter"])
+            if meta is None:
+                continue
+            out.append(
+                {
+                    "parameter": entry["parameter"],
+                    "label": meta.label,
+                    "family": str(meta.family),
+                    "unit": meta.unit,
+                    "point_count": entry["point_count"],
+                    "first_observed_at": entry["first_observed_at"],
+                    "last_observed_at": entry["last_observed_at"],
+                    "plottable": entry["point_count"] >= 2,
+                }
+            )
+        return out
 
     rows = db.execute(
         select(
