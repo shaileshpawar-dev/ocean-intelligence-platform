@@ -130,7 +130,10 @@ class TestTheCacheMatchesTheLiveComputation:
     def test_latest_measurement_per_parameter_is_identical(
         self, db, body_with_two_sources
     ):
-        live = {m["parameter"]: m for m in ws.build_summary(db, body_with_two_sources)["measurements"]}
+        live = {
+            m["parameter"]: m
+            for m in ws.build_summary(db, body_with_two_sources)["measurements"]
+        }
         bulk = {
             m["parameter"]: m
             for m in ws.build_all_summaries(db)[body_with_two_sources.id]["measurements"]
@@ -201,7 +204,9 @@ class TestReadersUseIt:
     def test_latest_measurements_reads_the_cache(self, db, body_with_two_sources):
         ws.store_summary(db, body_with_two_sources)
         db.commit()
-        measured = {m.parameter_key: m for m in ws.latest_measurements(db, body_with_two_sources)}
+        measured = {
+            m.parameter_key: m for m in ws.latest_measurements(db, body_with_two_sources)
+        }
         assert set(measured) == {"bod", "ph", "dissolved_oxygen"}
         assert measured["bod"].value == 2.0
         assert measured["bod"].source == "Sensor Agency"
@@ -228,8 +233,9 @@ class TestReadersUseIt:
 
         for field in ("status", "latest_observed_at", "observation_count"):
             assert cached[field] == uncached[field], field
-        assert cached["availability"]["newest_source"] == (
-            uncached["availability"]["newest_source"]
+        assert (
+            cached["availability"]["newest_source"]
+            == (uncached["availability"]["newest_source"])
         )
         assert [p["parameter"] for p in cached["parameters"]] == [
             p["parameter"] for p in uncached["parameters"]
