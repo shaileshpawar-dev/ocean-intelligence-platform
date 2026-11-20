@@ -132,3 +132,103 @@ carry metrics and a baseline) and `test_unevaluated_detectors_report_null_not_ze
   registry (Task 2) but has no runtime detector, so it does not appear here.
 
 **Next:** Task 4 — give the forecaster real history.
+
+---
+
+## Task 4 — Give the forecaster real history
+
+**Done.** The Forecasts page works for every region it offers: **38 of 38
+forecastable**, zero failures. The forecaster itself was not touched — it was
+correct all along, and was refusing to invent a curve it could not fit.
+
+### What was actually wrong
+
+Not "all events fall in 3 days" alone. The 49 events were spread across **49
+distinct regions, one event each**, so no region had more than a single daily
+bucket and none could ever reach the 7 that Holt needs. `zone_history` is built
+from `PollutionEvent` grouped by region-day, so one event per region means one
+bucket per region, whatever the date range.
+
+### What changed
+
+- **`app/demo/seed.py`** — default span `45 → 60` days (`DEFAULT_DEMO_DAYS`).
+  Measured, not guessed: each of the 38 monitored cells is observed once per
+  simulated day and only some observations yield a detection, so *distinct
+  event days* grows more slowly than the day count. At 45 days one cell
+  (`gulf_of_mexico_nw`) lands on 6 buckets, one short; at 60 every cell is on
+  at least 9.
+- **`app/demo/seed.py`** — the seeder now writes a `RiskAssessment` row per
+  event. It had always computed risk and stored the score on the event, but
+  never persisted the assessment, so a reseeded database showed an empty Risk
+  Analysis page and `/risk/{id}` returned 404 for every event it had just
+  created. 663 events, 663 assessments.
+- **`app/demo/seed.py`** — the returned summary now reports `forecastable`
+  and `regions_below_forecast_minimum`, so a short seed says so instead of
+  being discovered as "insufficient history" on the page.
+- **`app/api/routes/analytics.py`** — `/forecast/{code}` returns **400** with
+  the parent code for a stage-2 refined sub-cell.
+- **`app/services/analytics_service.py`** — `get_trends()` excludes refined
+  sub-cells. See the gotcha below; this one matters for the demo.
+
+### Reseed result
+
+```
+days=60  observations=2280  events=663  history_buckets=663
+regions_with_history=38  regions_below_forecast_minimum=[]  forecastable=true
+events span 2026-09-21 .. 2026-11-19 (60 distinct days)
+buckets per region: min=9 median=17 max=29
+```
+
+Forecast now returns real verdicts, including honest negative ones —
+`java_sea_se` beats the naive baseline, `gulf_of_mexico_ne` and `north_sea_se`
+do not, and the page says so.
+
+### Dependents, as warned
+
+- **Risk assessments:** the old 49 were deleted with their events and 663 new
+  ones were written by the seeder (see above).
+- **Agent runs and reports:** the FK is `ondelete="SET NULL"`, so all 6 of each
+  survived the reseed with `event_id = NULL`, pointing at nothing. Their
+  narrative describes the deleted event's region and signature, so re-pointing
+  them would have attached the wrong text to the wrong detection. They were
+  deleted and **5 fresh runs and reports generated across 5 distinct regions**
+  (Persian Gulf SE/SW, Yellow Sea NW, North Sea SE, Gulf of Mexico SE) — which
+  also fixes the audit finding that every report targeted one event.
+
+### Gotchas
+
+- **Do not click "Stage-2 refine" on Live Monitoring before the demo without
+  reading this.** Refining mints sub-cell regions, each of which gets a
+  `zone_history` row immediately and therefore appeared in `/trends` — which is
+  what builds the Forecasts dropdown. That would have put regions with one or
+  two buckets into the dropdown and brought "insufficient history" straight
+  back on a page that now works. `get_trends()` now filters them out, and
+  `test_every_region_offered_by_trends_can_be_forecast` guards it.
+- **`Region.parent_code` is not a region code.** It holds a display name
+  ("Gulf of Mexico"), and *every* region has one including the top-level
+  monitored cells. The structural marker for a sub-cell is the code suffix
+  `__r{row}c{col}` that `refinement_service.py:112` writes. A first attempt at
+  the 400 used `parent_code` and would have rejected every forecast.
+- **The sub-cell 400 is checked before the region is looked up**, because it
+  is a statement about the shape of the code, not about one row. A sub-cell
+  code that has not been refined yet still gets the helpful 400 rather than a
+  bare 404.
+- **Event count went 49 → 663**, which is well beyond "roughly the same".
+  It is unavoidable: 49 events in 49 distinct regions cannot produce 7 buckets
+  anywhere. 60 days × 38 cells at the demo provider's hit rate is 663. Dial it
+  with `seed_demo_data(days=N)`, but below 60 some region stops being
+  forecastable and the summary will name it.
+- **"Slick-scale extent" now reads 0 km² and there are 0 CRITICAL events.**
+  Not a regression in the metric — that card deliberately sums only
+  `oil_like_signature`, and all 663 seeded events are `dark_formation` from the
+  rule-based SAR baseline, which is the honest label for what it detects. The
+  previous oil-like events came from the refine step. If you want them back for
+  the demo, run refine *after* reading the first gotcha.
+
+**Tests:** 649 passed, 21 skipped. Three added:
+`test_forecast_of_a_refined_subcell_explains_itself`,
+`test_every_region_offered_by_trends_can_be_forecast`, plus the two from Task 3.
+
+**Next:** nothing outstanding from the four tasks. Remaining audit items are in
+`docs/SECTION_AUDIT.md` under P1–P2 (real prediction logs to revive drift, the
+knowledge graph, marine geographic coherence).

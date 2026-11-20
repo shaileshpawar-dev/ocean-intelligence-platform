@@ -164,6 +164,14 @@ def get_trends(
         select(ZoneHistory, Region)
         .join(Region, Region.id == ZoneHistory.region_id)
         .where(ZoneHistory.bucket_date >= since)
+        # Stage-2 refined sub-cells are excluded. They are subdivisions of a
+        # monitored region, so counting both double-counts the same water --
+        # and because a sub-cell only exists from the moment it was refined, it
+        # carries a day or two of history at most. Including them put regions
+        # in the Forecasts dropdown that could never be forecast, which is the
+        # failure this filter exists to prevent: running stage-2 refine would
+        # otherwise reintroduce "insufficient history" on a page that works.
+        .where(Region.code.not_like("%\\_\\_r%c%", escape="\\"))
         .order_by(ZoneHistory.bucket_date)
     )
     if parent_region:

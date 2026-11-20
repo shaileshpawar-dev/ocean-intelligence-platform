@@ -169,6 +169,24 @@ class TestAnalytics:
         for item in items:
             assert 0.0 <= item["coverage_ratio"] <= 1.0
 
+    def test_every_region_offered_by_trends_can_be_forecast(
+        self, seeded_client: TestClient
+    ) -> None:
+        """The Forecasts dropdown is built from /trends, so the two must agree.
+
+        Stage-2 refined sub-cells get a ZoneHistory row the moment they are
+        refined, with a day or two of history. Before they were filtered out,
+        running refine put regions into the dropdown that the forecaster could
+        only ever answer with "insufficient history".
+        """
+        items = seeded_client.get("/api/v1/trends", params={"days": 90}).json()["items"]
+        assert items, "no regions in trends"
+        for item in items:
+            code = item["region_code"]
+            assert "__r" not in code, f"{code} is a sub-cell and cannot be forecast"
+            response = seeded_client.get(f"/api/v1/forecast/{code}")
+            assert response.status_code == 200, code
+
     def test_forecast_declares_its_scope(self, seeded_client: TestClient) -> None:
         """Never a dispersion forecast."""
         items = seeded_client.get("/api/v1/pollution-zones").json()["items"]
@@ -187,6 +205,26 @@ class TestAnalytics:
 
     def test_forecast_unknown_region_is_404(self, client: TestClient) -> None:
         assert client.get("/api/v1/forecast/atlantis").status_code == 404
+
+    def test_forecast_of_a_refined_subcell_explains_itself(
+        self, seeded_client: TestClient
+    ) -> None:
+        """A sub-cell exists but holds no history, so 404 would be a lie.
+
+        Detections are recorded against the monitored region; stage-2 refined
+        sub-cells carry none of their own. Before this guard the endpoint
+        returned 200 with an empty series and the message "No stored history",
+        which reads as a data gap rather than the wrong code being asked for.
+        """
+        items = seeded_client.get("/api/v1/pollution-zones").json()["items"]
+        parent = items[0]["region_code"]
+        response = seeded_client.get(f"/api/v1/forecast/{parent}__r3c4")
+
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert "sub-cell" in detail
+        # It must name the code the caller should use instead.
+        assert f"/forecast/{parent}" in detail
 
     def test_overview_counts(self, seeded_client: TestClient) -> None:
         body = seeded_client.get("/api/v1/overview").json()

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -17,6 +19,11 @@ from app.services import forecast_service
 from app.services.analytics_service import get_trends, summary_counts
 
 router = APIRouter(tags=["analytics"])
+
+#: Codes that ``refinement_service`` mints for stage-2 sub-cells, as
+#: ``{parent_code}__r{row}c{col}``. These regions hold no detection history of
+#: their own, so they cannot be forecast.
+REFINED_CELL_CODE = re.compile(r"__r\d+c\d+$")
 
 
 @router.get(
@@ -74,6 +81,29 @@ def forecast(
                 f"Unknown model {model!r}. Available: {sorted(forecast_service.MODELS)}"
             ),
         )
+    # Checked before the region exists, because this is a statement about the
+    # shape of the code rather than about one row: a stage-2 refined sub-cell
+    # is never forecastable, refined or not. Detections are recorded against
+    # the monitored region one level up, so a sub-cell holds no history of its
+    # own and would otherwise come back as "no stored history" -- which reads
+    # as a data gap rather than as the wrong code being asked for.
+    #
+    # The marker is the suffix refinement_service writes
+    # (``{parent}__r{row}c{col}``). ``Region.parent_code`` cannot be used:
+    # every region has one, and it holds a display name, not a region code.
+    refined = REFINED_CELL_CODE.search(region_code)
+    if refined:
+        parent_code = region_code[: refined.start()]
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{region_code!r} is a stage-2 refined sub-cell. Detection "
+                "history is aggregated at the monitored-region level, so "
+                "sub-cells cannot be forecast individually. Request "
+                f"/forecast/{parent_code} instead."
+            ),
+        )
+
     region = db.scalar(select(Region).where(Region.code == region_code))
     if region is None:
         raise HTTPException(status_code=404, detail=f"No region {region_code!r}")
