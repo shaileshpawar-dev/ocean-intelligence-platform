@@ -69,10 +69,26 @@ export default function IndiaOverview() {
           hint="Individual parameter measurements"
         />
         <StatCard
-          label="Without recent data"
-          value={data.without_recent_data.toLocaleString()}
-          hint="Too old to describe present conditions"
-          tone={data.without_recent_data > 0 ? "warn" : "neutral"}
+          label="Current data"
+          value={data.coverage.current.toLocaleString()}
+          hint={`Measured in the last ${data.coverage.current_within_days} days`}
+          tone={data.coverage.current > 0 ? "good" : "warn"}
+        />
+        {/* Without this the buckets do not sum to the total: when the
+            real-time feed has not been ingested for a while, the hourly
+            stations fall out of "current" into "recent" and would vanish
+            from the strip entirely. */}
+        <StatCard
+          label="Recent data"
+          value={data.coverage.recent.toLocaleString()}
+          hint={`Measured in the last ${data.coverage.recent_within_days} days`}
+          tone={data.coverage.recent > 0 ? "good" : "neutral"}
+        />
+        <StatCard
+          label="Historical only"
+          value={data.coverage.historical_only.toLocaleString()}
+          hint="Described by an older measurement, with its date"
+          tone={data.coverage.historical_only > 0 ? "warn" : "neutral"}
         />
       </div>
 
@@ -86,21 +102,36 @@ export default function IndiaOverview() {
             <p>
               The most recent observation anywhere in the ingested data is from{" "}
               <strong>{formatDay(data.latest_observation_at)}</strong>, and{" "}
-              <strong>
-                {(
-                  data.water_bodies - data.without_recent_data
-                ).toLocaleString()}
-              </strong>{" "}
-              of {data.water_bodies.toLocaleString()} water bodies have data
+              <strong>{data.coverage.current.toLocaleString()}</strong> of{" "}
+              {data.coverage.total.toLocaleString()} water bodies have data
               recent enough to describe them now.
             </p>
             <p className="muted-note">
-              That small number is the whole picture. CPCB runs automatic
-              analysers on the Ganga and its tributaries that report hourly, so
-              those water bodies can be described in the present tense. Every
-              other water body here comes from manual sampling programmes whose
-              published extracts lag years behind — CPCB's mostly stop in 2021
-              — and for those the platform reports the{" "}
+              {data.coverage.current > 0 ? (
+                <>
+                  That small number is the whole picture. CPCB runs automatic
+                  analysers on the Ganga and its tributaries that report
+                  hourly, so those water bodies can be described in the present
+                  tense.{" "}
+                </>
+              ) : (
+                <>
+                  {/* The hourly feed is the only thing that can put a water
+                      body in the "current" bucket, so when it has not been
+                      ingested recently the honest statement is that nothing
+                      here describes today — not that the feed exists. */}
+                  No water body currently qualifies. CPCB runs automatic
+                  analysers on the Ganga and its tributaries that report
+                  hourly, but this database was last given those readings on{" "}
+                  <strong>{formatDay(data.latest_observation_at)}</strong>, so
+                  nothing here describes conditions today;{" "}
+                  {data.coverage.recent.toLocaleString()} water bodies still
+                  fall within {data.coverage.recent_within_days} days.{" "}
+                </>
+              )}
+              Every other water body here comes from manual sampling programmes
+              whose published extracts lag years behind — CPCB's mostly stop in
+              2021 — and for those the platform reports the{" "}
               <em>latest available</em> observation and its date, and refuses
               to describe present condition from it. Where you see a status,
               check the date attached to it.
