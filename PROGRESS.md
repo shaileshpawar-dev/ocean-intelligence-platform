@@ -573,3 +573,37 @@ including that live traffic produces **no** caveat and that two models in one
 window report `mixed`.
 
 **Next:** Task 7b — marine geographic framing.
+
+---
+
+## Tasks 7b + 8 — Marine framing, and Candidate Review first
+
+**Done.** Committed together because they are one change: say what the marine
+module is, then put the part that is real where people will find it.
+
+- **Ocean Overview** carries the full banner (global regions named, events
+  SIMULATED, pointer to Candidate Review) plus a prominent linked card:
+  *"Real Sentinel-1 data · 306 benchmark candidates"*.
+- **Live Monitoring, Pollution Events, Ocean Map** carry the one-line version.
+- **Candidate Review** is now **first** in the Marine Monitoring nav group.
+
+Regions were not moved or renamed, and no page content was changed.
+
+### Gotchas
+
+- **`MarineScopeNote` is one shared component, not four copies of a sentence.**
+  Four pages making the same claim in four places is four places for it to
+  drift out of date.
+- **Candidate Review deliberately does not carry the note.** It already has its
+  own "Research replay" banner, and a line reading "the real data is in
+  Candidate Review" would be absurd on that page.
+- **Watch automated JSX insertion.** A regex matching `<PageHeader ... />`
+  matched a *nested* self-closing tag on two pages, dropping the note inside
+  the header's `actions` prop on Overview and inside a `<button>` on Live
+  Monitoring. `tsc` passed both times — it is valid JSX, just in the wrong
+  place. Caught by reading the files; fixed by anchoring on the next sibling
+  element instead.
+
+**Tests:** 669 passed, 25 skipped (unchanged — presentational).
+
+**Next:** Task 10 — the knowledge graph.

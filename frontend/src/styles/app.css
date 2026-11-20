@@ -3383,3 +3383,49 @@
   margin-top: 0.12rem;
   color: var(--muted, #6b7785);
 }
+
+
+/* The one card on this dashboard pointing at measured data. Given weight
+   because everything around it is a simulation. */
+.real-data-card {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.95rem 1.1rem;
+  margin-bottom: 1rem;
+  border-radius: 0.7rem;
+  text-decoration: none;
+  color: inherit;
+  background: var(--surface, #fff);
+  border: 1px solid var(--accent, #2563eb);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  transition: box-shadow 120ms ease, transform 120ms ease;
+}
+
+.real-data-card:hover {
+  box-shadow: 0 3px 10px rgba(37, 99, 235, 0.16);
+  transform: translateY(-1px);
+}
+
+.real-data-card > div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.real-data-card strong {
+  font-size: 1.05rem;
+}
+
+.real-data-card svg {
+  flex: none;
+  color: var(--accent, #2563eb);
+}
+
+.real-data-kicker {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--accent, #2563eb);
+}

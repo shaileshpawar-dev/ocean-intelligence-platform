@@ -13,15 +13,16 @@ import {
   EmptyState,
   ErrorState,
   EvidenceBadge,
+  formatDateTime,
+  formatTime,
   LoadingSkeleton,
+  MarineScopeNote,
   MetricCard,
   PageHeader,
   RiskBadge,
   SectionCard,
-  Unavailable,
-  formatDateTime,
-  formatTime,
   titleise,
+  Unavailable,
 } from "@/components/ui";
 
 export default function LiveMonitoring() {
@@ -86,6 +87,8 @@ export default function LiveMonitoring() {
           </div>
         }
       />
+
+      <MarineScopeNote />
 
       {(ingest.isError || refine.isError) && (
         <ErrorState error={ingest.error ?? refine.error} />

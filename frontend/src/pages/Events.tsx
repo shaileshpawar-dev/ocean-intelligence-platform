@@ -16,15 +16,16 @@ import {
   EmptyState,
   ErrorState,
   EvidenceBadge,
+  formatDateTime,
   LoadingSkeleton,
+  MarineScopeNote,
   PageHeader,
   RiskBadge,
   SectionCard,
   SimulatedBanner,
+  titleise,
   Unavailable,
   Value,
-  formatDateTime,
-  titleise,
 } from "@/components/ui";
 
 const SEVERITIES: (Severity | "ALL")[] = ["ALL", "CRITICAL", "HIGH", "MEDIUM", "LOW"];
@@ -204,6 +205,8 @@ export default function Events() {
         title="Pollution Events"
         subtitle="Detections made by the platform, ranked by risk. Each is a claim with stated uncertainty, not a confirmed incident."
       />
+
+      <MarineScopeNote />
 
       {data?.provenance.contains_simulated_data && <SimulatedBanner />}
 

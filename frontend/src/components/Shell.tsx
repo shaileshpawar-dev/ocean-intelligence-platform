@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   Bot,
   Boxes,
+  ClipboardCheck,
   Cpu,
   Database,
   FileText,
@@ -58,6 +59,10 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
     title: "Marine Monitoring",
     items: [
+      // Candidate Review is first because it is the only page in this group
+      // backed by measured data: 306 real Sentinel-1 benchmark patches. The
+      // rest of the group is a simulated demonstration.
+      { to: "/app/candidate-review", label: "Candidate Review", icon: ClipboardCheck },
       { to: "/app/overview", label: "Ocean Overview", icon: Waves },
       { to: "/app/live", label: "Live Monitoring", icon: Activity },
       { to: "/app/events", label: "Pollution Events", icon: AlertTriangle },

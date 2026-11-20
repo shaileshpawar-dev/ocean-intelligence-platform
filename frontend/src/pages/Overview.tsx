@@ -9,16 +9,7 @@
 
 import { Link } from "react-router-dom";
 import { useQueries } from "@tanstack/react-query";
-import {
-  Activity,
-  AlertTriangle,
-  ArrowRight,
-  Cpu,
-  Gauge,
-  HeartPulse,
-  Radar,
-  Waves,
-} from "lucide-react";
+import { Activity, AlertTriangle, ArrowRight, ClipboardCheck, Cpu, Gauge, HeartPulse, Radar, Waves } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -30,10 +21,12 @@ import {
 } from "recharts";
 import { api } from "@/lib/api";
 import {
+  ErrorState,
   EvidenceBadge,
   EvidenceLegend,
-  ErrorState,
+  formatDateTime,
   LoadingSkeleton,
+  MarineScopeNote,
   MetricCard,
   NotEvaluated,
   PageHeader,
@@ -41,9 +34,8 @@ import {
   SectionCard,
   SimulatedBanner,
   StatusBadge,
-  Unavailable,
-  formatDateTime,
   titleise,
+  Unavailable,
 } from "@/components/ui";
 
 const DRIFT_TONE: Record<string, "ok" | "warn" | "error" | "neutral"> = {
@@ -122,6 +114,21 @@ export default function Overview() {
           ) : null
         }
       />
+
+      <MarineScopeNote full />
+
+      <Link className="real-data-card" to="/app/candidate-review">
+        <div>
+          <span className="real-data-kicker">Real Sentinel-1 data</span>
+          <strong>306 benchmark candidates</strong>
+          <span className="muted-note">
+            Measured Sentinel-1 patches from PANGAEA 980773 (CC BY 4.0),
+            collocated with ERA5 wind — the one place in this module where
+            nothing is simulated.
+          </span>
+        </div>
+        <ClipboardCheck size={22} aria-hidden />
+      </Link>
 
       {overview.data?.contains_simulated_data && (
         <SimulatedBanner

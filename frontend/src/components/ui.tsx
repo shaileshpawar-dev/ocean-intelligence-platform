@@ -9,6 +9,7 @@
  */
 
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { AlertTriangle, Info, Inbox, RefreshCw, ServerCrash } from "lucide-react";
 import type { EvidenceLevel, Severity } from "@/lib/types";
 
@@ -427,6 +428,40 @@ export function ProvenanceNote({ children }: { children: ReactNode }) {
     <div className="provenance-note" role="note">
       <Info size={15} />
       <span>{children}</span>
+    </div>
+  );
+}
+
+/** What the marine module is, and is not.
+ *
+ *  The marine regions are global while the rest of the platform is India, and
+ *  the events in them are synthetic. Said once per page so nobody has to work
+ *  it out from the region names, and so the one page holding real data --
+ *  Candidate Review -- is pointed at rather than lost among the rest.
+ */
+export function MarineScopeNote({ full = false }: { full?: boolean }) {
+  return (
+    <div className="provenance-note" role="note">
+      <Info size={15} />
+      <span>
+        {full ? (
+          <>
+            <strong>Global demonstration.</strong> The marine module monitors
+            the Gulf of Mexico, North Sea, Strait of Malacca, Yellow Sea,
+            Persian Gulf and Java Sea — not Indian waters, unlike the rest of
+            this platform. Every pollution event here is{" "}
+            <strong>SIMULATED</strong>. The real measured data in this module
+            is the 306 Sentinel-1 benchmark candidates in{" "}
+            <Link to="/app/candidate-review">Candidate Review</Link>.
+          </>
+        ) : (
+          <>
+            Global demonstration module; events are <strong>SIMULATED</strong>.
+            The real data is the 306 Sentinel-1 candidates in{" "}
+            <Link to="/app/candidate-review">Candidate Review</Link>.
+          </>
+        )}
+      </span>
     </div>
   );
 }
