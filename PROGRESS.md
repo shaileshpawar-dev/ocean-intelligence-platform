@@ -725,3 +725,47 @@ truncates and says so, an isolated region returns itself with no edges, nodes
 keep their own evidence level (and a region keeps `null` rather than borrowing
 one), summary counts equal table counts, and the route-order, 404, 400 and 422
 cases.
+
+---
+
+## Final state — window 3
+
+**Tests:** `683 passed, 25 skipped, 0 failed` (window 2 ended at 663/25).
+
+**Pages:** all 15 loaded with **zero console errors**, Knowledge Graph included.
+
+**Backup:** `backups/oip-after-window3.dump` (113 MB, 41 tables, verified).
+Earlier points this window: `oip-before-window3.dump`. No database writes were
+made in window 3 — every task was read-only or presentational — so the two
+dumps are equivalent.
+
+### What changed this window
+
+| Area | Before | After |
+|---|---|---|
+| Drift panel | a verdict with no stated source | names both benchmark splits and says the timestamps are assigned |
+| Latency cards | a percentile over unnamed models | names the model, or says "mixed" |
+| Marine pages | regions looked like a second project | declared a global demo on all four simulated pages |
+| Candidate Review | fifth in the nav group | first, plus a dashboard card |
+| Knowledge Graph | `NotAvailableInBackend` placeholder | 4,356 nodes / 4,464 edges, interactive, FK-only |
+
+### Two honest absences, by design
+
+- **No regulation nodes.** `research_documents` has no foreign keys. The
+  citations in `reports.sources` are JSON, so under the "existing foreign keys
+  only" rule they are out. The summary endpoint says so in its own `notes`.
+- **SAR candidates cannot be reached from a region.** `sar_candidates` has no
+  foreign keys at all, so they are a genuinely separate component. The graph
+  says this in its `notes` rather than quietly drawing nothing.
+
+Both are worth saying out loud in the demo: they are the graph being accurate
+about the schema, not gaps in the implementation.
+
+### Still open from `docs/SECTION_AUDIT.md`
+
+- RAG corpus is still 22 documents / 31 passages (explicitly skipped).
+- `llm_provider` is still `none`, so agent findings are templated and reports
+  carry `narrative=none`.
+- The optical YOLOv8 detector still has no committed test split, so its
+  registry metrics stay NULL — correct, not a gap to paper over.
+- Drift still reports **WARNING**. Unchanged and untuned since window 2.
