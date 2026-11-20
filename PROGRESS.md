@@ -955,3 +955,66 @@ Unchanged and deliberately skipped: RAG corpus expansion, live ingestion, AIS,
 MLflow, retraining automation. `llm_provider` remains `none`. The optical
 YOLOv8 detector still has no committed test split, so its registry metrics stay
 NULL — correct, not a gap.
+
+---
+
+## Final pre-demo pass — 20 November
+
+**Tests:** 689 passed, 25 skipped, 0 failed — matches expectation, nothing to fix.
+
+**Clean restart:** `docker compose down` (volumes preserved — no `-v`),
+`up -d db`, API restarted. Every expected count verified against the running
+app: 686 events / 10 CRITICAL / 306 candidates / 307 prediction logs /
+5 models (3 evaluated) / 4,601,153 water observations / drift WARNING. No
+restore needed; `reset_demo.sh` was **not** run against `oip`.
+
+**Pages:** all 15 marine/ML pages plus the full India section loaded with
+**zero console errors**.
+
+### One real issue found and fixed
+
+The India Overview — the demo's opening page — showed **CURRENT DATA 0** and
+**HISTORICAL ONLY 2,714** against a stated total of 2,740. The 26 hourly Ganga
+water bodies had aged out of "current" into "recent" and were not displayed at
+all, so the cards did not sum. Worse, the paragraph below still read *"CPCB
+runs automatic analysers … so those water bodies can be described in the
+present tense"* directly under a counter saying 0.
+
+Cause: the real-time feed was last ingested **26 September, 54 days ago**. The
+freshness engine is correct and untouched — `current` (≤2 days) is genuinely 0
+and `recent` (≤90 days) is 26. Only the page was describing it wrongly.
+
+Fixed by adding a **Recent data** card (0 + 26 + 2,714 = 2,740) and making the
+paragraph conditional: when nothing is current it says so and names the date
+the readings stop. Display-layer only, no database write.
+
+### India Water Intelligence — inspection (report only)
+
+| Page | Real data shown | State |
+|---|---|---|
+| India Overview `/app/india` | 2,740 bodies, 4,951 stations, 4,601,153 observations, 35 states, 613 districts | Fine after the fix above |
+| Water Map `/app/map` | Leaflet, 1,500 most-sampled shown, geoBoundaries overlay, status-by-last-measurement legend | Fine |
+| Ask about water `/app/ai` | Retrieval + SQL over stored observations; Mithi query returns a grounded headline with **5 citations**, dated 02 Dec 2021, plus limitations | Fine |
+| Reference Standards `/app/standards` | The selection rules and the standards themselves | Fine |
+| Data Sources `/app/data-quality` | 3 providers, all reachable, last sync 26 Sep 2026 | Fine |
+| Water body detail `/app/water/ganga-river` | 142 stations, 347,672 observations, 3 sources kept separate, availability panel, rule-by-rule status explanation | Fine |
+| State page `/app/state/maharashtra` | 146 bodies, 294 stations, 324,360 observations, type breakdown | Fine |
+
+Nothing empty, nothing erroring. The only oddity is the one fixed above.
+
+### Delivered
+
+- `docs/DEMO_SCRIPT.md` — 8–10 minute walkthrough with exact on-screen numbers,
+  a 60-second short version, and 12 likely questions with honest answers.
+- `README.md` — "Current status": test count, real-vs-simulated table, expected
+  counts, and how to run `reset_demo.sh`. Tests badge corrected 595 → 689.
+- Pushed to `origin/feature/india-water-intelligence`; tag **`demo-2026-11-22`**
+  created and pushed.
+
+### Worth knowing before the demo
+
+- **Only one of 38 regions beats the naive forecast baseline** (Java Sea SE,
+  MAE 0.785 vs 0.791 — narrow). The other 37 say so on their own charts. The
+  demo script uses Arabian Sea NE as the contrast.
+- The India Overview now leads with **zero current**. That is the strongest
+  honesty point on the platform; the script opens with it deliberately.
