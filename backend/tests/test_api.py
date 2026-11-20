@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import io
 
+import pytest
+
 from fastapi.testclient import TestClient
 
 
@@ -289,6 +291,75 @@ class TestModelRegistry:
 
     def test_unknown_model_is_404(self, client: TestClient) -> None:
         assert client.get("/api/v1/models/ghost/1.0").status_code == 404
+
+
+class TestPredictionLogWriter:
+    """The single writer that latency stats and drift both read.
+
+    It was a private helper inside the satellite route, so a batch replay had
+    to hand-craft rows and could drift out of step with what the live endpoint
+    records. These pin the parts a batch caller depends on.
+    """
+
+    class _Detection:
+        def __init__(self, confidence: float, signature: str) -> None:
+            self.confidence = confidence
+            self.signature = signature
+
+    def test_it_summarises_the_detections_it_is_given(self, db) -> None:
+        from app.models import PredictionLog
+        from app.monitoring.prediction_log import log_prediction
+
+        assert log_prediction(
+            db,
+            request_id="test_req_1",
+            detector_name="sar-oil-slick-v2.2",
+            version="2.2.0-experimental",
+            latency_ms=12.5,
+            detections=[self._Detection(0.8, "oil_like_signature"),
+                        self._Detection(0.4, "dark_formation")],
+        )
+
+        row = db.query(PredictionLog).filter_by(request_id="test_req_1").one()
+        assert row.detection_count == 2
+        assert row.max_confidence == pytest.approx(0.8)
+        assert row.mean_confidence == pytest.approx(0.6)
+        assert row.predicted_classes == ["oil_like_signature", "dark_formation"]
+        assert row.success is True
+        # Defaults match what the live detect endpoint records.
+        assert row.endpoint == "POST /api/v1/detect"
+
+    def test_a_batch_caller_can_set_endpoint_and_timestamp(self, db) -> None:
+        """Without these a replay cannot place rows in a drift window."""
+        from datetime import UTC, datetime, timedelta
+
+        from app.models import PredictionLog
+        from app.monitoring.prediction_log import log_prediction
+
+        when = datetime.now(UTC) - timedelta(days=20)
+        log_prediction(
+            db,
+            request_id="test_req_2",
+            detector_name="sar-oil-slick-v2.2",
+            version="2.2.0-experimental",
+            latency_ms=9.0,
+            detections=[],
+            endpoint="BATCH /sar-candidates/replay",
+            created_at=when,
+            input_stats={"timestamp_is_synthetic": True},
+        )
+
+        row = db.query(PredictionLog).filter_by(request_id="test_req_2").one()
+        assert row.endpoint == "BATCH /sar-candidates/replay"
+        stored = row.created_at
+        if stored.tzinfo is None:  # SQLite drops the offset
+            stored = stored.replace(tzinfo=UTC)
+        assert abs((stored - when).total_seconds()) < 1
+        # A replay must declare that its timestamp is assigned, not observed.
+        assert row.input_stats["timestamp_is_synthetic"] is True
+        # No detections means null confidence, never zero.
+        assert row.max_confidence is None
+        assert row.mean_confidence is None
 
 
 class TestMonitoring:

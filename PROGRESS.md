@@ -272,3 +272,101 @@ now reads 0 km².
 
 **Restore point:** `backups/oip-20261120-115423.dump` (taken before any of this
 work; `backups/` is gitignored).
+
+---
+
+## Task 5 — Real prediction logs
+
+**Done.** Inference latency and drift both show real numbers.
+
+- **Inference P95: 9.63 ms** over 105 requests (was "Unavailable", 0 logged)
+- **Drift: WARNING** (was "Insufficient data")
+
+### Where the patches were
+
+`data/training/sar_oil_v2/images`, resolved by
+`candidate_service.IMAGES_DIR / cand.image_name`. **305 of 306 load.** The
+missing one is `cand_test_missing_image_006`, an acceptance fixture that points
+at `missing_nonexistent_patch_9999.jpg` on purpose to exercise the 404 path —
+so 305 is the correct number, not a failure. The script reports it by name
+rather than skipping silently.
+
+### What changed
+
+- **`backend/app/monitoring/prediction_log.py`** (new) — `log_prediction()`,
+  now the single writer of `prediction_logs`. It was a private helper inside
+  `satellite.py` that hardcoded `created_at` and the endpoint label, so it was
+  only reachable from one route. `endpoint`, `created_at`, `input_stats` and
+  `commit` are now parameters; the defaults reproduce the live endpoint's
+  behaviour exactly.
+- **`backend/app/api/routes/satellite.py`** — `_log_prediction` is now a thin
+  wrapper over it, so the live path and the batch replay write identically.
+- **`scripts/log_sar_inferences.py`** (new) — idempotent, `--dry-run`,
+  `--replace`.
+
+### The drift verdict, reported as found
+
+```
+OVERALL: warning
+  mean_confidence              warning   PSI 0.1100   baseline_n=100  current_n=105
+  predicted_class_distribution ok        PSI 0.0322   baseline_n=100  current_n=105
+    baseline: oil_like_signature=65, no_anomaly=19, dark_formation=16
+    current:  oil_like_signature=67, dark_formation=23, no_anomaly=15
+```
+
+The screener's **confidence distribution shifts modestly between the two
+independent held-out benchmarks** (PSI 0.11, just over the 0.10 warning line)
+while the **predicted class mix stays stable** (PSI 0.032). This was not tuned
+for and has not been adjusted. It is a plausible and useful finding: the model
+is about equally decisive overall but distributes its confidence differently on
+the Phase 13 set, which is exactly the kind of signal drift monitoring exists
+to raise for a human.
+
+### Timestamps — read this before defending the panel
+
+All 305 inferences physically run within about three seconds of each other, but
+drift compares two *time* windows, so each row's `created_at` is **assigned**.
+The measurements are real (latency and confidence are what the detector
+produced); the placement in a window is not.
+
+The assignment is deliberately meaningful rather than convenient:
+
+| Window | Days back | Contents | n |
+|---|---|---|---|
+| baseline | 8–36 | Benchmark 1 (Phase 12 held-out) | 100 |
+| current | 0–6 | Benchmark 2 (Phase 13 locked final) + acceptance fixtures | 105 |
+| outside both | 40–55 | Phase 13 dev + validation sets | 100 |
+
+Dev and validation sit **outside** both windows on purpose: they are
+training-adjacent, and drift-comparing against data the model was tuned on
+would measure nothing. So the comparison is Benchmark 1 vs Benchmark 2 — two
+genuinely independent held-out sets.
+
+Every row carries `timestamp_is_synthetic: true` plus its true wall-clock
+`executed_at` in `input_stats`, and the endpoint label is
+`BATCH /sar-candidates/replay`, so these cannot be mistaken for live traffic.
+
+### Gotchas
+
+- **The detector silently rejects raw bytes.** `SAROilSlickDetectorV2.predict`
+  takes a path, a PIL image, a numpy array or a dict — passing
+  `path.read_bytes()` logs `sar_v2_invalid_payload_format` and returns **zero
+  detections in under 0.1 ms** without raising. The first dry run looked like a
+  clean success (`failures: 0`) and was entirely empty. If latency ever reads
+  ~0.0 ms with no predicted classes, this is why.
+- **The 2 mock-detector rows were left in place and do not contaminate
+  anything.** They are 34 days old, so they fall outside the 7-day latency
+  window (verified: every row inside it is `sar-oil-slick-v2.2`). They *are*
+  inside the drift baseline window, but their `mean_confidence` is NULL and
+  their `predicted_classes` is `[]`, so they contribute nothing to either PSI —
+  which is why `baseline_n` is exactly 100 and not 102.
+- **`latency_summary()` has no model filter**; it aggregates whatever is in the
+  window. Today that is only the SAR model. If something logs a second model
+  within 7 days, the P95 becomes a mixture and the card will not say so.
+- Re-running without `--replace` is a no-op by design.
+
+**Tests:** 651 passed, 21 skipped. Two added for the extracted writer
+(`TestPredictionLogWriter`), covering the detection summary and the
+batch-caller parameters a replay depends on.
+
+**Next:** Task 6 — confusion matrix and ROC from `sar_candidates` ground truth.
