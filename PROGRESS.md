@@ -43,3 +43,49 @@ to the sunglint test so both cases check the same two things.
 ever retuned, these tests are the ones that will tell you.
 
 **Next:** Task 2 — register the three evaluated SAR models in `model_versions`.
+
+---
+
+## Task 2 — Register the three evaluated SAR models
+
+**Done.** New script `scripts/register_sar_models.py` reads the three
+`data/models/sar/*/eval_metrics.json` files and upserts them into
+`model_versions`. Model Performance now reads **EVALUATED MODELS: 3**
+(was 0); five models are registered in total.
+
+| Model | Version | Precision | Recall | F1 | Mean latency |
+|---|---|---|---|---|---|
+| sar-oil-slick-v2 | 2.0.0-experimental | 0.636 | 0.933 | 0.757 | 5.6 ms |
+| sar-oil-slick-v2.1-expanded | 2.1.0-experimental | 0.721 | 0.880 | 0.793 | 38.4 ms |
+| sar-oil-slick-v2.2 | 2.2.0-experimental | 0.677 | 0.880 | 0.765 | 22.1 ms |
+
+Every value is read from the JSON files; nothing is derived or invented.
+Idempotent — verified by running twice (`3 created, 0 updated`, then
+`0 created, 3 updated`). `--dry-run` prints without writing.
+
+**Gotchas, in case you touch this again:**
+
+- **The three files disagree on key spelling.** v2 and v2.1 use
+  `precision` / `f1_score` / `avg_cpu_latency_ms`; v2.2 uses `Precision` / `F1`
+  and keeps latency in a separate `latency_benchmark_ms.total.mean` block.
+  `_first()` normalises this. Add a fourth model and you will probably meet a
+  fourth spelling.
+- **`map50`, `map50_95` and `iou` are deliberately NULL.** These are binary
+  scene classifiers (P(oil) for a 224×224 patch), not object detectors, so
+  those metrics do not exist for them. The page shows "Not evaluated" for
+  those rows, which is correct — do not be tempted to fill them.
+- **FPR, confusion matrix, test-set size and the baseline comparison have no
+  columns** in `model_versions`. They go into `notes` verbatim rather than
+  adding a migration before the demo. The structured version reaches the UI
+  through `/models/detectors` (Task 3).
+- `metrics_source` is the field the UI counts as "evaluated"
+  (`Models.tsx:41`), not the presence of metrics. If a future row has metrics
+  but no `metrics_source`, it will not be counted.
+- v2 and v2.1 are registered as `archived` (superseded on the same benchmark
+  lineage) and v2.2 as `staging` — `sar-detector-v1` is still the deployed
+  baseline, so none of the three is `is_deployed`.
+
+**Tests:** 645 passed, 21 skipped.
+
+**Next:** Task 3 — stop stripping `test_metrics` / `baseline_comparison` in
+`GET /api/v1/models/detectors`.
