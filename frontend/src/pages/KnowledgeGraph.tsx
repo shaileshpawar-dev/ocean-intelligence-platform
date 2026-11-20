@@ -1,9 +1,14 @@
 /**
  * Knowledge Graph.
  *
- * Every edge drawn here is a foreign key. Nothing is inferred from proximity,
- * name similarity or an embedding, which is why the empty state says "no
- * linked records" rather than drawing something suggestive.
+ * Solid edges are declared foreign keys. Dashed ones are citations resolved
+ * from reports.sources -- real stored identifiers, but a JSON column rather
+ * than a relationship, so nothing in the schema stops them dangling and the
+ * weaker guarantee is drawn differently.
+ *
+ * Nothing is inferred from proximity, name similarity or an embedding, which
+ * is why the empty state says "no linked records" rather than drawing
+ * something suggestive.
  *
  * Layout is radial rather than force-directed, and deliberately so: the API
  * returns a subgraph defined by a centre and a hop count, and concentric rings
@@ -32,6 +37,7 @@ const TYPE_COLOUR: Record<string, string> = {
   risk_assessment: "#d97706",
   agent_run: "#7c3aed",
   report: "#4338ca",
+  research_document: "#9333ea",
   sar_candidate: "#059669",
   sar_review: "#0d9488",
   optical_evidence: "#65a30d",
@@ -45,6 +51,7 @@ const TYPE_LABEL: Record<string, string> = {
   risk_assessment: "Risk assessment",
   agent_run: "Agent run",
   report: "Report",
+  research_document: "Document / regulation",
   sar_candidate: "SAR candidate",
   sar_review: "Analyst review",
   optical_evidence: "Optical evidence",
@@ -171,7 +178,7 @@ export default function KnowledgeGraph() {
     <>
       <PageHeader
         title="Knowledge Graph"
-        subtitle="Linked records from this platform's own data. Every edge is a stored foreign key."
+        subtitle="Linked records from this platform's own data. Solid edges are declared foreign keys; dashed ones are citations resolved from report sources."
         actions={<Network size={15} className="text-muted" />}
       />
 
@@ -259,6 +266,7 @@ export default function KnowledgeGraph() {
                 if (!a || !b) return null;
                 const lit =
                   hovered && (hovered.id === edge.source || hovered.id === edge.target);
+                const cited = edge.edge_kind === "resolved_reference";
                 return (
                   <line
                     key={`${edge.source}|${edge.target}|${edge.relation}`}
@@ -266,7 +274,9 @@ export default function KnowledgeGraph() {
                     y1={a.y}
                     x2={b.x}
                     y2={b.y}
-                    className={`kg-edge${lit ? " is-lit" : ""}`}
+                    className={`kg-edge${lit ? " is-lit" : ""}${
+                      cited ? " is-cited" : ""
+                    }`}
                   />
                 );
               })}
@@ -277,6 +287,7 @@ export default function KnowledgeGraph() {
                 return (
                   <g key={node.id}>
                     <circle
+                      data-node-id={node.id}
                       cx={node.x}
                       cy={node.y}
                       r={radius}
@@ -321,11 +332,39 @@ export default function KnowledgeGraph() {
                 ))}
               </ul>
 
+              {(data.edge_kind_counts?.resolved_reference ?? 0) > 0 && (
+                <ul className="kg-legend kg-legend-edges">
+                  <li>
+                    <span className="kg-line" />
+                    <span>Declared foreign key</span>
+                    <span className="mono">
+                      {data.edge_kind_counts.foreign_key ?? 0}
+                    </span>
+                  </li>
+                  <li>
+                    <span className="kg-line is-dashed" />
+                    <span>
+                      Citation resolved from report sources (not a declared FK)
+                    </span>
+                    <span className="mono">
+                      {data.edge_kind_counts.resolved_reference}
+                    </span>
+                  </li>
+                </ul>
+              )}
+
               <p className="muted-note">
                 Pollution events and the observations behind them are{" "}
                 <strong>SIMULATED</strong>. SAR candidates are measured
                 Sentinel-1 data.
               </p>
+
+              {data.unresolved_citations > 0 && (
+                <p className="muted-note">
+                  {data.unresolved_citations} citation id(s) name a document
+                  that is not stored, and are not drawn.
+                </p>
+              )}
 
               <div className="kg-hover">
                 {hovered ? (

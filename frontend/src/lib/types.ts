@@ -376,11 +376,17 @@ export interface GraphNode {
   attrs: Record<string, unknown>;
 }
 
-/** A stored foreign key. Nothing here is inferred. */
+/** A link between two records.
+ *
+ *  `foreign_key` is a declared relationship: a row holds the other row's key.
+ *  `resolved_reference` is an identifier read out of a JSON column that does
+ *  resolve to a real row, but which nothing in the schema protects — drawn
+ *  dashed so the weaker guarantee is visible. Nothing here is inferred. */
 export interface GraphEdge {
   source: string;
   target: string;
   relation: string;
+  edge_kind: "foreign_key" | "resolved_reference" | string;
 }
 
 export interface KnowledgeGraphResponse {
@@ -393,6 +399,8 @@ export interface KnowledgeGraphResponse {
   edges: GraphEdge[];
   node_count: number;
   edge_count: number;
+  edge_kind_counts: Record<string, number>;
+  unresolved_citations: number;
   notes: string[];
 }
 
@@ -401,6 +409,8 @@ export interface KnowledgeGraphSummary {
   edge_counts: Record<string, number>;
   total_nodes: number;
   total_edges: number;
+  edge_kinds: Record<string, number>;
+  unresolved_citations: number;
   node_types: string[];
   max_nodes_per_request: number;
   notes: string[];

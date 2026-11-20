@@ -798,3 +798,57 @@ rows and one unscored row and asserts the sentence reads "4 rows, 3 with
 confidence" while a fully-scored window keeps "(n=1)".
 
 **Next:** Task 12 — citation edges in the knowledge graph.
+
+---
+
+## Task 12 — Citation edges in the knowledge graph
+
+**Done, and it was clean.** Checked before building: **40 citation entries
+across 10 reports, all 40 resolve, 0 dangling**, naming 5 distinct documents.
+
+Documents are now reachable as a second, clearly weaker kind of edge:
+
+- relation `cites`, `edge_kind` **`resolved_reference`** (every foreign-key
+  edge now carries `edge_kind: "foreign_key"` explicitly)
+- drawn **dashed and grey** in the UI, with its own legend block:
+  *"Citation resolved from report sources (not a declared FK)"* with counts
+- new node type `research_document`, evidence level `RETRIEVED`
+- reachable in both directions: report → documents, and document → the
+  reports citing it
+
+Summary now reports 4,378 nodes / 4,504 edges, split
+`foreign_key: 4464, resolved_reference: 40`, `unresolved_citations: 0`.
+
+### Honesty mechanics
+
+- **Unresolvable ids are counted, never silently dropped.** `cited_documents()`
+  returns the documents it found *and* how many ids did not resolve; the count
+  surfaces in `unresolved_citations` and in the graph's own `notes`. A dangling
+  citation is a fact about the data.
+- **The page no longer claims every edge is a foreign key.** The subtitle and
+  the module docstring said exactly that, which Task 12 made false. Both now
+  distinguish the two kinds.
+
+### Gotchas
+
+- **`test_every_edge_corresponds_to_a_stored_foreign_key` is now scoped** to
+  `edge_kind == "foreign_key"`, and asserts it still has edges to check so the
+  scoping cannot silently empty it. Citations get their own guarantee in
+  `TestCitationEdges`: every `cites` edge must land on a real
+  `research_documents` row.
+- **An older test had to be replaced, not patched.**
+  `test_it_states_that_regulations_are_absent` asserted the absence this task
+  removed. It is now
+  `test_it_states_how_citations_differ_from_foreign_keys` — the claim worth
+  guarding changed from "there are none" to "these are not foreign keys".
+- **Document → reports is a Python scan, not a query.** The citation lives
+  inside a JSON blob, so every report is loaded and filtered. Fine at ten
+  reports; it would not be at scale, and the code says so.
+- Added `data-node-id` to each SVG circle so individual nodes are addressable
+  for debugging and UI checks.
+
+**Tests:** 689 passed, 25 skipped. Five added in `TestCitationEdges`, including
+a fixture carrying one id that resolves and one that does not, asserting the
+dangling one is counted and not drawn.
+
+**Next:** Task 13 — demo safety.

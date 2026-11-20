@@ -29,7 +29,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.intelligence import AgentRun, Report
+from app.models.intelligence import AgentRun, Report, ResearchDocument
 from app.models.pollution import (
     PollutionEvent,
     Region,
@@ -51,6 +51,7 @@ NODE_TYPES = (
     "risk_assessment",
     "agent_run",
     "report",
+    "research_document",
     "sar_candidate",
     "sar_review",
     "optical_evidence",
@@ -59,6 +60,17 @@ NODE_TYPES = (
 
 #: Hard ceiling on a response, so one busy centre cannot return the database.
 MAX_NODES = 150
+
+#: An edge backed by a declared foreign key. The row holds the other row's key.
+KIND_FK = "foreign_key"
+
+#: An edge resolved from a stored identifier that is *not* a declared
+#: relationship: ``reports.sources`` is a JSON array of document ids that do
+#: match ``research_documents.document_id``. Real, but weaker than a foreign
+#: key -- nothing in the schema stops it dangling -- so it is labelled
+#: separately, drawn dashed, and ids that fail to resolve are counted rather
+#: than quietly dropped.
+KIND_REFERENCE = "resolved_reference"
 
 
 @dataclass(slots=True)
@@ -177,6 +189,23 @@ def _report_node(row: Report) -> Node:
     )
 
 
+def _document_node(row: ResearchDocument) -> Node:
+    return Node(
+        id=node_id("research_document", row.id),
+        type="research_document",
+        label=row.title,
+        # A document is a cited source, not a measurement of the sea.
+        evidence_level="RETRIEVED",
+        attrs={
+            "document_id": row.document_id,
+            "doc_type": row.doc_type,
+            "year": row.year,
+            "jurisdiction": row.jurisdiction,
+            "source_url": row.source_url,
+        },
+    )
+
+
 def _candidate_node(row: SARCandidate) -> Node:
     return Node(
         id=node_id("sar_candidate", row.id),
@@ -245,6 +274,7 @@ _LOADERS = {
     "risk_assessment": (RiskAssessment, RiskAssessment.id, _risk_node),
     "agent_run": (AgentRun, AgentRun.id, _agent_run_node),
     "report": (Report, Report.id, _report_node),
+    "research_document": (ResearchDocument, ResearchDocument.id, _document_node),
     "sar_candidate": (SARCandidate, SARCandidate.id, _candidate_node),
     "sar_review": (SARCandidateReview, SARCandidateReview.id, _review_node),
     "optical_evidence": (
@@ -309,6 +339,11 @@ def resolve_center(db: Session, node_type: str, identifier: str) -> Node | None:
             _risk_node,
         ),
         "report": (Report, Report.report_id, _report_node),
+        "research_document": (
+            ResearchDocument,
+            ResearchDocument.document_id,
+            _document_node,
+        ),
         "sar_candidate": (SARCandidate, SARCandidate.candidate_id, _candidate_node),
     }
     spec = alternates.get(node_type)
@@ -322,18 +357,28 @@ def resolve_center(db: Session, node_type: str, identifier: str) -> Node | None:
 # ---------------------------------------------------------------------------
 # Expansion: one hop from a node, along declared foreign keys only
 # ---------------------------------------------------------------------------
-def _expand(db: Session, node: Node, per_node: int) -> list[tuple[Node, str, bool]]:
-    """Neighbours of ``node`` as (neighbour, relation, node_is_source).
+def _expand(
+    db: Session, node: Node, per_node: int
+) -> tuple[list[tuple[Node, str, bool, str]], int]:
+    """One hop out from ``node``.
 
-    ``node_is_source`` records the direction the foreign key actually points,
-    so an edge is never drawn backwards.
+    Returns the neighbours as (neighbour, relation, node_is_source, kind),
+    plus a count of citation ids that did not resolve.
+
+    ``node_is_source`` records the direction the relationship actually points,
+    so an edge is never drawn backwards. ``kind`` is :data:`KIND_FK` for a
+    declared foreign key and :data:`KIND_REFERENCE` for an id resolved out of
+    a JSON column.
     """
-    out: list[tuple[Node, str, bool]] = []
+    out: list[tuple[Node, str, bool, str]] = []
+    unresolved = 0
     key = node.id.split(":", 1)[1]
 
-    def add(rows: Any, build: Any, relation: str, *, forward: bool) -> None:
+    def add(
+        rows: Any, build: Any, relation: str, *, forward: bool, kind: str = KIND_FK
+    ) -> None:
         for row in rows:
-            out.append((build(row), relation, forward))
+            out.append((build(row), relation, forward, kind))
 
     if node.type == "region":
         region_id = int(key)
@@ -364,11 +409,11 @@ def _expand(db: Session, node: Node, per_node: int) -> list[tuple[Node, str, boo
         event_id = int(key)
         event = db.scalar(select(PollutionEvent).where(PollutionEvent.id == event_id))
         if event is None:
-            return out
+            return out, unresolved
         if event.region_id is not None:
             region = db.scalar(select(Region).where(Region.id == event.region_id))
             if region is not None:
-                out.append((_region_node(region), "occurs_in", True))
+                out.append((_region_node(region), "occurs_in", True, KIND_FK))
         if event.observation_id is not None:
             obs = db.scalar(
                 select(SatelliteObservation).where(
@@ -376,7 +421,7 @@ def _expand(db: Session, node: Node, per_node: int) -> list[tuple[Node, str, boo
                 )
             )
             if obs is not None:
-                out.append((_observation_node(obs), "detected_by", True))
+                out.append((_observation_node(obs), "detected_by", True, KIND_FK))
         add(
             db.scalars(
                 select(RiskAssessment)
@@ -412,7 +457,7 @@ def _expand(db: Session, node: Node, per_node: int) -> list[tuple[Node, str, boo
         if obs is not None and obs.region_id is not None:
             region = db.scalar(select(Region).where(Region.id == obs.region_id))
             if region is not None:
-                out.append((_region_node(region), "covers", True))
+                out.append((_region_node(region), "covers", True, KIND_FK))
         add(
             db.scalars(
                 select(PollutionEvent)
@@ -441,12 +486,16 @@ def _expand(db: Session, node: Node, per_node: int) -> list[tuple[Node, str, boo
                 select(PollutionEvent).where(PollutionEvent.id == row.event_id)
             )
             if event is not None:
-                out.append((_event_node(event), relation, True))
+                out.append((_event_node(event), relation, True, KIND_FK))
+        if row is not None and node.type == "report":
+            documents, missing = cited_documents(db, row, per_node)
+            unresolved += missing
+            add(documents, _document_node, "cites", forward=True, kind=KIND_REFERENCE)
 
     elif node.type == "sar_candidate":
         candidate = db.scalar(select(SARCandidate).where(SARCandidate.id == int(key)))
         if candidate is None:
-            return out
+            return out, unresolved
         add(
             db.scalars(
                 select(SARCandidateReview)
@@ -468,7 +517,7 @@ def _expand(db: Session, node: Node, per_node: int) -> list[tuple[Node, str, boo
             forward=False,
         )
         for vessel in _associated_vessels(db, candidate.candidate_id, per_node):
-            out.append((_vessel_node(vessel), "associated_vessel", False))
+            out.append((_vessel_node(vessel), "associated_vessel", False, KIND_FK))
 
     elif node.type in ("sar_review", "optical_evidence"):
         model = (
@@ -483,13 +532,58 @@ def _expand(db: Session, node: Node, per_node: int) -> list[tuple[Node, str, boo
                 select(SARCandidate).where(SARCandidate.id == row.candidate_id)
             )
             if candidate is not None:
-                out.append((_candidate_node(candidate), relation, True))
+                out.append((_candidate_node(candidate), relation, True, KIND_FK))
+
+    elif node.type == "research_document":
+        document = db.scalar(
+            select(ResearchDocument).where(ResearchDocument.id == int(key))
+        )
+        if document is not None:
+            # No index can answer this: the citation lives inside a JSON blob,
+            # so the reports are filtered in Python. There are ten of them.
+            for report in db.scalars(select(Report)):
+                cited, _ = cited_documents(db, report)
+                if any(d.id == document.id for d in cited):
+                    out.append((_report_node(report), "cites", False, KIND_REFERENCE))
+                    if len(out) >= per_node:
+                        break
 
     elif node.type == "vessel":
         for candidate in _vessel_candidates(db, key, per_node):
-            out.append((_candidate_node(candidate), "associated_vessel", True))
+            out.append((_candidate_node(candidate), "associated_vessel", True, KIND_FK))
 
-    return out
+    return out, unresolved
+
+
+def cited_documents(
+    db: Session, report: Report, limit: int | None = None
+) -> tuple[list[ResearchDocument], int]:
+    """Documents a report cites, and how many of its ids did not resolve.
+
+    ``reports.sources`` is a JSON array, not a relationship, so an id in it can
+    name a document that no longer exists. Those are counted and reported
+    rather than silently dropped: a citation that does not resolve is a fact
+    about the data, and hiding it would make the graph look tidier than the
+    records are.
+    """
+    ids = [
+        source["document_id"]
+        for source in (report.sources or [])
+        if isinstance(source, dict) and source.get("document_id")
+    ]
+    if not ids:
+        return [], 0
+
+    wanted = list(dict.fromkeys(ids))
+    found = list(
+        db.scalars(
+            select(ResearchDocument).where(ResearchDocument.document_id.in_(wanted))
+        )
+    )
+    unresolved = len(wanted) - len(found)
+    if limit is not None:
+        found = found[:limit]
+    return found, unresolved
 
 
 def _associated_vessels(db: Session, candidate_id: str, limit: int) -> list[Vessel]:
@@ -538,9 +632,10 @@ def build_graph(
 
     limit = max(1, min(limit, MAX_NODES))
     nodes: dict[str, Node] = {center.id: center}
-    edges: set[tuple[str, str, str]] = set()
+    edges: set[tuple[str, str, str, str]] = set()
     queue: deque[tuple[Node, int]] = deque([(center, 0)])
     truncated = False
+    unresolved_citations = 0
 
     # Enough breadth that a region's busiest neighbours all appear, without
     # letting one hop exhaust the whole budget.
@@ -550,7 +645,9 @@ def build_graph(
         node, node_depth = queue.popleft()
         if node_depth >= depth:
             continue
-        for neighbour, relation, node_is_source in _expand(db, node, per_node):
+        neighbours, missing = _expand(db, node, per_node)
+        unresolved_citations += missing
+        for neighbour, relation, node_is_source, kind in neighbours:
             if neighbour.id not in nodes:
                 if len(nodes) >= limit:
                     truncated = True
@@ -560,7 +657,7 @@ def build_graph(
             source, target = (
                 (node.id, neighbour.id) if node_is_source else (neighbour.id, node.id)
             )
-            edges.add((source, target, relation))
+            edges.add((source, target, relation, kind))
 
     return {
         "center": center.id,
@@ -570,16 +667,38 @@ def build_graph(
         "truncated": truncated,
         "nodes": [n.to_dict() for n in nodes.values()],
         "edges": [
-            {"source": s, "target": t, "relation": r} for s, t, r in sorted(edges)
+            {"source": s, "target": t, "relation": r, "edge_kind": k}
+            for s, t, r, k in sorted(edges)
         ],
         "node_count": len(nodes),
         "edge_count": len(edges),
-        "notes": [
-            "Every edge is a declared foreign key. Nothing is inferred.",
-            "SAR candidates have no foreign key to a region, so they form a "
-            "separate component and cannot be reached from one.",
-        ],
+        "edge_kind_counts": dict(Counter(k for _, _, _, k in edges)),
+        "unresolved_citations": unresolved_citations,
+        "notes": _graph_notes(edges, unresolved_citations),
     }
+
+
+def _graph_notes(edges: set[tuple[str, str, str, str]], unresolved: int) -> list[str]:
+    """What a reader needs to know about this particular subgraph."""
+    notes = [
+        "Edges marked foreign_key are declared relationships: a row holds the "
+        "other row's key. Nothing is inferred from proximity or similarity.",
+        "SAR candidates have no foreign key to a region, so they form a "
+        "separate component and cannot be reached from one.",
+    ]
+    if any(kind == KIND_REFERENCE for *_, kind in edges):
+        notes.append(
+            "Edges marked resolved_reference are citations read out of "
+            "reports.sources, a JSON column rather than a declared "
+            "relationship. They are shown dashed because nothing in the "
+            "schema stops them dangling."
+        )
+    if unresolved:
+        notes.append(
+            f"{unresolved} citation id(s) in this subgraph name a document "
+            "that is not in research_documents, and are not drawn."
+        )
+    return notes
 
 
 def graph_summary(db: Session) -> dict:
@@ -596,6 +715,7 @@ def graph_summary(db: Session) -> dict:
         "risk_assessment": db.scalar(select(func.count(RiskAssessment.id))) or 0,
         "agent_run": db.scalar(select(func.count(AgentRun.id))) or 0,
         "report": db.scalar(select(func.count(Report.id))) or 0,
+        "research_document": db.scalar(select(func.count(ResearchDocument.id))) or 0,
         "sar_candidate": db.scalar(select(func.count(SARCandidate.id))) or 0,
         "sar_review": db.scalar(select(func.count(SARCandidateReview.id))) or 0,
         "optical_evidence": db.scalar(
@@ -648,6 +768,15 @@ def graph_summary(db: Session) -> dict:
         "associated_vessel": db.scalar(select(func.count(Assoc.id))) or 0,
     }
 
+    # Citations are resolved, not joined, so they are counted by resolving
+    # them. Ten reports makes this cheap; it would not be at scale.
+    cites = unresolved = 0
+    for report in db.scalars(select(Report)):
+        found, missing = cited_documents(db, report)
+        cites += len(found)
+        unresolved += missing
+    edge_counts["cites"] = cites
+
     return {
         "node_counts": node_counts,
         "edge_counts": edge_counts,
@@ -655,13 +784,24 @@ def graph_summary(db: Session) -> dict:
         "total_edges": sum(edge_counts.values()),
         "node_types": list(NODE_TYPES),
         "max_nodes_per_request": MAX_NODES,
+        "edge_kinds": {
+            "foreign_key": sum(v for k, v in edge_counts.items() if k != "cites"),
+            "resolved_reference": cites,
+        },
+        "unresolved_citations": unresolved,
         "notes": [
             "Counts are table counts, not a sampled graph.",
             "An edge is a row whose foreign key is set; a nullable FK left "
             "NULL is not counted.",
-            "No regulation nodes: research_documents has no foreign keys, and "
-            "the citations in reports.sources are JSON rather than a "
-            "declared relationship.",
+            "'cites' edges are resolved from reports.sources, a JSON column "
+            "rather than a declared relationship, and are drawn dashed. "
+            "research_documents has no foreign keys of its own.",
+            (
+                f"{unresolved} citation id(s) do not resolve to a stored "
+                "document."
+                if unresolved
+                else "Every citation id resolves to a stored document."
+            ),
         ],
     }
 

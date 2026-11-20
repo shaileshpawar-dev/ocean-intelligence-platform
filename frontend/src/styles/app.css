@@ -3542,3 +3542,36 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* A citation is a weaker link than a foreign key — resolved out of JSON with
+   nothing in the schema protecting it — so it is drawn dashed. */
+.kg-edge.is-cited {
+  stroke-dasharray: 4 3;
+  stroke: var(--muted, #94a3b8);
+}
+
+.kg-edge.is-cited.is-lit {
+  stroke: #9333ea;
+}
+
+.kg-legend-edges {
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--border, #e2e8f0);
+}
+
+.kg-legend-edges li {
+  align-items: start;
+}
+
+.kg-line {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0;
+  margin-top: 0.45rem;
+  border-top: 2px solid var(--border, #cbd5e1);
+}
+
+.kg-line.is-dashed {
+  border-top-style: dashed;
+  border-top-color: var(--muted, #94a3b8);
+}

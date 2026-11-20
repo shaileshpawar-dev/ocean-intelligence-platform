@@ -104,11 +104,22 @@ class TestGraphContainsOnlyRealEdges:
     def test_every_edge_corresponds_to_a_stored_foreign_key(
         self, db, linked_records
     ) -> None:
-        """The whole point: no edge may exist without a row behind it."""
+        """The whole point: no edge may exist without a row behind it.
+
+        Scoped to ``foreign_key`` edges. Citation edges are resolved out of a
+        JSON column rather than joined, so they are checked separately in
+        :class:`TestCitationEdges` -- they must still resolve, but they are
+        not declared relationships and must not be claimed as such.
+        """
         graph = build_graph(db, "region", str(linked_records["region"].id), depth=2)
         nodes = {n["id"]: n for n in graph["nodes"]}
 
-        for edge in graph["edges"]:
+        foreign_key_edges = [
+            e for e in graph["edges"] if e["edge_kind"] == "foreign_key"
+        ]
+        assert foreign_key_edges, "no foreign-key edges to check"
+
+        for edge in foreign_key_edges:
             assert edge["source"] in nodes, "edge points at a node not returned"
             assert edge["target"] in nodes, "edge points at a node not returned"
 
@@ -201,9 +212,17 @@ class TestSummary:
             )
         )
 
-    def test_it_states_that_regulations_are_absent(self, db) -> None:
-        """The placeholder page promised regulation nodes; no FK supports them."""
-        assert any("regulation" in note for note in graph_summary(db)["notes"])
+    def test_it_states_how_citations_differ_from_foreign_keys(self, db) -> None:
+        """Documents are reachable now, but not as declared relationships.
+
+        This replaces an earlier assertion that regulation nodes were absent.
+        They are present, resolved from reports.sources -- so the claim worth
+        guarding is no longer "there are none" but "these are not foreign
+        keys", which is the thing a reader could otherwise be misled about.
+        """
+        notes = graph_summary(db)["notes"]
+        assert any("JSON column" in note for note in notes)
+        assert any("no foreign keys of its own" in note for note in notes)
 
 
 class TestEndpoint:
@@ -247,3 +266,91 @@ class TestEndpoint:
         assert body["node_count"] == 1
         assert body["nodes"][0]["type"] == "region"
         assert body["edges"] == []
+
+
+class TestCitationEdges:
+    """Citation edges, which are resolved rather than joined.
+
+    They get their own guarantee: every one must land on a document that
+    actually exists, and the graph must never claim a citation is a declared
+    relationship.
+    """
+
+    @pytest.fixture
+    def report_with_sources(self, db, linked_records):
+        from app.models.intelligence import Report, ResearchDocument
+
+        real = ResearchDocument(
+            document_id="marpol-annex-i",
+            title="MARPOL Annex I",
+            doc_type="regulation",
+        )
+        db.add(real)
+        db.add(
+            Report(
+                report_id="rpt_graph_test",
+                event_id=linked_records["event"].id,
+                workflow_id="wf_test",
+                title="Test report",
+                summary="summary",
+                sections={},
+                provenance={},
+                # One id that resolves and one that does not, because a JSON
+                # column has nothing stopping it from dangling.
+                sources=[
+                    {"document_id": "marpol-annex-i", "title": "MARPOL Annex I"},
+                    {"document_id": "deleted-document", "title": "Gone"},
+                ],
+                generated_by="test",
+                contains_simulated_data=True,
+            )
+        )
+        db.commit()
+        return real
+
+    def test_a_cites_edge_lands_on_a_real_document(
+        self, db, linked_records, report_with_sources
+    ) -> None:
+        from app.models.intelligence import ResearchDocument
+
+        graph = build_graph(db, "report", "rpt_graph_test", depth=1)
+        cites = [e for e in graph["edges"] if e["relation"] == "cites"]
+        assert cites, "no citation edges produced"
+
+        for edge in cites:
+            assert edge["edge_kind"] == "resolved_reference"
+            node_type, key = edge["target"].split(":", 1)
+            assert node_type == "research_document"
+            assert db.get(ResearchDocument, int(key)) is not None
+
+    def test_an_unresolvable_citation_is_counted_not_drawn(
+        self, db, linked_records, report_with_sources
+    ) -> None:
+        graph = build_graph(db, "report", "rpt_graph_test", depth=1)
+        assert graph["unresolved_citations"] == 1
+        assert any("do not resolve" in n or "not drawn" in n for n in graph["notes"])
+        # Exactly one of the two ids resolved, so exactly one edge is drawn.
+        assert len([e for e in graph["edges"] if e["relation"] == "cites"]) == 1
+
+    def test_citations_are_never_labelled_as_foreign_keys(
+        self, db, linked_records, report_with_sources
+    ) -> None:
+        graph = build_graph(db, "report", "rpt_graph_test", depth=1)
+        for edge in graph["edges"]:
+            if edge["relation"] == "cites":
+                assert edge["edge_kind"] != "foreign_key"
+            else:
+                assert edge["edge_kind"] == "foreign_key"
+
+    def test_a_document_reaches_the_reports_that_cite_it(
+        self, db, linked_records, report_with_sources
+    ) -> None:
+        graph = build_graph(db, "research_document", "marpol-annex-i", depth=1)
+        assert any(e["relation"] == "cites" for e in graph["edges"])
+        assert any(n["type"] == "report" for n in graph["nodes"])
+
+    def test_summary_counts_citations_separately(self, db, report_with_sources) -> None:
+        summary = graph_summary(db)
+        assert summary["edge_counts"]["cites"] == 1
+        assert summary["edge_kinds"]["resolved_reference"] == 1
+        assert summary["unresolved_citations"] == 1
