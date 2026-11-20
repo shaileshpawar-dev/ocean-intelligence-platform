@@ -1018,3 +1018,75 @@ Nothing empty, nothing erroring. The only oddity is the one fixed above.
   demo script uses Arabian Sea NE as the contrast.
 - The India Overview now leads with **zero current**. That is the strongest
   honesty point on the platform; the script opens with it deliberately.
+
+---
+
+## Indian marine regions (feature 2 of 4)
+
+**Done.** The marine module now monitors the Indian EEZ instead of an
+inherited global set (Gulf of Mexico, North Sea, Yellow Sea, Mediterranean…).
+
+**15 regions / 40 cells**, west coast to east: Gulf of Kutch, Gulf of Khambhat,
+Mumbai Offshore, Konkan & Goa, Malabar, Lakshadweep Sea, Gulf of Mannar, Palk
+Bay, Coromandel, Krishna-Godavari Offshore, Odisha Coast, Sundarbans & Bengal,
+Andaman Sea, plus open-water Arabian Sea and Bay of Bengal. Each carries a
+`REGION_RATIONALE` line saying why it is monitored (Vadinar/Kandla terminals,
+Mumbai High, the KG gas basin, Paradip, the Gulf of Mannar reserve).
+
+### Why this mattered more than cosmetics
+
+The marine receptors were **already Indian** — Gulf of Mannar, Sundarbans,
+Gulf of Kachchh MNP, Malvan, the Chennai desalination intake. So the risk
+engine's two geographic factors (30 of 100 points) could never fire: a
+detection in the Gulf of Mexico cannot threaten a reef off Tamil Nadu.
+
+Fixing the regions exposed a second problem: `distance_to_coast` was a
+62-point global city list with **six points in the whole Indian box**. The
+Andaman cells reported 750–965 km from land while sitting among the islands.
+Added 28 Indian coastal points (ports, headlands, Port Blair, Car Nicobar,
+Kavaratti, Minicoy) and 8 Indian MPAs.
+
+Measured effect:
+
+| | Before | After |
+|---|---|---|
+| Andaman Sea NW → coast | 902 km | **132 km** (Port Blair) |
+| Gulf of Kutch W → coast | — | **32 km** (Okha) |
+| Gulf of Kutch → nearest MPA | Gulf of Mannar, ~1,400 km | **Gulf of Kachchh MNP, 44 km** |
+| Odisha Coast W → coast | inland bbox | **5 km** (Paradip) |
+
+A Gulf of Mannar detection now scores **coastal 12.9/15** and **protected-area
+15/15** (57 km from the Marine National Park) — both were dead zeros before.
+
+### Also fixed while in here
+
+- **Two bboxes sat on land.** Odisha Coast W centred at 85.75E/20.05N — inland
+  near Khordha. Moved seaward to Paradip; Sundarbans nudged to the river
+  mouths.
+- **A 1×1 region was labelled "SW".** "Palk Bay SW" is not a south-western
+  part of anything. Undivided regions now carry no suffix.
+- **A 1×2 region labelled its north/south halves "SW"/"SE".** Compass labels
+  now match the grid shape: S/N for 1×2, W/E for 2×1, full compass for 2×2.
+- **`&` produced a triple underscore** in codes (`konkan___goa_coast`); the
+  slug now collapses separator runs.
+- **`prune_undefined_regions()`** (new) retires regions no longer defined.
+  It **keeps** any region still holding observations or events and reports
+  them, because deleting one cascades to its data — reseed first, then prune.
+  Removed all 270 old regions, kept 0, left 40.
+
+### Data
+
+Reseeded twice, deliberately: once onto the new grid, then again after the
+geography improved, so the stored risk scores reflect the final reference
+data. 2,400 observations, 666 events, 40/40 regions forecastable.
+
+**Tests:** 689 passed, 25 skipped — unchanged. The suite derives region codes
+from the API rather than hardcoding them, so none needed touching.
+
+### Known follow-up
+
+The Ocean Map still opens on the old Mediterranean centre; the default view
+needs re-centring on India. Not fixed here.
+
+**Restore point before this work:** `backups/oip-after-window4a-demostate.dump`
+(the state the PPT and DEMO_SCRIPT.md describe).

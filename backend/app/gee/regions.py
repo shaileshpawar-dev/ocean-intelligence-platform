@@ -1,10 +1,25 @@
 """Monitoring region definitions and grid subdivision.
 
-The twelve regions and their grid shapes are carried over unchanged from the
-original notebook -- the region selection was sound (busy shipping lanes,
-known spill hotspots, semi-enclosed seas) and there is no reason to rebuild
-it. What changed is that cells are now stable, named entities persisted in
-the ``regions`` table rather than strings rebuilt on every fetch.
+These are the Indian EEZ and the waters immediately around it. They replaced
+an inherited global set -- Gulf of Mexico, North Sea, Yellow Sea and the like
+-- which made the marine module read as a second, unrelated project beside
+the India water work, and which no part of the platform was actually built
+around.
+
+The environmental receptors were already Indian (Gulf of Mannar, the
+Sundarbans, the Gulf of Kachchh Marine National Park, Malvan, the Chennai
+desalination intake), so impact screening could never fire: a detection in
+the Gulf of Mexico cannot threaten a reef off Tamil Nadu. Matching the
+regions to the receptors is what makes that screening mean anything.
+
+Each region is a real area of operational interest rather than a tidy
+rectangle: the Gulf of Kutch carries the Vadinar and Kandla oil terminals,
+Mumbai Offshore covers the Mumbai High field, Krishna--Godavari covers the
+offshore gas basin, and Paradip, Kochi and Chennai sit against their coastal
+cells.
+
+Cells are stable, named entities persisted in the ``regions`` table rather
+than strings rebuilt on every fetch.
 """
 
 from __future__ import annotations
@@ -26,19 +41,46 @@ class RegionDefinition:
     grid: tuple[int, int]
 
 
+#: Why each region is monitored, carried into the UI so a reader is never
+#: left wondering why a rectangle of sea is on the list.
+REGION_RATIONALE: dict[str, str] = {
+    "Gulf of Kutch": "Vadinar and Kandla crude terminals; Marine National Park",
+    "Gulf of Khambhat": "Dahej and Hazira industrial estuary",
+    "Mumbai Offshore": "Mumbai High oil field and the JNPT approach",
+    "Konkan & Goa Coast": "Mormugao ore and fuel traffic; Malvan Marine Sanctuary",
+    "Malabar Coast": "Kochi refinery and port; monsoon-exposed shelf",
+    "Lakshadweep Sea": "Atoll reefs astride the Gulf-to-Asia tanker route",
+    "Gulf of Mannar": "Marine Biosphere Reserve; coral and seagrass",
+    "Palk Bay": "Shallow, enclosed, dugong and seagrass habitat",
+    "Coromandel Coast": "Chennai and Ennore ports; Nemmeli desalination intake",
+    "Krishna-Godavari Offshore": "Offshore gas basin and its supply traffic",
+    "Odisha Coast": "Paradip port and refinery; Olive Ridley nesting shelf",
+    "Sundarbans & Bengal": "UNESCO mangrove delta; Haldia approach",
+    "Andaman Sea": "Island reefs; Malacca approaches",
+    "Arabian Sea": "Open-water transit west of the shelf",
+    "Bay of Bengal": "Open-water transit east of the shelf",
+}
+
 REGIONS: tuple[RegionDefinition, ...] = (
-    RegionDefinition("Arabian Sea", (58.0, 10.0, 74.0, 26.0), (2, 2)),
-    RegionDefinition("Bay of Bengal", (80.0, 8.0, 95.0, 20.0), (2, 2)),
-    RegionDefinition("Persian Gulf", (48.0, 22.0, 58.0, 28.0), (2, 1)),
-    RegionDefinition("Mediterranean", (5.0, 30.0, 36.0, 46.0), (3, 2)),
-    RegionDefinition("South China Sea", (108.0, 5.0, 120.0, 22.0), (2, 2)),
-    RegionDefinition("Gulf of Guinea", (-2.0, -5.0, 15.0, 5.0), (2, 1)),
-    RegionDefinition("Red Sea", (32.0, 12.0, 44.0, 28.0), (1, 2)),
-    RegionDefinition("Gulf of Mexico", (-97.0, 18.0, -80.0, 30.0), (2, 2)),
-    RegionDefinition("North Sea", (-2.0, 51.0, 10.0, 58.0), (2, 1)),
-    RegionDefinition("Strait of Malacca", (99.0, 1.0, 106.0, 7.0), (2, 1)),
-    RegionDefinition("Yellow Sea", (119.0, 29.0, 127.0, 38.0), (2, 2)),
-    RegionDefinition("Java Sea", (106.0, -8.0, 116.0, -3.0), (2, 1)),
+    # -- West coast, north to south -------------------------------------
+    RegionDefinition("Gulf of Kutch", (68.3, 22.0, 70.4, 23.3), (2, 1)),
+    RegionDefinition("Gulf of Khambhat", (71.6, 20.6, 72.9, 22.3), (1, 1)),
+    RegionDefinition("Mumbai Offshore", (71.3, 18.6, 72.8, 20.3), (2, 1)),
+    RegionDefinition("Konkan & Goa Coast", (72.4, 14.8, 73.8, 17.6), (1, 2)),
+    RegionDefinition("Malabar Coast", (74.2, 8.2, 76.3, 12.4), (1, 2)),
+    RegionDefinition("Lakshadweep Sea", (70.8, 8.0, 74.0, 13.0), (2, 2)),
+    # -- Southern tip ----------------------------------------------------
+    RegionDefinition("Gulf of Mannar", (78.1, 8.3, 79.4, 9.4), (1, 1)),
+    RegionDefinition("Palk Bay", (79.0, 9.2, 80.2, 10.3), (1, 1)),
+    # -- East coast, south to north --------------------------------------
+    RegionDefinition("Coromandel Coast", (80.0, 10.6, 81.3, 13.9), (1, 2)),
+    RegionDefinition("Krishna-Godavari Offshore", (81.2, 14.4, 84.0, 17.3), (2, 2)),
+    RegionDefinition("Odisha Coast", (86.2, 19.4, 87.8, 21.2), (2, 1)),
+    RegionDefinition("Sundarbans & Bengal", (87.8, 20.4, 89.3, 21.7), (1, 1)),
+    # -- Islands and open water ------------------------------------------
+    RegionDefinition("Andaman Sea", (91.6, 9.2, 94.4, 13.9), (2, 2)),
+    RegionDefinition("Arabian Sea", (64.0, 12.0, 71.5, 21.5), (3, 2)),
+    RegionDefinition("Bay of Bengal", (82.0, 10.5, 89.5, 18.5), (3, 2)),
 )
 
 
@@ -81,8 +123,13 @@ class GridCell:
 
 
 def _slug(text: str) -> str:
-    """Lowercase, underscore-separated identifier."""
-    return "".join(c if c.isalnum() else "_" for c in text.lower()).strip("_")
+    """Lowercase, underscore-separated identifier.
+
+    Runs of separators collapse to one, so "Konkan & Goa Coast" becomes
+    ``konkan_goa_coast`` rather than ``konkan___goa_coast``.
+    """
+    raw = "".join(c if c.isalnum() else "_" for c in text.lower())
+    return "_".join(part for part in raw.split("_") if part)
 
 
 def build_grid(region: RegionDefinition) -> list[GridCell]:
@@ -102,11 +149,20 @@ def build_grid(region: RegionDefinition) -> list[GridCell]:
     for row in range(rows):
         for col in range(cols):
             index = row * cols + col
-            if cols * rows <= 4:
-                label = compass[index] if index < len(compass) else f"Z{index + 1}"
+            # The compass label has to match the grid shape or it misnames the
+            # cell: a region split only north-to-south has no western half, so
+            # "SW"/"SE" for its two halves was simply wrong.
+            if cols * rows == 1:
+                label = ""          # the cell is the whole region
+            elif cols == 1 and rows == 2:
+                label = ("S", "N")[index]
+            elif cols == 2 and rows == 1:
+                label = ("W", "E")[index]
+            elif cols == 2 and rows == 2:
+                label = compass[index]
             else:
                 label = f"Z{index + 1}"
-            name = f"{region.name} {label}"
+            name = f"{region.name} {label}".strip()
             cells.append(
                 GridCell(
                     code=_slug(name),

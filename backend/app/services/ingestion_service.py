@@ -20,7 +20,7 @@ import hashlib
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -116,6 +116,55 @@ def ensure_regions(db: Session) -> dict[str, Region]:
     db.commit()
     logger.info("regions_ensured", extra={"count": len(existing)})
     return existing
+
+
+def prune_undefined_regions(db: Session) -> dict:
+    """Remove regions no longer in :data:`REGIONS` that hold no data.
+
+    ``ensure_regions`` only ever adds, so changing the monitored areas leaves
+    the previous ones behind as rows nothing references. They are not
+    harmless: they inflate the region count, appear in the knowledge graph,
+    and leave a reader wondering why the Gulf of Mexico is listed by a
+    platform that monitors India.
+
+    A region still holding observations or events is **kept**, and reported.
+    Deleting it would cascade to that data, and quietly destroying records to
+    tidy a list is not a trade this function is allowed to make -- reseed
+    first, then prune.
+    """
+    defined = {cell.code for cell in all_cells()}
+    removed: list[str] = []
+    kept_with_data: list[str] = []
+
+    for region in db.scalars(select(Region)).all():
+        if region.code in defined:
+            continue
+        observations = db.scalar(
+            select(func.count(SatelliteObservation.id)).where(
+                SatelliteObservation.region_id == region.id
+            )
+        ) or 0
+        events = db.scalar(
+            select(func.count(PollutionEvent.id)).where(
+                PollutionEvent.region_id == region.id
+            )
+        ) or 0
+        if observations or events:
+            kept_with_data.append(region.code)
+            continue
+        db.delete(region)
+        removed.append(region.code)
+
+    db.commit()
+    summary = {
+        "removed": len(removed),
+        "kept_with_data": len(kept_with_data),
+        "remaining": db.scalar(select(func.count(Region.id))) or 0,
+    }
+    if kept_with_data:
+        summary["kept_codes"] = sorted(kept_with_data)[:10]
+    logger.info("regions_pruned", extra=summary)
+    return summary
 
 
 def _persist_observation(
