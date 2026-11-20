@@ -20,11 +20,17 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.routes import (
     analytics,
+    candidates,
+    drift,
     health,
     intelligence,
+    knowledge_graph,
     ml,
     pollution,
+    receptors,
+    sar_scenes,
     satellite,
+    vessels,
     water,
 )
 from app.core.config import settings
@@ -191,6 +197,12 @@ app.include_router(analytics.router, prefix=API_PREFIX)
 app.include_router(ml.router, prefix=API_PREFIX)
 app.include_router(intelligence.router, prefix=API_PREFIX)
 app.include_router(water.router, prefix=API_PREFIX)
+app.include_router(candidates.router, prefix=API_PREFIX)
+app.include_router(sar_scenes.router, prefix=API_PREFIX)
+app.include_router(vessels.router, prefix=API_PREFIX)
+app.include_router(drift.router, prefix=API_PREFIX)
+app.include_router(receptors.router, prefix=API_PREFIX)
+app.include_router(knowledge_graph.router, prefix=API_PREFIX)
 
 
 @app.get("/preview", tags=["system"], include_in_schema=False)

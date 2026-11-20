@@ -20,6 +20,8 @@ import type {
   DetectorInfo,
   DriftReport,
   Forecast,
+  KnowledgeGraphResponse,
+  KnowledgeGraphSummary,
   HealthResponse,
   ListResponse,
   Metrics,
@@ -266,6 +268,23 @@ export const api = {
     get<DriftReport>(
       `/drift${qs({ baseline_days: baselineDays, current_days: currentDays })}`,
     ),
+  knowledgeGraph: (params: {
+    centerType?: string | null;
+    centerId?: string | null;
+    depth?: number;
+    limit?: number;
+  } = {}) =>
+    get<KnowledgeGraphResponse>(
+      `/knowledge-graph${qs({
+        center_type: params.centerType ?? null,
+        center_id: params.centerId ?? null,
+        depth: params.depth ?? 1,
+        limit: params.limit ?? null,
+      })}`,
+    ),
+  knowledgeGraphSummary: () =>
+    get<KnowledgeGraphSummary>("/knowledge-graph/summary"),
+
   candidateEvaluation: (threshold = 0.5) =>
     get<CandidateEvaluation>(
       `/models/sar-candidates/evaluation${qs({ threshold })}`,

@@ -607,3 +607,121 @@ Regions were not moved or renamed, and no page content was changed.
 **Tests:** 669 passed, 25 skipped (unchanged — presentational).
 
 **Next:** Task 10 — the knowledge graph.
+
+---
+
+## Task 10 — Knowledge graph
+
+### FK survey, recorded before writing any code
+
+Every edge below is a real foreign key in `Base.metadata`, confirmed against
+the live schema with `inspect(engine).get_foreign_keys()`.
+
+**Region component** (the default view):
+
+| From | To | Column | Relation |
+|---|---|---|---|
+| `pollution_events` | `regions` | `region_id` | occurs_in |
+| `pollution_events` | `satellite_observations` | `observation_id` | detected_by |
+| `satellite_observations` | `regions` | `region_id` | covers |
+| `risk_assessments` | `pollution_events` | `event_id` | assesses |
+| `agent_runs` | `pollution_events` | `event_id` | analysed |
+| `reports` | `pollution_events` | `event_id` | documents |
+
+**Candidate component** (reachable by centring on a candidate):
+
+| From | To | Column | Relation |
+|---|---|---|---|
+| `sar_candidate_reviews` | `sar_candidates` | `candidate_id` | reviews |
+| `sar_candidate_optical_evidence` | `sar_candidates` | `candidate_id` | corroborates |
+| `candidate_vessel_associations` | `sar_candidates`, `vessels` | `candidate_id`, `mmsi` | associated_vessel |
+| `candidate_environmental_impacts` | `sar_candidates`, `marine_receptors` | `candidate_id`, `receptor_id` | threatens |
+| `drift_simulations` | `sar_candidates` | `candidate_id` | drift_modelled |
+
+### Two findings that changed the design
+
+1. **`sar_candidates` has no foreign keys at all.** There is no
+   candidate → region link, so the SAR candidates are a **separate connected
+   component**, not part of the region subgraph. The graph therefore supports
+   centring on a candidate as well as a region; joining the two components
+   would have required inventing an edge.
+2. **The regulation edge the placeholder page promised does not exist as an
+   FK.** `research_documents` has no foreign keys. `reports.sources` is a JSON
+   array holding `document_id` strings that do correspond to real rows, but it
+   is not a declared relationship. Per the "existing foreign keys only"
+   constraint it is **excluded**, so there are no regulation nodes. Adding
+   them later means resolving `reports.sources[].document_id` against
+   `research_documents.document_id` — a real link, just not an FK.
+
+Node populations: 270 regions, 686 events, 2373 observations, 686 risk
+assessments, 10 agent runs, 10 reports, 306 candidates, 8 reviews, 1 optical
+evidence, 6 vessels. The busiest region (`south_china_sea_ne`, 29 events)
+yields roughly 90 nodes at depth 2, comfortably inside the 150 cap.
+
+### Built
+
+**Backend** — `app/knowledge_graph/builder.py`, `app/api/routes/knowledge_graph.py`.
+
+- `GET /api/v1/knowledge-graph?center_type=&center_id=&depth=1..2&limit=` — BFS
+  outward from one record along declared foreign keys. Defaults to the region
+  with the most events, so the first view is never empty. Capped at 150 nodes
+  and reports `truncated` so a partial view never passes for a complete one.
+- `GET /api/v1/knowledge-graph/summary` — node and edge counts straight from
+  the tables: **4,356 nodes / 4,464 edges** across 10 node types.
+- `center_id` accepts either a primary key or the human-facing identifier
+  (region code, `evt_...`, `cand_...`).
+
+Live results: default region centre gives 113 nodes / 137 edges at depth 2,
+80 nodes at depth 1; a candidate centre gives 7 nodes / 6 edges; unknown centre
+404, unknown type 400, depth > 2 → 422.
+
+**Frontend** — `pages/KnowledgeGraph.tsx` replaces the placeholder. Radial SVG
+layout, colour by type, hover for evidence level and attributes, click to
+re-centre, 38-region selector, depth control, legend with per-type counts, and
+the summary counts below.
+
+### No new dependency, and why
+
+`package.json` had no graph library. Rather than add `react-force-graph-2d` or
+`cytoscape` (200–400 KB on top of an existing 416 KB charts chunk), the page
+draws its own SVG. The reasoning is not only size:
+
+- The API returns a subgraph defined by **a centre and a hop count**, and
+  concentric rings express exactly that — ring 1 is one hop, ring 2 is two.
+  A force simulation would scramble that structure into an arbitrary blob.
+- It is **deterministic**: the picture does not rearrange itself between
+  renders, which matters when someone is pointing at it in a demo.
+- At ≤150 nodes there is no performance argument for a simulation.
+
+If the graph ever needs free-form exploration over thousands of nodes, that is
+the point to add a real library.
+
+### Gotchas
+
+- **Integer primary keys versus string path parameters.** PostgreSQL refuses
+  to compare `integer = varchar` — it raises rather than returning no rows, so
+  `region/abc` was a 500, not a 404. `_coerce_key()` converts by column type
+  and returns None when it cannot, which lets the lookup fall through to the
+  human-facing identifier.
+- **The region selector filters out stage-2 sub-cells.** They hold a couple of
+  records at most, so centring on one draws a near-empty graph that reads as a
+  bug. Same filter as `get_trends()`, for the same reason.
+- **The selector must not be bound to the API's node id.** `value="region:20"`
+  matches no `<option>`, so the browser silently displayed the first region
+  while the graph showed another. It now reads the centre's own `code` out of
+  the returned node.
+- **Testing hover in React needs `mouseover`, not `mouseenter`.** React
+  synthesises enter/leave from `mouseover`/`mouseout` at the root, so a
+  dispatched `mouseenter` does nothing and the feature looks broken when it is
+  not.
+- `SatelliteObservation` requires `observation_id`, `collection` and
+  `platform`; a test fixture omitting them fails on a NOT NULL constraint.
+
+**Tests:** 683 passed, 25 skipped. 14 added in `tests/test_knowledge_graph.py`,
+the central one being `test_every_edge_corresponds_to_a_stored_foreign_key`,
+which re-reads each edge's row and asserts the foreign key actually holds the
+other node's key. Also: depth 1 excludes what only depth 2 reaches, `limit`
+truncates and says so, an isolated region returns itself with no edges, nodes
+keep their own evidence level (and a region keeps `null` rather than borrowing
+one), summary counts equal table counts, and the route-order, 404, 400 and 422
+cases.

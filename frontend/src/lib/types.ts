@@ -362,6 +362,47 @@ export interface DriftWindowProvenance {
   dominant_split: string | null;
 }
 
+/** One record in the knowledge graph. `evidence_level` is whatever the row
+ *  itself declares; null means the record is configuration or process, not a
+ *  measurement, and must not borrow a level from its neighbours. */
+export interface GraphNode {
+  id: string;
+  type: string;
+  label: string;
+  evidence_level: string | null;
+  attrs: Record<string, unknown>;
+}
+
+/** A stored foreign key. Nothing here is inferred. */
+export interface GraphEdge {
+  source: string;
+  target: string;
+  relation: string;
+}
+
+export interface KnowledgeGraphResponse {
+  center: string | null;
+  center_type: string | null;
+  depth: number;
+  limit: number;
+  truncated: boolean;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  node_count: number;
+  edge_count: number;
+  notes: string[];
+}
+
+export interface KnowledgeGraphSummary {
+  node_counts: Record<string, number>;
+  edge_counts: Record<string, number>;
+  total_nodes: number;
+  total_edges: number;
+  node_types: string[];
+  max_nodes_per_request: number;
+  notes: string[];
+}
+
 export interface DriftReport {
   overall_status: string;
   baseline_window_days: number;
