@@ -920,3 +920,38 @@ missing dump path exits with a usage message rather than a stack trace.
   literal, which does not compile. The message is now built with
   `[...].join("\n")`, which has no escapes to mangle — worth remembering for
   any future multi-line string written through a script.
+
+---
+
+## Final state — window 4a
+
+**Tests:** `689 passed, 25 skipped, 0 failed` (window 3 ended at 683/25).
+
+**Pages:** all 15 loaded with **zero console errors**.
+
+**Backup:** `backups/oip-after-window4a.dump` (113 MB, 41 tables, verified).
+This is the dump `scripts/reset_demo.sh` will now pick by default.
+
+No database writes were made this window — the restore test ran against a
+throwaway database, and declining the refine prompt was verified to leave the
+event count unchanged at 686.
+
+### Demo-day quick reference
+
+| If this happens | Do this |
+|---|---|
+| Something was clicked that changed the data | `scripts/reset_demo.sh`, then restart the API |
+| "Stage-2 refine" prompt appears | Cancel unless you mean it — it adds events and sub-cells |
+| Asked why drift says Warning | It is a real finding, not a fault: confidence shifts between two held-out benchmarks while the class mix holds. The platform flags it for review and never retrains on it. |
+| Asked whether the marine data is real | It is not, and every page says so. The real data is Candidate Review: 306 Sentinel-1 patches. |
+| Asked about the dashed graph edges | Citations resolved from `reports.sources`, a JSON column — real stored ids, but not a declared foreign key. |
+
+Expected counts after a restore: **686 events, 10 CRITICAL, 306 candidates,
+307 prediction logs, 5 model versions (3 evaluated), 4.6M water observations.**
+
+### Still open from `docs/SECTION_AUDIT.md`
+
+Unchanged and deliberately skipped: RAG corpus expansion, live ingestion, AIS,
+MLflow, retraining automation. `llm_provider` remains `none`. The optical
+YOLOv8 detector still has no committed test split, so its registry metrics stay
+NULL — correct, not a gap.
