@@ -444,3 +444,77 @@ curve rather than a fabricated diagonal, plus the endpoint and route-order
 cases.
 
 **Next:** Task 6b — stage-2 refine on a few regions.
+
+---
+
+## Task 6b — Restore some oil-like events
+
+**Done, nothing regressed.** Stage-2 refine on 4 regions:
+
+```
+cells_refined=4  subcells_observed=93  events_created=23  upgraded_to_oil_like=16
+```
+
+| | Before | After |
+|---|---|---|
+| Events | 663 | 686 |
+| CRITICAL | 0 | **10** |
+| HIGH | 208 | 221 |
+| Slick-scale extent | 0 km² | **54,940 km²** |
+
+### The regression check this task existed for
+
+The Task 4 gotcha warned that refine would put one-bucket sub-cells into the
+Forecasts dropdown. The filter added in Task 4 held:
+
+```
+trends regions: 38   sub-cells leaked into dropdown: 0
+forecastable: 38/38
+```
+
+`test_every_region_offered_by_trends_can_be_forecast` passes, no page shows
+"insufficient history", and no restore was needed. A rollback point was taken
+first anyway: `backups/oip-before-refine.dump`.
+
+**Note for the demo:** the refine was run against 4 regions only. Running it
+again will refine 4 more and add further sub-cells — harmless to Forecasts now,
+but it will keep inflating the event count.
+
+---
+
+## Final state — window 2
+
+**Tests:** `663 passed, 25 skipped, 0 failed` (window 1 ended at 649/21).
+
+**Pages:** all 15 loaded with **zero console errors**, checked after the refine.
+
+**Backup:** `backups/oip-after-window2.dump` (113 MB, 41 tables, verified).
+Earlier points: `oip-before-refine.dump`, `oip-after-window1.dump`,
+`oip-20261120-115423.dump`. All gitignored.
+
+### What a demo viewer sees now that they did not at the start of this window
+
+| Panel | Before | After |
+|---|---|---|
+| Inference latency | "Unavailable", 0 logged | **p95 9.63 ms**, 105 requests |
+| Drift monitoring | "Insufficient data" | **Warning**, PSI 0.11 / 0.032 on real windows |
+| Retraining trigger state | Insufficient Data | **Warning**, a live verdict |
+| Model Performance | 3 registry cards | plus a **live confusion matrix, ROC and AUC 0.771** with a working threshold slider |
+| Ocean Overview | 0 CRITICAL, 0 km² extent | **10 CRITICAL**, 54,940 km² |
+
+### The one finding to be ready to talk about
+
+Drift says **WARNING**, not "no drift". The screener's confidence distribution
+shifts between the Phase 12 and Phase 13 held-out benchmarks (PSI 0.11, just
+over the 0.10 line) while the class mix stays stable (0.032). This was not
+tuned for, and tuning it away was explicitly out of scope. It is a good thing
+to be asked about: the platform raises it for human review and does not
+retrain on it, which is the policy the Retraining page states.
+
+### Still open from `docs/SECTION_AUDIT.md`
+
+- Knowledge Graph still has no backend (P2, item 8).
+- Marine regions are still global while the rest of the platform is India
+  (P2, item 7) — worth one line in the demo script.
+- The optical YOLOv8 detector still has no committed test split, so its
+  registry metrics remain NULL. That is correct, not a gap to paper over.
