@@ -456,6 +456,69 @@ class TestMeasurementProvenance:
         assert "timestamps are assigned" in note
         assert "Inferences are real" in note
 
+    def test_the_note_agrees_with_the_number_the_psi_used(self, db) -> None:
+        """A window can hold rows the confidence PSI cannot use.
+
+        The two old mock-detector rows log no confidence, so the window held
+        102 rows while the statistic ran over 100. Quoting only the row count
+        made the sentence say 102 beside a table saying 100, which reads as
+        one of them being wrong rather than as two different questions.
+        """
+        from datetime import UTC, datetime, timedelta
+
+        from app.monitoring.drift import run_drift_checks
+        from app.monitoring.prediction_log import log_prediction
+
+        class _Scored:
+            confidence = 0.8
+            signature = "oil_like_signature"
+
+        now = datetime.now(UTC)
+        for index in range(3):
+            log_prediction(
+                db,
+                request_id=f"scored_{index}",
+                detector_name="sar-oil-slick-v2.2",
+                version="2.2.0-experimental",
+                latency_ms=9.0,
+                detections=[_Scored()],
+                endpoint="BATCH /sar-candidates/replay",
+                created_at=now - timedelta(days=20),
+                input_stats={"timestamp_is_synthetic": True, "split": "Phase 12"},
+            )
+        # One row with no detections, so mean_confidence is NULL.
+        log_prediction(
+            db,
+            request_id="unscored_0",
+            detector_name="mock-detector",
+            version="sim-1.0.0",
+            latency_ms=0.2,
+            detections=[],
+            created_at=now - timedelta(days=20),
+        )
+        log_prediction(
+            db,
+            request_id="current_0",
+            detector_name="sar-oil-slick-v2.2",
+            version="2.2.0-experimental",
+            latency_ms=9.0,
+            detections=[_Scored()],
+            endpoint="BATCH /sar-candidates/replay",
+            created_at=now - timedelta(days=1),
+            input_stats={"timestamp_is_synthetic": True, "split": "Phase 13"},
+        )
+
+        report = run_drift_checks(db)
+        baseline = report["provenance"]["baseline"]
+        assert baseline["n"] == 4
+        assert baseline["scored_n"] == 3
+
+        note = report["provenance"]["note"]
+        assert "4 rows, 3 with confidence" in note
+
+        # A window where every row scored keeps the plain form.
+        assert "(n=1)" in note
+
 
 class TestMonitoring:
     def test_metrics_report_zero_not_fake_latency(self, client: TestClient) -> None:

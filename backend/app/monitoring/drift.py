@@ -187,15 +187,23 @@ def _window_provenance(db: Session, start: datetime, end: datetime | None) -> di
     Read in Python rather than with a JSON operator because the suite runs on
     SQLite and the deployment on PostgreSQL, and a window is a hundred rows.
     """
-    stmt = select(PredictionLog.input_stats).where(PredictionLog.created_at >= start)
+    stmt = select(PredictionLog.input_stats, PredictionLog.mean_confidence).where(
+        PredictionLog.created_at >= start
+    )
     if end is not None:
         stmt = stmt.where(PredictionLog.created_at < end)
 
     total = 0
     replayed = 0
+    # The confidence PSI only sees rows with a confidence, so a window can
+    # hold more rows than the statistic was computed over. Counting both keeps
+    # the sentence under the panel from contradicting the table beside it.
+    scored = 0
     splits: Counter[str] = Counter()
-    for stats in db.scalars(stmt).all():
+    for stats, mean_confidence in db.execute(stmt).all():
         total += 1
+        if mean_confidence is not None:
+            scored += 1
         if not isinstance(stats, dict):
             continue
         if stats.get("timestamp_is_synthetic"):
@@ -205,6 +213,7 @@ def _window_provenance(db: Session, start: datetime, end: datetime | None) -> di
 
     return {
         "n": total,
+        "scored_n": scored,
         "replayed_n": replayed,
         "is_replayed": replayed > 0,
         "splits": dict(splits.most_common()),
@@ -217,13 +226,22 @@ def _provenance_note(baseline: dict, current: dict) -> str | None:
 
     Returns None when nothing in either window was replayed, so a live
     deployment never carries a caveat about a batch it does not contain.
+
+    Where a window holds rows the confidence PSI could not use -- the two old
+    mock-detector rows log no confidence -- both counts are given. Quoting only
+    the row count made the sentence say 102 while the table beside it said 100,
+    which reads as one of them being wrong rather than as two different
+    questions.
     """
     if not (baseline["is_replayed"] or current["is_replayed"]):
         return None
 
     def describe(window: dict) -> str:
         split = window["dominant_split"] or "unlabelled batch"
-        return f"{split} (n={window['n']})"
+        total, scored = window["n"], window["scored_n"]
+        if scored == total:
+            return f"{split} (n={total})"
+        return f"{split} ({total} rows, {scored} with confidence)"
 
     return (
         f"Replayed benchmark: baseline = {describe(baseline)}, "

@@ -356,6 +356,9 @@ export interface CandidateEvaluation {
 /** What a drift window actually holds, read back from the logged rows. */
 export interface DriftWindowProvenance {
   n: number;
+  /** Rows the confidence PSI could actually use. Lower than `n` when a
+   *  window holds rows that logged no confidence. */
+  scored_n: number;
   replayed_n: number;
   is_replayed: boolean;
   splits: Record<string, number>;

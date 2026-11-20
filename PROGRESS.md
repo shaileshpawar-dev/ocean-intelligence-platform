@@ -769,3 +769,32 @@ about the schema, not gaps in the implementation.
 - The optical YOLOv8 detector still has no committed test split, so its
   registry metrics stay NULL — correct, not a gap to paper over.
 - Drift still reports **WARNING**. Unchanged and untuned since window 2.
+
+---
+
+## Task 11 — Drift n mismatch
+
+**Done.** The note said `n=102` while the table beside it said `baseline_n=100`,
+because the confidence PSI skips rows with a NULL `mean_confidence` and the two
+old mock-detector rows log none.
+
+`_window_provenance()` now also counts `scored_n` — rows the PSI could actually
+use — and the sentence states both when they differ:
+
+> baseline = Benchmark 1 (Phase 12 Held-Out Test Set) **(102 rows, 100 with
+> confidence)**, current = Benchmark 2 (Phase 13 Locked Final Test Set) (n=105)
+
+A window where every row scored keeps the plain `(n=105)` form, so the longer
+phrasing appears only where there is a discrepancy to explain.
+
+**Gotcha:** these are two different questions, not one number with a bug —
+how many rows are in the window, and how many the statistic ran over. Making
+them agree by dropping the mock rows would have hidden a real fact about the
+data.
+
+**Tests:** 684 passed, 25 skipped. One added,
+`test_the_note_agrees_with_the_number_the_psi_used`, which logs three scored
+rows and one unscored row and asserts the sentence reads "4 rows, 3 with
+confidence" while a fully-scored window keeps "(n=1)".
+
+**Next:** Task 12 — citation edges in the knowledge graph.
