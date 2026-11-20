@@ -852,3 +852,71 @@ a fixture carrying one id that resolves and one that does not, asserting the
 dangling one is counted and not drawn.
 
 **Next:** Task 13 — demo safety.
+
+---
+
+## Task 13 — Demo safety
+
+**Done.**
+
+### Stage-2 refine now asks first
+
+The button is next to Refresh and writes irreversibly, which is the Task 4
+gotcha waiting to be triggered by a stray click. It now confirms:
+
+> Run stage-2 refinement?
+>
+> This writes to the database: it subdivides the most anomalous monitored
+> cells into sub-cell regions and creates new pollution events from them,
+> raising the event count.
+>
+> It cannot be undone from this page. Restore with `scripts/reset_demo.sh`
+> if you need the previous state.
+
+Verified in the browser: the prompt fires with that text, and declining leaves
+the event count at 686 — the mutation does not run.
+
+### `scripts/reset_demo.sh`
+
+Restores the newest `backups/oip-after-*.dump` (or one named as an argument),
+then prints the counts that prove it worked:
+
+```
+  Pollution events             686
+    of which CRITICAL          10
+  SAR candidates               306
+  Prediction logs              307
+  Model versions               5
+    of which evaluated         3
+  Regions                      270
+  Zone history buckets         663
+  Water quality observations   4601153
+```
+
+Restore took well under a minute. `FORCE=1` skips the prompt;
+`CONTAINER`/`DB_USER`/`DB_NAME` are overridable.
+
+### How it was tested without risking the demo database
+
+The script drops and recreates the schema, so testing it on `oip` the day
+before a demo would be the exact risk it exists to mitigate. Instead it was
+pointed at a throwaway database (`DB_NAME=oip_resettest`), which exercises
+every step — drop, restore, verify — against the real dump. All counts came
+back correct and the live `oip` database was never touched; confirmed still at
+686 events afterwards. The throwaway was then dropped.
+
+Also checked: declining the prompt aborts with "Nothing was changed", and a
+missing dump path exits with a usage message rather than a stack trace.
+
+### Gotchas
+
+- **It picks `oip-after-*.dump`, not simply the newest file in `backups/`.**
+  A `before-window` dump is a rollback point, not a known-good demo state, and
+  grabbing one by accident would quietly restore the wrong thing.
+- **Restart the API after restoring.** The script prints the command. Existing
+  pooled connections point at a schema that has been dropped and recreated.
+- **The heredoc escape trap bit again.** Writing the confirm() string through a
+  shell heredoc turned `\n` into real newlines inside a TypeScript string
+  literal, which does not compile. The message is now built with
+  `[...].join("\n")`, which has no escapes to mangle — worth remembering for
+  any future multi-line string written through a script.

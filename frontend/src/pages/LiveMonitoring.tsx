@@ -75,7 +75,28 @@ export default function LiveMonitoring() {
             </button>
             <button
               className="btn btn-outline btn-sm"
-              onClick={() => refine.mutate()}
+              onClick={() => {
+                // Refinement writes: it mints sub-cell regions and new
+                // events, and cannot be undone from the UI. Easy to hit by
+                // accident mid-demo while reaching for Refresh.
+                if (
+                  window.confirm(
+                    [
+                      "Run stage-2 refinement?",
+                      "",
+                      "This writes to the database: it subdivides the most " +
+                        "anomalous monitored cells into sub-cell regions and " +
+                        "creates new pollution events from them, raising the " +
+                        "event count.",
+                      "",
+                      "It cannot be undone from this page. Restore with " +
+                        "scripts/reset_demo.sh if you need the previous state.",
+                    ].join("\n"),
+                  )
+                ) {
+                  refine.mutate();
+                }
+              }}
               disabled={refine.isPending}
             >
               <ZoomIn size={13} />
