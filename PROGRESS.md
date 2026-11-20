@@ -89,3 +89,46 @@ Idempotent — verified by running twice (`3 created, 0 updated`, then
 
 **Next:** Task 3 — stop stripping `test_metrics` / `baseline_comparison` in
 `GET /api/v1/models/detectors`.
+
+---
+
+## Task 3 — Stop dropping detector metrics in the API
+
+**Done.** `DetectorInfoOut` (`backend/app/schemas/analytics.py`) listed seven
+fields while the evaluated SAR screeners' `describe()` returns fifteen, so
+Pydantic silently discarded `test_metrics`, `baseline_comparison` and six
+other fields. The API therefore said nothing about models that had been
+scored on a held-out split.
+
+Added nine optional fields: `architecture`, `modality`, `input_resolution`,
+`evaluation_status`, `dataset_provenance`, `is_default`, `role`,
+`test_metrics`, `baseline_comparison`. All default to `None`, so the mock and
+rule-based detectors still validate and still report null.
+
+Verified live:
+
+```
+mock-detector        eval=None                            metrics=none
+sar-dark-formation   eval=None                            metrics=none
+sar-oil-slick-v2     eval=evaluated_on_labeled_test_data  metrics=yes  baselines=yes
+sar-oil-slick-v2.2   eval=evaluated_on_labeled_test_data  metrics=yes  baselines=yes
+```
+
+**Tests:** two added in `tests/test_api.py` —
+`test_evaluated_detectors_report_their_measured_metrics` (the evaluated ones
+carry metrics and a baseline) and `test_unevaluated_detectors_report_null_not_zero`
+(the mock one reports null, not zero). 647 passed, 21 skipped.
+
+**Gotchas:**
+
+- **No route change was needed.** `list_detectors()` already did
+  `DetectorInfoOut(**d)`; the loss was entirely in the schema. Pydantic drops
+  unknown keys without complaining, which is why this was invisible.
+- `test_metrics` key spelling differs per checkpoint (`precision` vs
+  `Precision`), so the payload is passed through as the detector wrote it
+  rather than normalised. The new test accepts either spelling. If you render
+  these in the UI, handle both.
+- Only v2 and v2.2 are exposed as detectors; v2.1-expanded exists in the
+  registry (Task 2) but has no runtime detector, so it does not appear here.
+
+**Next:** Task 4 — give the forecaster real history.

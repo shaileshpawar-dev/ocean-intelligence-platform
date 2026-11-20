@@ -211,6 +211,44 @@ class TestModelRegistry:
         sar = next(d for d in detectors if d["name"] == "sar-dark-formation")
         assert "plastic_debris_signature" not in sar["supported_signatures"]
 
+    def test_evaluated_detectors_report_their_measured_metrics(
+        self, client: TestClient
+    ) -> None:
+        """The endpoint must not drop what the detector already measured.
+
+        ``describe()`` on the evaluated SAR screeners carries ``test_metrics``
+        and ``baseline_comparison``, but the response schema listed seven
+        fields and silently discarded the rest -- so the API reported nothing
+        about models that had in fact been scored on a held-out split.
+        """
+        detectors = client.get("/api/v1/models/detectors").json()
+        evaluated = [
+            d
+            for d in detectors
+            if d.get("evaluation_status") == "evaluated_on_labeled_test_data"
+        ]
+        assert evaluated, "no detector reported an evaluated status"
+
+        for detector in evaluated:
+            metrics = detector["test_metrics"]
+            assert metrics, f"{detector['name']} reports no test_metrics"
+            # Spelling differs between checkpoints; one of each pair must exist.
+            assert metrics.get("precision") or metrics.get("Precision")
+            assert metrics.get("recall") or metrics.get("Recall")
+            assert detector["baseline_comparison"], (
+                f"{detector['name']} reports no baseline to compare against"
+            )
+
+    def test_unevaluated_detectors_report_null_not_zero(
+        self, client: TestClient
+    ) -> None:
+        """The mock and rule-based detectors have no metrics, and must say so."""
+        detectors = client.get("/api/v1/models/detectors").json()
+        mock = next(d for d in detectors if d["name"] == "mock-detector")
+        assert mock["test_metrics"] is None
+        assert mock["baseline_comparison"] is None
+        assert mock["evaluation_status"] is None
+
     def test_unknown_model_is_404(self, client: TestClient) -> None:
         assert client.get("/api/v1/models/ghost/1.0").status_code == 404
 
