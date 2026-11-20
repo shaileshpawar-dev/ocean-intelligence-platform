@@ -5,14 +5,82 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB)](https://www.python.org/)
 [![React 18](https://img.shields.io/badge/react-18-61DAFB)](https://react.dev/)
 [![FastAPI](https://img.shields.io/badge/fastapi-0.115-009688)](https://fastapi.tiangolo.com/)
-[![Tests](https://img.shields.io/badge/tests-412%20passing-brightgreen)](#testing)
+[![Tests](https://img.shields.io/badge/tests-689%20passing-brightgreen)](#current-status)
 [![Data: CPCB](https://img.shields.io/badge/data-CPCB%20via%20NWDP-0369a1)](docs/data-sources.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 > **Live demo status.** The public deployment below still runs **v1, the marine
 > pollution platform**. The India Water Intelligence version on this branch has
 > been built and verified locally (tests, browser, Docker) but **has not been
-> deployed**. See [Deployment](#deployment).
+> deployed** (AWS account credit exhaustion; running locally). See [Deployment](#deployment).
+
+## Current status
+
+Last verified 20 November 2026, after a clean restart (`docker compose down`,
+`up -d db`, API restarted) with every count checked against the running
+application.
+
+**Tests: 689 passing, 25 skipped, 0 failing.**
+
+```bash
+cd backend && ../.venv/Scripts/python.exe -m pytest tests/ -q
+```
+
+The 25 skips are deliberate: 21 require optional heavy dependencies, and 4
+exercise the real PostgreSQL database, which `conftest.py` deliberately
+prevents the suite from reaching. That guard exists because the suite once
+destroyed the live database.
+
+### What is real, and what is not
+
+| | Status | Detail |
+|---|---|---|
+| **India water observations** | **Real** | 4,601,153 measurements, 2,740 water bodies, 4,951 stations, 35 states, 613 districts — CPCB and CWC via NWDP |
+| **SAR candidates** | **Real** | 306 Sentinel-1 patches, PANGAEA 980773 (CC BY 4.0), collocated with ECMWF ERA5 wind |
+| **SAR model metrics** | **Real** | 3 evaluated models; v2.2 precision 0.677 / recall 0.880 / F1 0.765 on a 100-sample leakage-free split |
+| **Inference latency & drift** | **Real measurements** | 305 genuine inferences; the timestamps placing them in drift windows are assigned, and every row and panel says so |
+| **Knowledge graph** | **Real** | 4,378 nodes / 4,504 edges, built only from foreign keys; 40 citation edges resolved from JSON and drawn separately |
+| **Marine pollution events** | **Simulated** | All 686, tagged `SIMULATED` by the API; every page in that module states it |
+| **Marine regions** | **Global demo** | Gulf of Mexico, North Sea, Malacca, Yellow Sea, Persian Gulf, Java Sea — not Indian waters |
+| **Vessels / AIS** | **Simulated** | 6 hand-written vessels |
+| **LLM narrative** | **Absent** | `llm_provider = none`; agent findings are templated and reports are structured, not written |
+
+Unevaluated things report `null` and render as "Not evaluated", never as zero.
+Drift currently reports **WARNING** (PSI 0.11), which is a genuine finding and
+has not been tuned away.
+
+### Expected counts
+
+After a restore these should be exact:
+
+| | |
+|---|---|
+| Pollution events | 686 (10 CRITICAL) |
+| SAR candidates | 306 |
+| Prediction logs | 307 |
+| Model versions | 5 (3 evaluated) |
+| Water observations | 4,601,153 |
+| Regions | 270 |
+
+### Resetting the demo database
+
+`scripts/reset_demo.sh` restores the newest `backups/oip-after-*.dump` and
+prints those counts so a restore can be confirmed in under a minute.
+
+```bash
+scripts/reset_demo.sh                     # newest after-window dump
+scripts/reset_demo.sh backups/oip-after-window4a.dump
+FORCE=1 scripts/reset_demo.sh             # skip the confirmation prompt
+```
+
+It **drops and recreates the schema**, so it asks before doing anything.
+Restart the API afterwards — pooled connections point at a schema that no
+longer exists. It deliberately ignores `before-window` dumps, which are
+rollback points rather than known-good demo states.
+
+For a walkthrough of the application, see [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
+
+---
 
 ## 🌊 Live Demo (v1)
 
