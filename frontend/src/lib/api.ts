@@ -15,6 +15,7 @@ import type {
   AgentRunResult,
   AgentRunSummary,
   Alert,
+  CandidateEvaluation,
   CorpusStats,
   DetectorInfo,
   DriftReport,
@@ -31,6 +32,21 @@ import type {
   ReportSummary,
   ResearchAnswer,
   RiskAssessment,
+  SARCandidate,
+  SARCandidateDetail,
+  SARCandidateSummary,
+  CandidateMapPoint,
+  CandidateReviewCreateIn,
+  OpticalScene,
+  SARCandidateOpticalEvidence,
+  CandidateFootprintCollection,
+  SARSceneListResponse,
+  MultiSensorAssessment,
+  CandidateVesselAssociation,
+  DriftSimulation,
+  Vessel,
+  MarineReceptor,
+  CandidateImpactAssessment,
   Zone,
 } from "./types";
 import type {
@@ -250,6 +266,10 @@ export const api = {
     get<DriftReport>(
       `/drift${qs({ baseline_days: baselineDays, current_days: currentDays })}`,
     ),
+  candidateEvaluation: (threshold = 0.5) =>
+    get<CandidateEvaluation>(
+      `/models/sar-candidates/evaluation${qs({ threshold })}`,
+    ),
 
   /* -- intelligence ----------------------------------------------------- */
   research: (question: string, limit = 5, docType?: string | null) =>
@@ -377,4 +397,109 @@ export const api = {
 
   /** Grounded Q&A. Figures come from stored observations, never a model. */
   waterAsk: (question: string) => post<WaterAnswer>("/water/ask", { question }),
+
+  /* -- SAR Candidate Review & Analyst Workflow (Phase 13.2) ----------- */
+  sarCandidates: (params: {
+    screening_status?: string | null;
+    review_status?: string | null;
+    model_version?: string | null;
+    is_coastal?: boolean | null;
+    split?: string | null;
+    search?: string | null;
+    start_date?: string | null;
+    end_date?: string | null;
+    limit?: number;
+    offset?: number;
+  } = {}) => get<ListResponse<SARCandidate>>(`/sar-candidates${qs(params)}`),
+
+  sarCandidateSummary: () => get<SARCandidateSummary>("/sar-candidates/summary"),
+
+  sarCandidateMapPoints: () => get<CandidateMapPoint[]>("/sar-candidates/map-points"),
+
+  sarCandidateDetail: (candidateId: string) =>
+    get<SARCandidateDetail>(`/sar-candidates/${encodeURIComponent(candidateId)}`),
+
+  submitCandidateReview: (candidateId: string, payload: CandidateReviewCreateIn) =>
+    post<SARCandidateDetail>(`/sar-candidates/${encodeURIComponent(candidateId)}/reviews`, payload),
+
+  sarCandidateImageUrl: (candidateId: string) =>
+    `${API_ROOT}/sar-candidates/${encodeURIComponent(candidateId)}/image`,
+
+  /* -- Sentinel-2 Optical Evidence (Phase 14.1) ---------------------- */
+  sarCandidateOpticalScenes: (candidateId: string) =>
+    get<OpticalScene[]>(`/sar-candidates/${encodeURIComponent(candidateId)}/optical-scenes`),
+
+  sarCandidateOpticalEvidence: (candidateId: string) =>
+    get<SARCandidateOpticalEvidence[]>(`/sar-candidates/${encodeURIComponent(candidateId)}/optical-evidence`),
+
+  processCandidateOpticalEvidence: (
+    candidateId: string,
+    payload: { scene_id?: string | null; chip_size?: number } = {},
+  ) =>
+    post<SARCandidateOpticalEvidence>(
+      `/sar-candidates/${encodeURIComponent(candidateId)}/optical-evidence/process`,
+      payload,
+    ),
+
+  sarCandidateOpticalImageUrl: (
+    candidateId: string,
+    evidenceId: number,
+    productType: "rgb" | "false_color" | "scl" | "ndci",
+  ) =>
+    `${API_ROOT}/sar-candidates/${encodeURIComponent(candidateId)}/optical-evidence/${evidenceId}/image/${productType}`,
+
+  /* -- Full-Scene SAR Processing (Phase 14.2) ----------------------- */
+  sarScenes: (params: { limit?: number; offset?: number; search?: string | null } = {}) =>
+    get<SARSceneListResponse>(`/sar-scenes${qs(params)}`),
+
+  sarSceneMetadata: (sceneId: string) =>
+    get<Record<string, unknown>>(`/sar-scenes/${encodeURIComponent(sceneId)}`),
+
+  processSarScene: (
+    sceneId: string,
+    payload: { confidence_threshold?: number; tile_size?: number; overlap_pct?: number } = {},
+  ) => post<Record<string, unknown>>(`/sar-scenes/${encodeURIComponent(sceneId)}/process`, payload),
+
+  sarSceneFootprints: (sceneId: string) =>
+    get<CandidateFootprintCollection>(`/sar-scenes/${encodeURIComponent(sceneId)}/footprints`),
+
+  sarSceneHeatmapUrl: (sceneId: string) =>
+    `${API_ROOT}/sar-scenes/${encodeURIComponent(sceneId)}/heatmap`,
+
+  /* -- Multi-Sensor Evidence Fusion (Phase 14.3) -------------------- */
+  sarCandidateFusion: (candidateId: string) =>
+    get<MultiSensorAssessment>(`/sar-candidates/${encodeURIComponent(candidateId)}/fusion`),
+
+  /* -- AIS Vessel Tracking & Association (Phase 15) ----------------- */
+  vessels: (params: { vessel_type?: string | null; risk_profile?: string | null; search?: string | null; limit?: number } = {}) =>
+    get<Vessel[]>(`/vessels${qs(params)}`),
+
+  vesselDetail: (mmsi: string) =>
+    get<Vessel>(`/vessels/${encodeURIComponent(mmsi)}`),
+
+  candidateVessels: (candidateId: string) =>
+    get<CandidateVesselAssociation[]>(`/sar-candidates/${encodeURIComponent(candidateId)}/vessels`),
+
+  correlateCandidateVessels: (candidateId: string) =>
+    post<CandidateVesselAssociation[]>(`/sar-candidates/${encodeURIComponent(candidateId)}/vessels/correlate`, {}),
+
+  /* -- Lagrangian Oil Drift Simulation (Phase 16) ------------------- */
+  candidateDrift: (candidateId: string) =>
+    get<DriftSimulation>(`/sar-candidates/${encodeURIComponent(candidateId)}/drift`),
+
+  runCandidateDrift: (
+    candidateId: string,
+    payload: { duration_hours?: number; oil_type?: string; spill_volume_m3?: number } = {},
+  ) =>
+    post<DriftSimulation>(`/sar-candidates/${encodeURIComponent(candidateId)}/drift`, payload),
+
+  /* -- Environmental Impact & Marine Protected Areas (Phase 17) ----- */
+  receptors: (params: { category?: string | null; search?: string | null } = {}) =>
+    get<MarineReceptor[]>(`/receptors${qs(params)}`),
+
+  candidateImpact: (candidateId: string) =>
+    get<CandidateImpactAssessment>(`/sar-candidates/${encodeURIComponent(candidateId)}/impact`),
+
+  evaluateCandidateImpact: (candidateId: string) =>
+    post<CandidateImpactAssessment>(`/sar-candidates/${encodeURIComponent(candidateId)}/impact/evaluate`, {}),
 };

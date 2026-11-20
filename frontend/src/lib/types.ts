@@ -321,6 +321,33 @@ export interface DriftCheck {
   detail: Record<string, unknown>;
 }
 
+/** The SAR screener scored against the stored candidates' own ground truth.
+ *
+ *  Computed live from the database rather than read from a metrics file, so
+ *  the threshold can be moved and the matrix recomputed. The scores are
+ *  uncalibrated, which `note` states on every response. */
+export interface CandidateEvaluation {
+  n: number;
+  positives: number;
+  negatives: number;
+  skipped: number;
+  threshold: number;
+  model: string | string[] | null;
+  scores_are_calibrated: boolean;
+  confusion: { tp: number; fp: number; tn: number; fn: number };
+  precision: number | null;
+  recall: number | null;
+  f1: number | null;
+  fpr: number | null;
+  accuracy: number;
+  roc: { fpr: number; tpr: number; threshold: number }[];
+  auc: number | null;
+  positive_subsets: string[];
+  negative_subsets: string[];
+  note: string;
+  detail?: string;
+}
+
 export interface DriftReport {
   overall_status: string;
   baseline_window_days: number;
@@ -453,4 +480,376 @@ export interface ReportDetail {
   workflow_id: string | null;
   created_at: string;
   contains_simulated_data: boolean;
+}
+
+/* -------------------------------------------------------------------------
+   SAR Candidates & Analyst Review Workflow (Phase 13.2)
+   ------------------------------------------------------------------------- */
+
+export type SARCandidateScreeningStatus =
+  | "candidate_requires_review"
+  | "low_wind_ambiguity_review"
+  | "no_candidate_detected";
+
+export type SARCandidateReviewStatus =
+  | "awaiting_review"
+  | "potential_oil_slick"
+  | "rejected_lookalike"
+  | "inconclusive"
+  | "requires_additional_evidence";
+
+export interface SARCandidate {
+  candidate_id: string;
+  image_name: string;
+  component_id: number | null;
+  latitude: number;
+  longitude: number;
+  is_coastal: boolean;
+  acquisition_timestamp: string;
+  detector_name: string;
+  model_version: string;
+  raw_confidence: number;
+  confidence_is_calibrated: boolean;
+  wind_speed_ms: number | null;
+  wind_direction_deg: number | null;
+  era5_source: string;
+  grid_latitude: number | null;
+  grid_longitude: number | null;
+  temporal_offset_minutes: number | null;
+  grid_distance_km: number | null;
+  quality_status: string;
+  environmental_warnings: string[];
+  screening_status: SARCandidateScreeningStatus | string;
+  retained_for_analyst_review: boolean;
+  review_status: SARCandidateReviewStatus | string;
+  latest_review_decision: string | null;
+  latest_reviewed_at: string | null;
+  latest_reviewer_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SARCandidateReview {
+  review_id: string;
+  previous_status: string;
+  decision: string;
+  reviewer_id: string;
+  reviewed_at: string;
+  model_version: string;
+  notes: string | null;
+  evidence_references: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface OpticalScene {
+  scene_id: string;
+  platform: string;
+  acquisition_time: string;
+  temporal_delta_hours: number;
+  temporal_delta_days: number;
+  temporal_window: "primary_3d" | "secondary_10d" | string;
+  cloud_cover_pct: number;
+  cloud_category: "clean" | "moderate" | "contaminated" | "covered" | string;
+  quality_grade: string;
+  tile_id: string;
+  available_bands: string[];
+  has_scl: boolean;
+  is_best_match: boolean;
+}
+
+export interface SARCandidateOpticalEvidence {
+  id: number;
+  candidate_id: string;
+  scene_id: string;
+  platform: string;
+  acquisition_timestamp: string;
+  temporal_offset_hours: number;
+  temporal_window: string;
+  scene_cloud_cover_pct: number;
+  tile_id?: string | null;
+  local_water_fraction: number;
+  local_cloud_fraction: number;
+  local_shadow_fraction: number;
+  local_valid_pixel_fraction: number;
+  mean_ndci: number | null;
+  p90_ndci: number | null;
+  mean_ndti: number | null;
+  mean_swir_ratio: number | null;
+  optical_quality_flag: string;
+  has_rgb_image: boolean;
+  has_false_color_image: boolean;
+  has_scl_mask: boolean;
+  has_ndci_map: boolean;
+  processing_status: string;
+  created_at: string;
+}
+
+export interface SARCandidateDetail extends SARCandidate {
+  interpretation: string;
+  reviews: SARCandidateReview[];
+  optical_evidence: SARCandidateOpticalEvidence[];
+}
+
+export interface CandidateReviewCreateIn {
+  decision: string;
+  reviewer_id?: string;
+  notes?: string | null;
+  evidence_references?: Record<string, unknown> | null;
+}
+
+export interface SARCandidateSummary {
+  total_candidates: number;
+  total_monitored_samples?: number;
+  total_evaluated_samples?: number;
+  eligible_candidates?: number;
+  standard_review_candidates: number;
+  standard_wind_review?: number;
+  low_wind_ambiguity_candidates: number;
+  low_wind_ambiguity?: number;
+  high_wind_ambiguity_candidates?: number;
+  high_wind_ambiguity?: number;
+  wind_unavailable_candidates?: number;
+  wind_unavailable?: number;
+  no_candidate_detected: number;
+  background_non_detections?: number;
+  awaiting_analyst_review: number;
+  reviewed_candidates: number;
+  decisions: Record<string, number>;
+}
+
+export interface CandidateMapPoint {
+  candidate_id: string;
+  image_name: string;
+  latitude: number;
+  longitude: number;
+  screening_status: string;
+  review_status: string;
+  raw_confidence: number;
+  wind_speed_ms: number | null;
+  is_coastal: boolean;
+  acquisition_timestamp: string;
+  map_state: string;
+  color: string;
+}
+
+/* -------------------------------------------------------------------------
+   Full-Scene Sentinel-1 SAR Processing (Phase 14.2)
+   ------------------------------------------------------------------------- */
+
+export interface SARSceneListItem {
+  scene_id: string;
+  platform: string;
+  polarization: string;
+  acquisition_time: string;
+  bbox: [number, number, number, number];
+  candidate_count: number;
+  is_processed: boolean;
+  candidate_tiles_detected: number | null;
+  footprints_geojson_url: string;
+  heatmap_url: string;
+}
+
+export interface SARSceneListResponse {
+  total: number;
+  scenes: SARSceneListItem[];
+}
+
+export interface CandidateFootprintProperties {
+  footprint_id: string;
+  tile_indices: [number, number];
+  centroid: [number, number];
+  confidence_p_oil: number;
+  confidence_pct: number;
+  mean_backscatter_db: number;
+  contrast_db: number;
+  area_km2: number;
+  screening_status: string;
+  model_version: string;
+}
+
+export interface CandidateFootprintFeature {
+  type: 'Feature';
+  id: string;
+  geometry: {
+    type: 'Polygon';
+    coordinates: number[][][];
+  };
+  properties: CandidateFootprintProperties;
+}
+
+export interface CandidateFootprintCollection {
+  type: 'FeatureCollection';
+  name: string;
+  features: CandidateFootprintFeature[];
+  metadata: {
+    scene_id: string;
+    platform: string;
+    polarization: string;
+    acquisition_time: string;
+    bbox: [number, number, number, number];
+    model_version: string;
+    tile_size: number;
+    overlap_pct: number;
+    stride: number;
+    total_tiles_evaluated: number;
+    candidate_tiles_detected: number;
+    generated_at: string;
+  };
+}
+
+/* -------------------------------------------------------------------------
+   Multi-Sensor Evidence Fusion (Phase 14.3)
+   ------------------------------------------------------------------------- */
+
+export interface EvidenceItem {
+  modality: string;
+  sensor: string;
+  acquisition_time_utc: string;
+  temporal_offset_hours: number | null;
+  signature: string;
+  confidence: number;
+  consistency: "supporting" | "conflicting" | "inconclusive" | "unavailable";
+  description: string;
+  metrics: Record<string, unknown>;
+}
+
+export interface MultiSensorAssessment {
+  candidate_id: string;
+  latitude: number;
+  longitude: number;
+  sar_screening_status: string;
+  wind_classification: string;
+  optical_verification_status: string;
+  concordance_score: number;
+  concordance_level: string;
+  triangulation_summary: string;
+  recommended_action: string;
+  evidence_items: EvidenceItem[];
+  generated_at: string;
+}
+
+/* -------------------------------------------------------------------------
+   AIS Vessel Tracking & Incident Association (Phase 15)
+   ------------------------------------------------------------------------- */
+
+export interface VesselPosition {
+  id: number;
+  mmsi: string;
+  timestamp: string;
+  latitude: number;
+  longitude: number;
+  speed_knots: number;
+  heading_deg: number;
+  nav_status: string;
+  destination?: string | null;
+}
+
+export interface Vessel {
+  mmsi: string;
+  imo?: string | null;
+  name: string;
+  callsign?: string | null;
+  vessel_type: string;
+  flag_country: string;
+  length_m?: number | null;
+  width_m?: number | null;
+  draught_m?: number | null;
+  risk_profile: string;
+  positions?: VesselPosition[];
+}
+
+export interface CandidateVesselAssociation {
+  id: number;
+  candidate_id: string;
+  mmsi: string;
+  vessel_name: string;
+  vessel_type: string;
+  flag_country: string;
+  association_type: string;
+  spatial_distance_km: number;
+  temporal_offset_minutes: number;
+  interpolated_lat: number;
+  interpolated_lon: number;
+  association_score: number;
+  is_primary_suspect: boolean;
+  notes?: string | null;
+}
+
+/* -------------------------------------------------------------------------
+   Lagrangian Oil Drift Simulation (Phase 16)
+   ------------------------------------------------------------------------- */
+
+export interface HourlyDriftSnapshot {
+  hour: number;
+  timestamp_utc: string;
+  centroid_lat: number;
+  centroid_lon: number;
+  spread_radius_km: number;
+  evaporated_pct: number;
+  floating_pct: number;
+  beached_pct: number;
+  dispersed_pct: number;
+  active_particles: number;
+  beached_particles: number;
+  dispersed_particles: number;
+}
+
+export interface DriftSimulation {
+  simulation_id: string;
+  candidate_id?: string | null;
+  origin_lat: number;
+  origin_lon: number;
+  start_time: string;
+  duration_hours: number;
+  oil_type: string;
+  spill_volume_m3: number;
+  wind_speed_ms: number;
+  wind_direction_deg: number;
+  current_speed_ms: number;
+  current_direction_deg: number;
+  final_evaporated_pct: number;
+  final_floating_pct: number;
+  final_beached_pct: number;
+  final_dispersed_pct: number;
+  beaching_risk_level: string;
+  time_to_shore_hours?: number | null;
+  mass_balance_timeline: HourlyDriftSnapshot[];
+  geojson: Record<string, unknown>;
+}
+
+/* -------------------------------------------------------------------------
+   Environmental Impact & Marine Protected Areas (Phase 17)
+   ------------------------------------------------------------------------- */
+
+export interface MarineReceptor {
+  receptor_id: string;
+  name: string;
+  category: string;
+  jurisdiction: string;
+  latitude: number;
+  longitude: number;
+  vulnerability_weight: number;
+  description?: string | null;
+}
+
+export interface CandidateEnvironmentalImpact {
+  id: number;
+  candidate_id: string;
+  receptor_id: string;
+  receptor_name: string;
+  category: string;
+  distance_km: number;
+  estimated_arrival_hours?: number | null;
+  impact_severity: string;
+  vulnerability_score: number;
+  priority_action?: string | null;
+}
+
+export interface CandidateImpactAssessment {
+  candidate_id: string;
+  max_vulnerability_score: number;
+  highest_severity: string;
+  proximate_receptors_count: number;
+  impacts: CandidateEnvironmentalImpact[];
+  overall_mitigation_summary: string;
 }

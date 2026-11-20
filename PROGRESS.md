@@ -370,3 +370,77 @@ Every row carries `timestamp_is_synthetic: true` plus its true wall-clock
 batch-caller parameters a replay depends on.
 
 **Next:** Task 6 — confusion matrix and ROC from `sar_candidates` ground truth.
+
+---
+
+## Task 6 — Confusion matrix and ROC from stored ground truth
+
+**Done.** Model Performance now carries a panel computed live from the database
+rather than read back from a metrics file.
+
+**Headline: AUC 0.771** over all 306 candidates, at threshold 0.50
+precision 65.7%, recall 88.3%, F1 0.753, FPR 46.7%.
+
+```
+                 Predicted oil   Predicted clean
+Actually oil         136              18
+Actually clean        71              81
+```
+
+### Score provenance — checked, as asked
+
+All 306 rows carry `detector_name = sar-oil-slick-v2.2`,
+`model_version = 2.2.0-experimental`, and `confidence_is_calibrated = false`
+for every one. So the panel is labelled with v2.2 and states on every response
+that the scores are uncalibrated. 154 positives (`ow` 104 + `oc` 50), 152
+negatives (`nw` 122 + `nc` 30).
+
+**Independent check that the labelling is right:** these live figures
+(P 0.657 / R 0.883 / F1 0.754 / FPR 0.467 over 306) land within a couple of
+points of the registered v2.2 metrics (P 0.677 / R 0.880 / F1 0.765 / FPR 0.42
+over the locked 100-sample split). Two separately-derived computations over
+overlapping data agreeing this closely is good evidence neither is inverted.
+The panel says in plain text that the two differ because they are different
+sample sets, so a viewer does not read it as a contradiction.
+
+### What changed
+
+- **`backend/app/monitoring/candidate_evaluation.py`** (new) — labels, matrix,
+  ROC and AUC. **sklearn is not installed** and was not added for two textbook
+  formulas two days before a demo; numpy is present but the computation is
+  plain Python and clearer for it.
+- **`backend/app/api/routes/ml.py`** —
+  `GET /api/v1/models/sar-candidates/evaluation?threshold=`.
+- **`frontend/src/components/CandidateEvaluationPanel.tsx`** (new) — 2×2
+  matrix, ROC with the chance diagonal and a threshold marker, live slider.
+- **`frontend/src/styles/app.css`**, `api.ts`, `types.ts`, `Models.tsx`.
+
+### Gotchas
+
+- **Route order matters.** `/models/sar-candidates/evaluation` must be declared
+  **before** `/models/{name}/{version}`, which would otherwise swallow it as
+  `name="sar-candidates", version="evaluation"` and return 404. There is a test
+  for exactly this (`test_it_is_not_swallowed_by_the_model_detail_route`).
+- **The dual `test_metrics` spelling from Task 3 does not arise here.** Nothing
+  in the frontend renders `test_metrics` — I grepped. This panel computes
+  everything itself from the evaluation endpoint, so there was no spelling to
+  handle; I did not invent a use for it. If you later surface detector
+  `test_metrics` in the UI, that is when you need `precision` **and**
+  `Precision`.
+- **The 4 real-database tests skip during a normal run.** `conftest.py` forces
+  `DATABASE_URL` at its own temp SQLite file — that is the isolation guard that
+  exists because the suite once destroyed the live database. So those cases
+  skip by design; I verified their assertions against Postgres directly
+  (n=306, skipped=0, model named correctly, AUC invariant to threshold).
+- **AUC is threshold-independent and the panel says so.** If you move the
+  slider in the demo and the AUC changes, something is wrong.
+- Thresholds outside [0, 1] are rejected with 422 by FastAPI's validation.
+
+**Tests:** 663 passed, 25 skipped. 16 added in
+`tests/test_candidate_evaluation.py` — hand-worked confusion matrices,
+perfect / inverted / tied-score AUC cases (1.0, 0.0, 0.5), a hand-checked
+intermediate AUC of 0.75, curve endpoints, the one-class case returning no
+curve rather than a fabricated diagonal, plus the endpoint and route-order
+cases.
+
+**Next:** Task 6b — stage-2 refine on a few regions.

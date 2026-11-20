@@ -9,6 +9,7 @@
 import { useQueries } from "@tanstack/react-query";
 import { Cpu, Info } from "lucide-react";
 import { api } from "@/lib/api";
+import CandidateEvaluationPanel from "@/components/CandidateEvaluationPanel";
 import {
   ErrorState,
   LoadingSkeleton,
@@ -82,6 +83,8 @@ export default function Models() {
           detail={`${metrics.data?.volume.total_requests ?? 0} request(s) logged`}
         />
       </div>
+
+      <CandidateEvaluationPanel />
 
       {rows.map((model) => (
         <SectionCard

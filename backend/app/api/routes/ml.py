@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models import ModelVersion
+from app.monitoring.candidate_evaluation import evaluate_candidates
 from app.monitoring.drift import run_drift_checks
 from app.monitoring.metrics import latency_summary, prediction_volume
 from app.schemas.analytics import DetectorInfoOut, ModelVersionOut
@@ -62,6 +63,34 @@ def list_models(db: Session = Depends(get_db)) -> list[ModelVersionOut]:
 def list_detectors() -> list[DetectorInfoOut]:
     """Which detectors are actually loaded in this process, and what they may claim."""
     return [DetectorInfoOut(**d) for d in describe_all()]
+
+
+@router.get(
+    "/models/sar-candidates/evaluation",
+    summary="Confusion matrix and ROC from the stored candidates' ground truth",
+)
+def sar_candidate_evaluation(
+    threshold: float = Query(
+        0.5,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Score at or above which a candidate counts as predicted-positive. "
+            "A ranking cut, not a probability: the scores are uncalibrated."
+        ),
+    ),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Score the SAR screener against the benchmark labels already in the table.
+
+    ``sar_candidates`` stores both the model's ``raw_confidence`` and the
+    subset it came from, so precision, recall and an ROC curve are computable
+    from the database with no new dataset and nothing retrained.
+
+    Declared above ``/models/{name}/{version}`` deliberately: that route would
+    otherwise swallow this path as ``name="sar-candidates"``.
+    """
+    return evaluate_candidates(db, threshold=threshold)
 
 
 @router.get(
