@@ -297,6 +297,11 @@ export interface LatencySummary {
   p50_ms: number | null;
   p95_ms: number | null;
   max_ms: number | null;
+  /** Which models these percentiles cover. One number over two detectors
+   *  describes neither, so the card names them. */
+  models: string[];
+  /** The single model name, or "mixed" when the window holds more than one. */
+  model_label: string | null;
   detail?: string;
 }
 
@@ -348,6 +353,15 @@ export interface CandidateEvaluation {
   detail?: string;
 }
 
+/** What a drift window actually holds, read back from the logged rows. */
+export interface DriftWindowProvenance {
+  n: number;
+  replayed_n: number;
+  is_replayed: boolean;
+  splits: Record<string, number>;
+  dominant_split: string | null;
+}
+
 export interface DriftReport {
   overall_status: string;
   baseline_window_days: number;
@@ -356,6 +370,13 @@ export interface DriftReport {
   thresholds: { warning: number; drift: number };
   checks: DriftCheck[];
   action: string;
+  /** `note` is null when neither window was replayed, so a live deployment
+   *  never carries a caveat about a batch it does not contain. */
+  provenance: {
+    baseline: DriftWindowProvenance;
+    current: DriftWindowProvenance;
+    note: string | null;
+  };
 }
 
 /* -------------------------------------------------------------------------

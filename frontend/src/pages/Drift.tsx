@@ -15,6 +15,7 @@ import {
   LoadingSkeleton,
   MetricCard,
   PageHeader,
+  ProvenanceNote,
   SectionCard,
   Unavailable,
   titleise,
@@ -89,6 +90,10 @@ export default function Drift() {
           </label>
         </div>
       </SectionCard>
+
+      {data.provenance?.note && (
+        <ProvenanceNote>{data.provenance.note}</ProvenanceNote>
+      )}
 
       <div className="metric-grid">
         <MetricCard

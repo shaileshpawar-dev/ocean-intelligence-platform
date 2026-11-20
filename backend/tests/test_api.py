@@ -362,6 +362,101 @@ class TestPredictionLogWriter:
         assert row.mean_confidence is None
 
 
+class TestMeasurementProvenance:
+    """The panels must say what they are actually measuring.
+
+    Two ways these numbers mislead by omission: one percentile computed over
+    two different detectors, and a drift verdict over replayed benchmark rows
+    presented as if it came from live traffic.
+    """
+
+    def _log(self, db, *, model: str, latency: float, stats: dict | None = None):
+        from app.monitoring.prediction_log import log_prediction
+
+        log_prediction(
+            db,
+            request_id=f"prov_{model}_{latency}",
+            detector_name=model,
+            version="1.0.0",
+            latency_ms=latency,
+            detections=[],
+            input_stats=stats,
+        )
+
+    def test_latency_names_the_single_model_it_covers(self, db) -> None:
+        from app.monitoring.metrics import latency_summary
+
+        self._log(db, model="sar-oil-slick-v2.2", latency=9.0)
+        summary = latency_summary(db, days=7)
+        assert summary["models"] == ["sar-oil-slick-v2.2"]
+        assert summary["model_label"] == "sar-oil-slick-v2.2"
+
+    def test_two_models_in_one_window_are_reported_as_mixed(self, db) -> None:
+        """One percentile over a 9 ms screener and a 900 ms detector
+        describes neither, so the card must not imply a single model."""
+        from app.monitoring.metrics import latency_summary
+
+        self._log(db, model="sar-oil-slick-v2.2", latency=9.0)
+        self._log(db, model="mock-detector", latency=900.0)
+        summary = latency_summary(db, days=7)
+        assert summary["model_label"] == "mixed"
+        assert len(summary["models"]) == 2
+
+    def test_latency_can_be_filtered_to_one_model(self, db) -> None:
+        from app.monitoring.metrics import latency_summary
+
+        self._log(db, model="sar-oil-slick-v2.2", latency=9.0)
+        self._log(db, model="mock-detector", latency=900.0)
+        summary = latency_summary(db, days=7, model="sar-oil-slick-v2.2")
+        assert summary["n"] == 1
+        assert summary["model_label"] == "sar-oil-slick-v2.2"
+
+    def test_an_empty_window_names_no_model(self, client: TestClient) -> None:
+        body = client.get("/api/v1/metrics").json()
+        assert body["latency"]["models"] == []
+        assert body["latency"]["model_label"] is None
+
+    def test_live_traffic_carries_no_replay_caveat(self, db) -> None:
+        """A note about a replayed batch must not appear without one."""
+        from app.monitoring.drift import run_drift_checks
+
+        self._log(db, model="sar-oil-slick-v2.2", latency=9.0)
+        assert run_drift_checks(db)["provenance"]["note"] is None
+
+    def test_replayed_rows_are_declared_with_their_split(self, db) -> None:
+        from datetime import UTC, datetime, timedelta
+
+        from app.monitoring.drift import run_drift_checks
+        from app.monitoring.prediction_log import log_prediction
+
+        now = datetime.now(UTC)
+        for index, (days, split) in enumerate(
+            [(20, "Benchmark 1 (Phase 12 Held-Out Test Set)")] * 3
+            + [(1, "Benchmark 2 (Phase 13 Locked Final Test Set)")] * 3
+        ):
+            log_prediction(
+                db,
+                request_id=f"replay_{index}",
+                detector_name="sar-oil-slick-v2.2",
+                version="2.2.0-experimental",
+                latency_ms=9.0,
+                detections=[],
+                endpoint="BATCH /sar-candidates/replay",
+                created_at=now - timedelta(days=days),
+                input_stats={"timestamp_is_synthetic": True, "split": split},
+            )
+
+        provenance = run_drift_checks(db)["provenance"]
+        assert provenance["baseline"]["is_replayed"] is True
+        assert provenance["current"]["is_replayed"] is True
+        note = provenance["note"]
+        assert "Phase 12" in note and "Phase 13" in note
+        # The sentence must not let a reader think this is live traffic, and
+        # must not undersell the inferences as fabricated either.
+        assert "timestamps are assigned" in note
+        assert "Inferences are real" in note
+
+
 class TestMonitoring:
     def test_metrics_report_zero_not_fake_latency(self, client: TestClient) -> None:
         body = client.get("/api/v1/metrics").json()

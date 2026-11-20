@@ -518,3 +518,58 @@ retrain on it, which is the policy the Retraining page states.
   (P2, item 7) — worth one line in the demo script.
 - The optical YOLOv8 detector still has no committed test split, so its
   registry metrics remain NULL. That is correct, not a gap to paper over.
+
+---
+
+## Task 7a — Make the replay provenance visible
+
+**Done.** Both panels now say what they are measuring.
+
+**Drift Monitoring** carries a derived label:
+
+> Replayed benchmark: baseline = Benchmark 1 (Phase 12 Held-Out Test Set)
+> (n=102), current = Benchmark 2 (Phase 13 Locked Final Test Set) (n=105).
+> Inferences are real; window timestamps are assigned, not live traffic.
+
+**Inference P95** now reads `9.63ms · 105 request(s) · sar-oil-slick-v2.2`.
+
+### Derived, not hardcoded
+
+`_window_provenance()` reads each window's rows back and counts how many carry
+`timestamp_is_synthetic`, grouping by `split`. `_provenance_note()` returns
+**None** when neither window holds a replayed row, so a live deployment never
+carries a caveat about a batch it does not contain. The split names in the
+sentence come from the rows, not from a constant — the n=102 in the baseline is
+the two old mock rows being counted honestly alongside the 100 replayed ones.
+
+`latency_summary()` gained the model filter the Task 5 gotcha asked for, plus
+`models` and `model_label`. `model_label` is `"mixed"` whenever the window holds
+more than one detector, so the card can never imply a single model it is not
+measuring. Over 60 days this database genuinely reports `mixed`
+(mock-detector + v2.2); over 7 days it reports v2.2 alone.
+
+### What changed
+
+- `backend/app/monitoring/metrics.py` — model filter, `models`, `model_label`.
+- `backend/app/monitoring/drift.py` — `_window_provenance`, `_provenance_note`,
+  `provenance` block on the response.
+- `frontend/src/components/ui.tsx` — new `ProvenanceNote`.
+- `Drift.tsx`, `Models.tsx`, `Overview.tsx`, `LiveMonitoring.tsx`, types, CSS.
+
+### Gotchas
+
+- **`ProvenanceNote` is deliberately not a `SimulatedBanner`.** The inferences
+  behind the replay are real and only the timestamps are assigned; calling it
+  "simulated data" would understate the measurement and overstate the caveat
+  at once. Different component, different claim.
+- `input_stats` is read in Python rather than with a JSON operator, because
+  the suite runs on SQLite and the deployment on PostgreSQL. A window is about
+  a hundred rows, so it costs nothing.
+- The three latency cards (Models p95, Overview p50, Live Monitoring) all read
+  the same `latency_summary`, so they agree by construction.
+
+**Tests:** 669 passed, 25 skipped. Six added (`TestMeasurementProvenance`),
+including that live traffic produces **no** caveat and that two models in one
+window report `mixed`.
+
+**Next:** Task 7b — marine geographic framing.

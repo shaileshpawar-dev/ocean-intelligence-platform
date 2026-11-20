@@ -140,7 +140,9 @@ export default function LiveMonitoring() {
           detail={
             metrics.data?.latency.p50_ms !== null &&
             metrics.data?.latency.p50_ms !== undefined
-              ? `p50 ${metrics.data.latency.p50_ms} ms`
+              ? `p50 ${metrics.data.latency.p50_ms} ms · ${
+                  metrics.data.latency.model_label ?? "unknown model"
+                }`
               : "No latency recorded yet"
           }
         />

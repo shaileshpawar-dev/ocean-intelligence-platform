@@ -415,6 +415,22 @@ export function SimulatedBanner({ detail }: { detail?: string }) {
   );
 }
 
+/** Where a measurement's inputs came from, when that is not live traffic.
+ *
+ *  Deliberately not a SimulatedBanner: the inferences behind a replayed
+ *  benchmark are real, and only the window timestamps are assigned. Calling
+ *  that "simulated data" would understate the measurement and overstate the
+ *  caveat at the same time.
+ */
+export function ProvenanceNote({ children }: { children: ReactNode }) {
+  return (
+    <div className="provenance-note" role="note">
+      <Info size={15} />
+      <span>{children}</span>
+    </div>
+  );
+}
+
 /** A page whose backing capability does not exist in this deployment. */
 export function NotAvailableInBackend({
   feature,

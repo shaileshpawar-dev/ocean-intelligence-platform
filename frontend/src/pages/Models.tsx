@@ -80,7 +80,11 @@ export default function Models() {
               <Unavailable reason="No predictions logged" />
             )
           }
-          detail={`${metrics.data?.volume.total_requests ?? 0} request(s) logged`}
+          detail={
+            metrics.data?.latency.model_label
+              ? `${metrics.data.volume.total_requests} request(s) · ${metrics.data.latency.model_label}`
+              : `${metrics.data?.volume.total_requests ?? 0} request(s) logged`
+          }
         />
       </div>
 

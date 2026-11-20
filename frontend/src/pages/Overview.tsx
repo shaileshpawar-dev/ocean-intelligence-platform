@@ -203,7 +203,11 @@ export default function Overview() {
           }
           detail={
             metrics.data
-              ? `${metrics.data.volume.total_requests} request(s) in ${metrics.data.window_days}d`
+              ? `${metrics.data.volume.total_requests} request(s) in ${metrics.data.window_days}d${
+                  metrics.data.latency.model_label
+                    ? ` · ${metrics.data.latency.model_label}`
+                    : ""
+                }`
               : undefined
           }
           tone="neutral"
