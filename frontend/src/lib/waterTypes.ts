@@ -338,6 +338,8 @@ export interface WaterImageEvidence {
 }
 
 export interface WaterBodyDetail extends Omit<WaterBodySummary, "latest_available_status"> {
+  /** What is known, and what is not. */
+  data_availability?: DataAvailability;
   basin: string | null;
   sub_basin: string | null;
   aliases: string[];
@@ -603,6 +605,23 @@ export interface DistrictDetail {
   stations: StationSummary[];
 }
 
+/** What kinds of knowledge exist for one water body. Absence is the point:
+ *  a reader should see that there is no real-time data without inferring it
+ *  from an empty panel. */
+export interface DataAvailability {
+  real_time: boolean;
+  real_time_detail: string;
+  latest_measurement: string | null;
+  latest_source: string | null;
+  age_days: number | null;
+  historical: boolean;
+  historical_detail: string;
+  geometry: boolean;
+  satellite_evidence: boolean;
+  official_classification: boolean;
+  parameters_measured: number;
+}
+
 export interface WaterOverview {
   water_bodies: number;
   monitoring_stations: number;
@@ -614,6 +633,18 @@ export interface WaterOverview {
   /** What each body's most recent measurement found. Always date-qualified. */
   historical_status_distribution: Record<string, number>;
   without_recent_data: number;
+  /** The four-way split: how many water bodies can be described now, how
+   *  many only historically, how many not at all. */
+  coverage: {
+    total: number;
+    current: number;
+    recent: number;
+    historical_only: number;
+    no_data: number;
+    current_within_days: number;
+    recent_within_days: number;
+    note: string;
+  };
   sources: {
     key: string;
     name: string;

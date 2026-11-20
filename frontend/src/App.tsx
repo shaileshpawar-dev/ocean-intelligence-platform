@@ -28,6 +28,7 @@ const Overview = lazy(() => import("./pages/Overview"));
 const LiveMonitoring = lazy(() => import("./pages/LiveMonitoring"));
 const Events = lazy(() => import("./pages/Events"));
 const OceanMap = lazy(() => import("./pages/OceanMap"));
+const CandidateReview = lazy(() => import("./pages/CandidateReview"));
 const Forecasts = lazy(() => import("./pages/Forecasts"));
 const RiskAnalysis = lazy(() => import("./pages/RiskAnalysis"));
 const KnowledgeGraph = lazy(() => import("./pages/KnowledgeGraph"));
@@ -69,6 +70,8 @@ const APP_ROUTES: { path: string; element: React.ReactNode }[] = [
   { path: "/app/events", element: <Events /> },
   { path: "/app/events/:eventId", element: <Events /> },
   { path: "/app/ocean-map", element: <OceanMap /> },
+  { path: "/app/candidate-review", element: <CandidateReview /> },
+  { path: "/app/candidate-review/:candidateId", element: <CandidateReview /> },
   { path: "/app/forecasts", element: <Forecasts /> },
   { path: "/app/risk", element: <RiskAnalysis /> },
   { path: "/app/risk/:eventId", element: <RiskAnalysis /> },

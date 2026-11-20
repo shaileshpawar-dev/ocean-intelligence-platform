@@ -26,7 +26,7 @@ from __future__ import annotations
 import math
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import ColumnElement, Select, func, or_, select, tuple_
@@ -43,7 +43,7 @@ from app.models.water import (
     WaterQualityObservation,
 )
 from app.models.water_geo import SourceClassification
-from app.water.freshness import Cadence
+from app.water.freshness import MIN_NO_RECENT_DAYS, Cadence
 from app.water.matching import PLACE_ALIASES, haversine_km, normalise_name
 from app.water.parameters import BY_KEY
 from app.water.standards import ReferenceSelection, compare, select_reference
@@ -925,6 +925,9 @@ def get_water_body_detail(
         "designated_use_recorded": body.designated_use,
         "stations": summarise_stations(db, list(stations)),
         "sources": source_records,
+        # What is known about this water body, and what is not: real-time,
+        # historical, geometry, satellite, official classification.
+        "data_availability": data_availability(db, body),
         **_geography(db, body, status, source_records),
     }
 
@@ -2077,6 +2080,127 @@ def district_detail(db: Session, slug: str) -> dict | None:
 # ---------------------------------------------------------------------------
 # Platform overview
 # ---------------------------------------------------------------------------
+#: A water body is described in the present tense only if its newest
+#: observation is this recent. Two days, because the only sub-daily source in
+#: India that this platform can reach reports hourly, and a station that has
+#: not reported for two days has stopped reporting.
+#:
+#: Taken from the freshness engine rather than restated, so that this count and
+#: the pages it counts always agree. When they were two separate numbers the
+#: overview said the Ganga had current data while the Ganga's own page said its
+#: reading was too old to describe the river.
+CURRENT_DATA_DAYS = int(MIN_NO_RECENT_DAYS)
+
+#: Newer than a monthly programme's own cadence allows for, but not current.
+RECENT_DATA_DAYS = 90
+
+
+def coverage_counts(db: Session) -> dict:
+    """How many water bodies have current data, recent data, or only history.
+
+    The single most important number on the platform is the first one: 26 of
+    2,740. Reporting it as a count, next to the others, is what stops the
+    map looking like a live national network.
+    """
+    now = datetime.now(UTC)
+    current_cutoff = now - timedelta(days=CURRENT_DATA_DAYS)
+    recent_cutoff = now - timedelta(days=RECENT_DATA_DAYS)
+
+    def count(condition: ColumnElement[bool]) -> int:
+        return db.scalar(select(func.count(WaterBody.id)).where(condition)) or 0
+
+    total = db.scalar(select(func.count(WaterBody.id))) or 0
+    no_data = count(WaterBody.latest_observed_at.is_(None))
+    current = count(WaterBody.latest_observed_at >= current_cutoff)
+    recent = (
+        count(
+            WaterBody.latest_observed_at.is_not(None),
+        )
+        - count(WaterBody.latest_observed_at < recent_cutoff)
+        - current
+    )
+    historical = total - no_data - current - max(recent, 0)
+
+    return {
+        "total": total,
+        "current": current,
+        "recent": max(recent, 0),
+        "historical_only": max(historical, 0),
+        "no_data": no_data,
+        "current_within_days": CURRENT_DATA_DAYS,
+        "recent_within_days": RECENT_DATA_DAYS,
+        "note": (
+            f"{current} of {total} water bodies have an observation from the "
+            f"last {CURRENT_DATA_DAYS} days. The rest are described by their "
+            "most recent measurement, with its date; none of those is a "
+            "statement about today."
+        ),
+    }
+
+
+def data_availability(db: Session, body: WaterBody) -> dict:
+    """What kinds of knowledge exist for this water body, as plain answers.
+
+    Absence is the point: a reader should be able to see that there is no
+    real-time data and no official classification without inferring it from
+    an empty panel.
+    """
+    from app.models.water_geo import SourceClassification, WaterBodyGeometry, WaterImage
+
+    summary = summary_for(db, body)
+    sources = summary.get("sources") or []
+    newest = sources[0] if sources else None
+    latest = body.latest_observed_at
+    age_days = (
+        round((datetime.now(UTC) - _as_utc(latest)).total_seconds() / 86400.0, 1)
+        if latest
+        else None
+    )
+    is_current = age_days is not None and age_days <= CURRENT_DATA_DAYS
+
+    has_geometry = (
+        db.scalar(
+            select(WaterBodyGeometry.id).where(WaterBodyGeometry.water_body_id == body.id)
+        )
+        is not None
+    )
+    has_imagery = (
+        db.scalar(select(WaterImage.id).where(WaterImage.water_body_id == body.id))
+        is not None
+    )
+    has_classification = (
+        db.scalar(
+            select(SourceClassification.id).where(
+                SourceClassification.water_body_id == body.id
+            )
+        )
+        is not None
+    )
+
+    return {
+        "real_time": is_current,
+        "real_time_detail": (
+            f"{newest['name']} reported {age_days:g} days ago"
+            if is_current and newest
+            else "No source reports this water body often enough to describe it now"
+        ),
+        "latest_measurement": _iso(latest),
+        "latest_source": newest["name"] if newest else None,
+        "age_days": age_days,
+        "historical": bool(sources),
+        "historical_detail": (
+            f"{len(sources)} source{'s' if len(sources) != 1 else ''}, "
+            f"{body.observation_count:,} observations"
+            if sources
+            else "No observation has ever been recorded"
+        ),
+        "geometry": has_geometry,
+        "satellite_evidence": has_imagery,
+        "official_classification": has_classification,
+        "parameters_measured": summary.get("parameter_count", 0),
+    }
+
+
 def overview(db: Session) -> dict:
     """Headline counters for the dashboard.
 
@@ -2105,6 +2229,9 @@ def overview(db: Session) -> dict:
         "status_distribution": distribution,
         "historical_status_distribution": status_distribution(db, historical=True),
         "without_recent_data": distribution.get(str(WaterStatus.NO_RECENT_DATA), 0),
+        # The four-way split, so "26 of 2,740" is a number the page can show
+        # rather than something a reader has to work out.
+        "coverage": coverage_counts(db),
         "sources": [
             {
                 "key": s.key,

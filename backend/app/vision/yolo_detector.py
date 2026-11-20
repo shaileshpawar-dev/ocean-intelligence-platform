@@ -52,12 +52,16 @@ DEFAULT_CLASS_MAP: dict[int, tuple[str, PollutionSignature]] = {
 LABEL_SIGNATURE_MAP: dict[str, PollutionSignature] = {
     "oil_spill": PollutionSignature.OIL_LIKE_SIGNATURE,
     "oil": PollutionSignature.OIL_LIKE_SIGNATURE,
+    "oil_slick_candidate": PollutionSignature.OIL_LIKE_SIGNATURE,
     "algae_bloom": PollutionSignature.ALGAE_BLOOM_SIGNATURE,
     "algae": PollutionSignature.ALGAE_BLOOM_SIGNATURE,
+    "algae_bloom_optical": PollutionSignature.ALGAE_BLOOM_SIGNATURE,
     "plastic_waste": PollutionSignature.PLASTIC_DEBRIS_SIGNATURE,
     "plastic": PollutionSignature.PLASTIC_DEBRIS_SIGNATURE,
     "marine_debris": PollutionSignature.PLASTIC_DEBRIS_SIGNATURE,
+    "floating_plastic_debris": PollutionSignature.PLASTIC_DEBRIS_SIGNATURE,
     "chemical_pollution": PollutionSignature.SURFACE_ANOMALY,
+    "surface_discolouration_plume": PollutionSignature.SURFACE_ANOMALY,
 }
 
 CHEMICAL_CAVEAT = (
@@ -176,6 +180,8 @@ class YOLODetector(BaseDetector):
         info = super().describe()
         info["class_names"] = self.class_names
         info["checkpoint"] = self.model_path
+        info["evaluation_status"] = "operational_locally_unvalidated"
+        info["calibrated"] = False
         return info
 
     # -- Inference ---------------------------------------------------------

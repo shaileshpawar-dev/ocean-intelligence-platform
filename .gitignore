@@ -127,3 +127,18 @@ desktop.ini
 .idea/
 .vscode/
 backups/
+
+# --- large local artefacts, kept out of git deliberately -------------------
+# 881 training JPEGs + annotations (129 MB). The dataset is public --
+# PANGAEA 980773, CC BY 4.0 -- so it is re-downloadable rather than vendored.
+# The split manifests and evaluation results below ARE tracked, because they
+# are what the model registry's metrics are read from.
+data/training/sar_oil_v2/images/
+data/training/sar_oil_v2/annotations/
+
+# One-off helper scripts written during development (88 MB, mostly outputs).
+scratch/
+
+# API response caches.
+data/cache/
+backend/data/cache/

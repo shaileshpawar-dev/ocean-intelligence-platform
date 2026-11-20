@@ -132,6 +132,7 @@ class Intent(StrEnum):
     FRESHNESS = "freshness"
     SOURCE = "source"
     STANDARDS = "standards"
+    SATELLITE = "satellite"
     UNKNOWN = "unknown"
 
 
@@ -358,6 +359,8 @@ def classify_intent(question: str) -> Intent:
         return Intent.SOURCE
     if re.search(r"\b(standard|criteria|criterion|threshold|limit|class [a-e])\b", q):
         return Intent.STANDARDS
+    if re.search(r"\b(satellite|sentinel|imagery|remote sensing|spaceborne)\b", q):
+        return Intent.SATELLITE
     if re.search(r"\b(which|where|list)\b", q):
         return Intent.PARAMETER
     if re.search(r"\b(status|polluted|clean|safe|quality|condition|how is)\b", q):
@@ -1617,6 +1620,128 @@ def _answer_standards(db: Session, tracer: _Tracer, question: str) -> WaterAnswe
     )
 
 
+def _answer_satellite(
+    db: Session, tracer: _Tracer, question: str, resolution: Resolution
+) -> WaterAnswer:
+    from app.models.water_geo import WaterImage
+
+    def _query_images():
+        stmt = (
+            select(WaterBody, WaterImage)
+            .join(WaterImage, WaterImage.water_body_id == WaterBody.id)
+            .where(WaterImage.evidence_type == "SATELLITE")
+        )
+        if resolution.water_types:
+            stmt = stmt.where(WaterBody.water_type.in_(resolution.water_types))
+        if resolution.states:
+            stmt = stmt.where(WaterBody.state_id.in_([s.id for s in resolution.states]))
+        if resolution.districts:
+            stmt = stmt.where(
+                WaterBody.district_id.in_([d.id for d, _ in resolution.districts])
+            )
+        stmt = stmt.order_by(
+            WaterImage.acquisition_date.desc().nullslast(), WaterBody.name.asc()
+        )
+        return db.execute(stmt).all()
+
+    rows = tracer.call("OBSERVE", "query_satellite_images", _query_images)
+    if not rows:
+        return WaterAnswer(
+            question=question,
+            intent=Intent.SATELLITE,
+            status=AnswerStatus.NO_EVIDENCE,
+            headline=(
+                "No satellite imagery evidence is recorded for matching water "
+                "bodies in the ingested data."
+            ),
+            limitations=[
+                "Only water bodies with ingested Sentinel-2 L2A scenes appear in "
+                "satellite evidence.",
+            ],
+        )
+
+    citations: list[Citation] = []
+    items: list[dict] = []
+    for i, (body, image) in enumerate(rows[:30]):
+        proxy = (image.image_metadata or {}).get("proxy") or {}
+        proxy_label = proxy.get("label") or "optical proxy"
+        median = proxy.get("median")
+        acq_str = (
+            _day(image.acquisition_date.isoformat())
+            if image.acquisition_date
+            else "unknown date"
+        )
+        detail = (
+            f"{proxy_label}: {median:.3f} (index, no unit) on {acq_str}. "
+            "Not a measurement."
+            if median is not None
+            else f"{image.sensor or 'Satellite'} scene acquired on {acq_str}."
+        )
+        citations.append(
+            Citation(
+                position=i + 1,
+                kind="satellite",
+                title=f"{body.name} — {image.sensor or 'Sentinel-2 MSI'}",
+                detail=detail,
+                evidence_type="SATELLITE_OBSERVED",
+                water_body_slug=body.slug,
+                observed_at=(
+                    image.acquisition_date.isoformat()
+                    if image.acquisition_date
+                    else None
+                ),
+                source=(
+                    f"{image.source} via {image.provider}"
+                    if image.provider
+                    else image.source
+                ),
+                source_reference=image.scene_id,
+                latitude=body.centroid_lat,
+                longitude=body.centroid_lon,
+            )
+        )
+        items.append(
+            {
+                "name": body.name,
+                "slug": body.slug,
+                "water_type": body.water_type,
+                "sensor": image.sensor,
+                "scene_id": image.scene_id,
+                "acquisition_date": (
+                    image.acquisition_date.isoformat()
+                    if image.acquisition_date
+                    else None
+                ),
+                "detail": detail,
+                "proxy": proxy,
+                "cite": i + 1,
+            }
+        )
+
+    count = len(rows)
+    noun = "water body" if count == 1 else "water bodies"
+    return WaterAnswer(
+        question=question,
+        intent=Intent.SATELLITE,
+        status=AnswerStatus.GROUNDED,
+        headline=(
+            f"{count} monitored {noun} have verified Sentinel-2 satellite "
+            "imagery evidence."
+        ),
+        sections=[{"kind": "list", "items": items}],
+        citations=citations,
+        limitations=[
+            "Satellite scenes are Sentinel-2 L2A bottom-of-atmosphere reflectance "
+            "acquisitions.",
+            "Proxy indices (turbidity, chlorophyll) are uncalibrated optical surface "
+            "proxies, not laboratory measurements.",
+            "A satellite scene covers a specific date and time and does not "
+            "represent continuous monitoring.",
+        ],
+        map_action=_map_action([ws.summarise_body(db, b) for b, _ in rows]),
+    )
+
+
 def _no_evidence(question: str, intent: Intent) -> WaterAnswer:
     return WaterAnswer(
         question=question,
@@ -1673,6 +1798,8 @@ def answer(db: Session, question: str) -> dict:
         result = _answer_city(db, tracer, question, resolution)
     elif intent is Intent.TREND and has_body:
         result = _answer_trend(db, tracer, question, resolution)
+    elif intent is Intent.SATELLITE and not has_body:
+        result = _answer_satellite(db, tracer, question, resolution)
     elif has_body:
         result = _answer_status(
             db,

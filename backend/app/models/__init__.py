@@ -32,6 +32,21 @@ from app.models.pollution import (
     SatelliteObservation,
     ZoneHistory,
 )
+from app.models.drift_simulation import DriftSimulation
+from app.models.environmental_impact import (
+    CandidateEnvironmentalImpact,
+    MarineReceptor,
+)
+from app.models.vessel import (
+    CandidateVesselAssociation,
+    Vessel,
+    VesselPosition,
+)
+from app.models.sar_candidate import (
+    SARCandidate,
+    SARCandidateOpticalEvidence,
+    SARCandidateReview,
+)
 from app.models.water import (
     DataSource,
     District,
@@ -65,6 +80,9 @@ __all__ = [
     "DetectionMethod",
     "District",
     "DriftReport",
+    "CandidateEnvironmentalImpact",
+    "DriftSimulation",
+    "MarineReceptor",
     "DriftStatus",
     "EvidenceLevel",
     "IngestionRun",
@@ -83,6 +101,12 @@ __all__ = [
     "ResearchDocument",
     "RiskAssessment",
     "RiverStretch",
+    "SARCandidate",
+    "CandidateVesselAssociation",
+    "SARCandidateOpticalEvidence",
+    "SARCandidateReview",
+    "Vessel",
+    "VesselPosition",
     "SatelliteObservation",
     "Severity",
     "SourceClassification",

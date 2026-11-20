@@ -98,10 +98,36 @@ class Settings(BaseSettings):
 
     # -- Vision ------------------------------------------------------------
     detector_backend: Literal["yolo", "mock"] = "mock"
-    yolo_model_path: str | None = None
+    yolo_model_path: str | None = (
+        str(REPO_ROOT / "data" / "models" / "optical" / "best.pt")
+        if (REPO_ROOT / "data" / "models" / "optical" / "best.pt").exists()
+        else None
+    )
+    yolo_v2_model_path: str | None = (
+        str(REPO_ROOT / "data" / "models" / "optical" / "v2" / "best.pt")
+        if (REPO_ROOT / "data" / "models" / "optical" / "v2" / "best.pt").exists()
+        else None
+    )
+    yolo_active_version: str = "v1"
     detection_confidence_threshold: float = 0.25
 
     # -- SAR dark-formation detection --------------------------------------
+    sar_model_version: Literal["v1", "v2", "v2.1", "v2.2"] = "v1"
+    sar_v2_model_path: str | None = (
+        str(REPO_ROOT / "data" / "models" / "sar" / "v2" / "best.pt")
+        if (REPO_ROOT / "data" / "models" / "sar" / "v2" / "best.pt").exists()
+        else None
+    )
+    sar_v2_expanded_model_path: str | None = (
+        str(REPO_ROOT / "data" / "models" / "sar" / "v2_expanded" / "best.pt")
+        if (REPO_ROOT / "data" / "models" / "sar" / "v2_expanded" / "best.pt").exists()
+        else None
+    )
+    sar_v2_2_model_path: str | None = (
+        str(REPO_ROOT / "data" / "models" / "sar" / "v2_2_scene_clean" / "best.pt")
+        if (REPO_ROOT / "data" / "models" / "sar" / "v2_2_scene_clean" / "best.pt").exists()
+        else None
+    )
     # Backscatter (dB) below which a cell is treated as a candidate dark
     # formation. -22 dB is a conservative open-ocean threshold; see
     # docs/ai-pipeline.md for the justification and its limitations.
@@ -109,6 +135,14 @@ class Settings(BaseSettings):
     # Wind speed (m/s) below which dark formations are ambiguous because of
     # low-wind look-alikes. Applied only when wind data is available.
     sar_min_wind_speed_ms: float = 3.0
+
+    # -- Copernicus Data Space Ecosystem (CDSE) ----------------------------
+    cdse_stac_url: str = "https://stac.dataspace.copernicus.eu/v1"
+    cdse_token_url: str = (
+        "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
+    )
+    cdse_username: str | None = None
+    cdse_password: str | None = None
 
     # -- LLM ---------------------------------------------------------------
     llm_provider: Literal["none", "gemini", "openai", "anthropic"] = "none"

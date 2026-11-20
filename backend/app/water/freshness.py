@@ -65,6 +65,57 @@ CADENCE_LABELS: dict[Cadence, str] = {
 LATE_MULTIPLE = 2.0
 NO_RECENT_MULTIPLE = 12.0
 
+# A floor under the refusal horizon. Twelve nominal periods is a sensible
+# multiple for a monthly programme and far too tight for an hourly one: it
+# would declare an hourly analyser's reading unfit to describe the present
+# after twelve hours, so the Ganga's page would flip between "described" and
+# "no recent data" according to when the ingestion job last ran rather than
+# according to anything about the river. River quality does not become
+# meaningless overnight, so no source's refusal horizon is shorter than this.
+# It is the same two days the national coverage split calls "current data",
+# deliberately: one threshold governs both, so the count of water bodies that
+# can be described now cannot disagree with the pages that describe them.
+MIN_NO_RECENT_DAYS = 2.0
+
+# A ceiling on it, for the opposite reason. Twelve missed months is not a
+# monthly programme running late, it is a programme that stopped, and an
+# Indian water body sampled more than a season ago was sampled in a different
+# season: pre-monsoon, monsoon and post-monsoon quality at the same station
+# differ enough that the older reading says nothing about now. Without this
+# ceiling the engine would give a present-tense status to a sample eleven
+# months old while the overview told the reader that only 26 water bodies can
+# be described at all.
+MAX_NO_RECENT_DAYS = 90.0
+
+
+def refusal_horizon_days(cadence: Cadence) -> float | None:
+    """How old an observation may be before it stops describing the present.
+
+    ``None`` for cadences that make no promise; those fall back to
+    :data:`ABSOLUTE_NO_RECENT_DAYS`.
+
+    Three considerations meet here, which is why this is a function and not a
+    constant:
+
+    * twelve nominal periods, the source's own promise missed twelve times over;
+    * never sooner than :data:`MIN_NO_RECENT_DAYS`, so an hourly analyser is
+      not declared unusable between two runs of the ingestion job;
+    * never later than :data:`MAX_NO_RECENT_DAYS`, so a stopped monthly
+      programme is not read as a description of today --- except that a source
+      which genuinely reports less often than that is not overdue merely for
+      keeping to its schedule, so the horizon is never shorter than twice its
+      own cadence. A quarterly programme that published 100 days ago is on
+      time, and the engine must not call it stale.
+    """
+    period = CADENCE_DAYS[cadence]
+    if period is None:
+        return None
+    return max(
+        MIN_NO_RECENT_DAYS,
+        period * LATE_MULTIPLE,
+        min(period * NO_RECENT_MULTIPLE, MAX_NO_RECENT_DAYS),
+    )
+
 # For irregular and unknown cadences there is no promise to measure against,
 # so a single absolute horizon applies instead. Three years is deliberately
 # generous: it is long enough not to condemn a slow official programme, and
@@ -100,6 +151,23 @@ FRESHNESS_LABELS: dict[Freshness, str] = {
 }
 
 
+def _age_phrase(age_days: float | None) -> str:
+    """The age in the unit a reader would use for it.
+
+    An hourly source measured eleven hours ago was being reported as "0 days
+    ago", which reads as a contradiction beside a sentence calling it old.
+    """
+    days = age_days or 0.0
+    if days < 1.0:
+        hours = int(days * 24)
+        if hours < 1:
+            minutes = max(int(days * 1440), 1)
+            return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
+        return f"{hours} hour{'s' if hours != 1 else ''} ago"
+    whole = int(days)
+    return f"{whole} day{'s' if whole != 1 else ''} ago"
+
+
 @dataclass(slots=True)
 class FreshnessAssessment:
     """The age of the latest observation, judged against source cadence."""
@@ -131,21 +199,21 @@ class FreshnessAssessment:
             return "No observation has ever been recorded for this location."
 
         date = self.observed_at.strftime("%d %b %Y")
-        age = int(self.age_days or 0)
+        age = _age_phrase(self.age_days)
         cadence = CADENCE_LABELS[self.cadence].lower()
 
         if self.freshness is Freshness.NO_RECENT_DATA:
             return (
-                f"Latest available observation is from {date}, {age} days ago. "
+                f"Latest available observation is from {date}, {age}. "
                 "That is too old to describe the water body's present state."
             )
         if self.freshness is Freshness.OLDER_THAN_CADENCE:
             return (
-                f"Latest available observation is from {date}, {age} days ago. "
+                f"Latest available observation is from {date}, {age}. "
                 f"The source reports {cadence}, so this is overdue."
             )
         return (
-            f"Latest available observation is from {date}, {age} days ago, "
+            f"Latest available observation is from {date}, {age}, "
             f"within the source's {cadence} reporting cadence."
         )
 
@@ -197,7 +265,7 @@ def assess(
             if age_days > ABSOLUTE_NO_RECENT_DAYS
             else Freshness.WITHIN_CADENCE
         )
-    elif age_days > period * NO_RECENT_MULTIPLE:
+    elif age_days > refusal_horizon_days(cadence):
         level = Freshness.NO_RECENT_DATA
     elif age_days > period * LATE_MULTIPLE:
         level = Freshness.OLDER_THAN_CADENCE

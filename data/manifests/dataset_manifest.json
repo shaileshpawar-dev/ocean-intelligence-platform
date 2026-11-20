@@ -1,0 +1,136 @@
+{
+  "manifest_version": "1.0.0",
+  "created_at": "2026-10-17T20:30:00Z",
+  "platform": "OceanAI India Water Intelligence",
+  "description": "Inventory of optical, multispectral, and SAR datasets for marine and inland water pollution detection.",
+  "local_inventory": {
+    "optical_samples": [
+      {
+        "filename": "synthetic_slick.png",
+        "relative_path": "data/samples/synthetic_slick.png",
+        "sensor": "Synthetic RGB Generator",
+        "spatial_resolution_m": null,
+        "image_dimensions": [800, 800, 3],
+        "license": "CC0-1.0",
+        "annotation_status": "synthetic_fixture",
+        "ground_truth_boxes": 1,
+        "classes_present": ["plastic_waste"],
+        "purpose": "Code-path integration and pipeline unit testing only. NEVER used for accuracy verification."
+      }
+    ],
+    "sentinel2_evidence_scenes": [
+      {
+        "scene_id": "S2A_MSIL2A_20260925T054251_R005_T43QBG_20260925T103013",
+        "water_body": "Dharoi Dam (Gujarat)",
+        "sensor": "Sentinel-2 MSI Level-2A",
+        "acquisition_date": "2026-09-25",
+        "channels": ["B02", "B03", "B04", "B08", "truecolour"],
+        "spatial_resolution_m": 10.0,
+        "turbidity_proxy_ndti": 0.042,
+        "annotation_status": "unannotated_raster",
+        "object_detection_labels_present": false,
+        "suitability": "Multispectral water quality proxy analysis; unannotated for bounding box object detection."
+      },
+      {
+        "scene_id": "S2C_MSIL2A_20260923T053641_R005_T43SES_20260923T101809",
+        "water_body": "Mansar Lake (Jammu & Kashmir)",
+        "sensor": "Sentinel-2 MSI Level-2A",
+        "acquisition_date": "2026-09-23",
+        "channels": ["B02", "B03", "B04", "B08", "truecolour"],
+        "spatial_resolution_m": 10.0,
+        "turbidity_proxy_ndti": 0.081,
+        "annotation_status": "unannotated_raster",
+        "object_detection_labels_present": false,
+        "suitability": "Multispectral water quality proxy analysis; unannotated for bounding box object detection."
+      },
+      {
+        "scene_id": "S2C_MSIL2A_20260920T052651_R105_T43RFQ_20260920T102311",
+        "water_body": "Sukhna Lake (Chandigarh)",
+        "sensor": "Sentinel-2 MSI Level-2A",
+        "acquisition_date": "2026-09-20",
+        "channels": ["B02", "B03", "B04", "B08", "truecolour"],
+        "spatial_resolution_m": 10.0,
+        "turbidity_proxy_ndti": 0.065,
+        "annotation_status": "unannotated_raster",
+        "object_detection_labels_present": false,
+        "suitability": "Multispectral water quality proxy analysis; unannotated for bounding box object detection."
+      },
+      {
+        "scene_id": "S2C_MSIL2A_20260616T050651_R019_T44QKE_20260616T100816",
+        "water_body": "Hussain Sagar Lake (Hyderabad)",
+        "sensor": "Sentinel-2 MSI Level-2A",
+        "acquisition_date": "2026-06-16",
+        "channels": ["B02", "B03", "B04", "B08", "truecolour"],
+        "spatial_resolution_m": 10.0,
+        "turbidity_proxy_ndti": 0.124,
+        "annotation_status": "unannotated_raster",
+        "object_detection_labels_present": false,
+        "suitability": "Historical high-turbidity optical evidence; unannotated for bounding box object detection."
+      }
+    ]
+  },
+  "original_training_artifact_audit": {
+    "checkpoint_file": "data/models/optical/best.pt",
+    "size_bytes": 52040018,
+    "architecture": "YOLOv8m (25,858,636 parameters)",
+    "training_date": "2026-04-22T12:28:31.607556",
+    "framework": "ultralytics 8.4.41",
+    "training_args": {
+      "data": "pollution.yaml",
+      "project": "/content/drive/MyDrive/ocean_ai",
+      "name": "ocean_v3",
+      "epochs": 100,
+      "batch": 16,
+      "imgsz": 640,
+      "optimizer": "auto",
+      "lr0": 0.001,
+      "patience": 20,
+      "seed": 42
+    },
+    "internal_validation_metrics": {
+      "precision": 0.84718,
+      "recall": 0.72502,
+      "map50": 0.82665,
+      "map50_95": 0.54317,
+      "final_val_box_loss": 1.00207,
+      "final_val_cls_loss": 1.93200,
+      "final_val_dfl_loss": 1.15309
+    },
+    "provenance_status": "CHECKPOINT_RECOVERED_BUT_DATASET_MISSING",
+    "blocker": "The training images, Roboflow dataset files, and test split annotations (pollution.yaml) reside on external Google Drive storage and were not committed to the repository. Independent test metric calculation is blocked until a benchmark split is acquired."
+  },
+  "candidate_v2_data_sources": [
+    {
+      "dataset_name": "TACO (Trash Annotations in Context) / FloaDebris",
+      "target_task": "floating_plastic_debris",
+      "sensor": "RGB Optical / Drone / Shoreline cameras",
+      "spatial_resolution": "1 cm - 10 cm / pixel",
+      "license": "CC BY 4.0",
+      "annotation_format": "COCO / YOLO bounding boxes",
+      "suitability": "High for high-resolution optical cameras; not applicable to 10m Sentinel-2."
+    },
+    {
+      "dataset_name": "ESA / Copernicus Marine Algal Bloom Benchmark",
+      "target_task": "algae_bloom_optical",
+      "sensor": "Sentinel-2 MSI Level-2A",
+      "spatial_resolution": "10 m - 20 m",
+      "license": "Copernicus Open Access",
+      "annotation_format": "Spectral Chlorophyll Index (NDCI) raster masks",
+      "suitability": "Ideal: replaces ill-posed bounding box with physical spectral chlorophyll concentration."
+    },
+    {
+      "dataset_name": "CleanSeaNet / EMSA Verified Oil Spill Database",
+      "target_task": "oil_slick_candidate",
+      "sensor": "Sentinel-1 C-Band SAR (VV/VH)",
+      "spatial_resolution": "10 m - 20 m (IW GRD)",
+      "license": "Open Government / Research",
+      "annotation_format": "Polygonal slick boundary masks + ancillary wind field",
+      "suitability": "High: provides verified ground-truth slicks with co-registered wind speeds to resolve low-wind false alarms."
+    }
+  ],
+  "data_leakage_safeguards": {
+    "rule_1": "Scene-Level Stratification: All image tiles derived from the same satellite orbit or scene footprint must reside entirely in either train, validation, or test set. Tile-level random splitting is strictly prohibited.",
+    "rule_2": "Temporal Isolation: Test scenes must be acquired at distinct dates from training scenes to test temporal generalizability.",
+    "rule_3": "Spatial Buffering: A minimum 50 km geographic buffer must separate training scene centroids from test scene centroids."
+  }
+}

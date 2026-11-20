@@ -23,7 +23,14 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from app.models.enums import QualityFlag, WaterBodyType, WaterStatus
-from app.water.freshness import Cadence, Freshness, assess
+from app.water.freshness import (
+    MAX_NO_RECENT_DAYS,
+    MIN_NO_RECENT_DAYS,
+    Cadence,
+    Freshness,
+    assess,
+    refusal_horizon_days,
+)
 from app.water.matching import (
     apply_propagation,
     haversine_km,
@@ -259,6 +266,57 @@ class TestFreshness:
         summary = assess(NOW - timedelta(days=5), Cadence.MONTHLY, now=NOW).summary()
         assert "latest available" in summary.lower()
         assert "current" not in summary.lower()
+
+    def test_an_hourly_source_is_not_unusable_after_twelve_hours(self):
+        """The bug this pins: twelve nominal periods is one hour times twelve.
+
+        CPCB's analysers on the Ganga report hourly, and the ingestion job runs
+        on a schedule. A twelve-hour refusal horizon meant the Ganga's page
+        said "too old to describe the river" whenever the job had not run for
+        half a day, while the national overview counted the same water body as
+        having current data. The reading is overdue at twelve hours, which the
+        page should say; it is not unusable.
+        """
+        result = assess(NOW - timedelta(hours=13), Cadence.HOURLY, now=NOW)
+        assert result.freshness is Freshness.OLDER_THAN_CADENCE
+        assert result.describes_present_state
+        assert "overdue" in result.summary()
+
+    def test_an_hourly_source_silent_for_days_stops_describing_the_present(self):
+        result = assess(NOW - timedelta(days=3), Cadence.HOURLY, now=NOW)
+        assert result.freshness is Freshness.NO_RECENT_DATA
+        assert result.describes_present_state is False
+
+    def test_the_refusal_horizon_matches_the_coverage_count(self):
+        """One threshold, or the count and the pages contradict each other."""
+        from app.services.water_service import CURRENT_DATA_DAYS
+
+        assert CURRENT_DATA_DAYS == int(MIN_NO_RECENT_DAYS)
+
+    def test_a_sub_day_age_is_stated_in_hours(self):
+        """"0 days ago" beside "that is too old" read as a contradiction."""
+        summary = assess(NOW - timedelta(hours=5), Cadence.HOURLY, now=NOW).summary()
+        assert "5 hours ago" in summary
+        assert "0 days" not in summary
+
+    def test_a_stopped_monthly_programme_does_not_describe_today(self):
+        """The leak on the other side of the same rule.
+
+        Twelve nominal months is 372 days, so a sample eleven months old would
+        have been given a present-tense status while the overview told the
+        reader that 26 of 2,740 water bodies could be described at all. An
+        Indian water body sampled eleven months ago was sampled in a different
+        season.
+        """
+        result = assess(NOW - timedelta(days=200), Cadence.MONTHLY, now=NOW)
+        assert result.freshness is Freshness.NO_RECENT_DATA
+        assert result.describes_present_state is False
+
+    def test_a_slow_source_keeping_to_its_schedule_is_not_stale(self):
+        """The ceiling must not condemn a programme for being quarterly."""
+        result = assess(NOW - timedelta(days=100), Cadence.QUARTERLY, now=NOW)
+        assert result.describes_present_state
+        assert refusal_horizon_days(Cadence.QUARTERLY) > MAX_NO_RECENT_DAYS
 
     def test_future_dates_do_not_produce_negative_age(self):
         result = assess(NOW + timedelta(days=30), Cadence.MONTHLY, now=NOW)

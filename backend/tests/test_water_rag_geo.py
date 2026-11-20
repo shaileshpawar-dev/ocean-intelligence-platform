@@ -146,3 +146,39 @@ class TestOverHttp:
         assert [b.slug for b in r.water_bodies] == []
         r = resolve_entities(db, "How is Red Lake?")
         assert [b.slug for b in r.water_bodies] == ["red-lake"]
+
+    def test_satellite_evidence_listing_question(self, water_db, geo_client):  # noqa: F811
+        """Questions asking for satellite evidence list bodies with imagery."""
+        from datetime import datetime, UTC
+        from app.models.water import WaterBody
+        from app.models.water_geo import WaterImage
+
+        db, _ = water_db
+        body = db.query(WaterBody).first()
+        if body:
+            img = WaterImage(
+                image_id="test-sentinel-scene-1",
+                water_body_id=body.id,
+                evidence_type="SATELLITE",
+                source="Sentinel-2",
+                provider="Planetary Computer",
+                sensor="Sentinel-2 MSI",
+                scene_id="S2A_MSIL2A_TEST",
+                acquisition_date=datetime(2026, 9, 20, 5, 0, 0, tzinfo=UTC),
+                retrieved_at=datetime(2026, 9, 21, 5, 0, 0, tzinfo=UTC),
+                image_metadata={"proxy": {"label": "turbidity proxy", "median": 0.045}},
+            )
+            db.add(img)
+            db.commit()
+
+        r = geo_client.post(
+            "/api/v1/water/ask", json={"question": "Which water bodies have satellite evidence?"}
+        )
+        assert r.status_code == 200
+        data = r.json()
+        assert data["status"] == "grounded"
+        assert data["intent"] == "satellite"
+        assert "satellite" in data["headline"].lower()
+        assert len(data["citations"]) >= 1
+        assert data["citations"][0]["evidence_type"] == "SATELLITE_OBSERVED"
+

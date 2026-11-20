@@ -49,6 +49,7 @@ import type {
   WaterBodyDetail as Detail,
 } from "@/lib/waterTypes";
 import {
+  DataAvailabilityPanel,
   LatestAvailableStatus,
   MatchConfidenceNote,
   ParameterCard,
@@ -133,6 +134,13 @@ export default function WaterBodyDetail() {
       <div className="wb-status-grid">
         <SectionCard title="Current data availability">
           <AvailabilityPanel availability={body.availability} />
+        </SectionCard>
+
+        <SectionCard
+          title="What we know about this water body"
+          description="Each answer is a fact about the data held, not about the water."
+        >
+          <DataAvailabilityPanel availability={body.data_availability} />
         </SectionCard>
 
         <SectionCard title="Latest measured status">

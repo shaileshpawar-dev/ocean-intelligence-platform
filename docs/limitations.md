@@ -318,9 +318,9 @@ India.
 **Standards.** Rivers are compared against the EP Rules 1986 bathing-water
 criteria, which is what CPCB uses to identify polluted stretches; everything
 else says "reference comparison unavailable" unless a designated use is
-recorded or chosen. IS 10500 (drinking/groundwater) is not loaded. No
-official polluted-stretch classification is loaded: CPCB publishes it as PDF
-and the import path is there, waiting for a machine-readable table.
+recorded or chosen. 6 reference standards (including CPCB Bathing Criteria
+and Drinking Water thresholds) are loaded. 351 official CPCB polluted-stretch
+classifications (Priority I through V) are loaded in source_classifications.
 
 **Units.** Conversions are applied only where they are exact. Both agencies
 label conductivity mS/cm while publishing µS/cm magnitudes; the platform
@@ -331,9 +331,8 @@ is stored unconverted and flagged `unit_not_convertible`, never compared.
 **Satellite.** One path: Sentinel-2 L2A for lakes with a matched polygon,
 with strict per-lake cloud and water checks. The stored value is an
 uncalibrated index (NDTI) with no unit — not turbidity, never compared with a
-standard or with CPCB's NTU. Scene pictures are rendered on demand by the
-imagery service; if that service is unreachable the stored evidence (scene,
-date, cover fractions, index) still displays.
+standard or with CPCB's NTU. 17 Sentinel-2 L2A scenes are stored locally in
+the PostGIS database and available offline without cloud dependencies.
 
 **Database.** PostgreSQL 16 + PostGIS 3.4 is the production target and is
 what the spatial queries run on; SQLite remains for development and tests,
@@ -341,13 +340,13 @@ where the Python geometry helpers are used instead. The two paths are
 exercised by the same test suite, but only PostGIS is exercised against the
 full national dataset.
 
-**Deployment.** Nothing is deployed. The staging stack runs locally under
-`docker compose`; AWS outbound access to the portals, OSM mirrors and the
-imagery service has not been verified from inside a VPC.
+**Deployment.** Local execution only. The AWS cloud account is suspended
+following credit exhaustion; zero cloud resources or AWS credentials are used.
+The application stack runs fully locally under Docker Desktop via `docker compose`
+with PostgreSQL 16/PostGIS and FastAPI backend.
 
-**Not implemented:** status-history population, user-reported issues,
-pollution-source attribution, basin boundaries, vector tiles, scheduled
-ingestion (the jobs exist and are idempotent; nothing schedules them yet).
+**Not implemented:** user-reported issues, pollution-source attribution,
+basin boundaries, vector tiles, automated cloud GPU retraining.
 
 **Q&A.** Rule-based routing and entity resolution; no language model is used
 on the water path. Unusual phrasings fail towards "no evidence".

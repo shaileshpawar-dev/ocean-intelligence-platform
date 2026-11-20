@@ -1962,3 +1962,63 @@
   height: 3px;
   border-radius: 2px;
 }
+
+
+/* What we know about this water body: a yes/no list where the "no" rows are
+   as legible as the "yes" rows, because for most water bodies the answer is
+   no and that is the finding. */
+.availability-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.availability-list li {
+  display: grid;
+  grid-template-columns: 1.4rem 10rem 3rem 1fr;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.5rem;
+  background: var(--surface-muted, #f6f8fa);
+}
+
+.availability-list li.is-yes .availability-mark {
+  color: var(--good, #1a7f5a);
+}
+
+.availability-list li.is-no .availability-mark {
+  color: var(--muted, #6b7785);
+}
+
+.availability-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.availability-label {
+  font-weight: 600;
+}
+
+.availability-answer {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted, #6b7785);
+}
+
+.availability-detail {
+  color: var(--muted, #6b7785);
+  font-size: 0.86rem;
+}
+
+@media (max-width: 640px) {
+  .availability-list li {
+    grid-template-columns: 1.4rem 1fr auto;
+  }
+
+  .availability-detail {
+    grid-column: 2 / -1;
+  }
+}

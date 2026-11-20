@@ -30,10 +30,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-    # Not published to the host by default; the backend reaches it over the
-    # compose network. Uncomment to inspect with a local client.
-    # ports:
-    #   - "5432:5432"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
 
   # One-shot: bring the schema to head. Run before the first start and
   # after every deploy that carries a migration.
@@ -112,4 +110,8 @@ services:
 
 volumes:
   pgdata:
+    name: oip_pgdata
+    external: true
   oipdata:
+    name: ocean-intelligence-platform_oipdata
+    external: true

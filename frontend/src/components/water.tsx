@@ -18,6 +18,7 @@ import type { ReactNode } from "react";
 import {
   AlertTriangle,
   CalendarClock,
+  Check,
   CircleHelp,
   Droplets,
   Scale,
@@ -33,6 +34,7 @@ import {
 } from "lucide-react";
 import type {
   ComparisonResult,
+  DataAvailability,
   StatusDetail,
   WaterBodyType,
   WaterEvidenceType,
@@ -183,6 +185,68 @@ export function LatestAvailableStatus({
         </span>
       </p>
     </div>
+  );
+}
+
+
+/** What is known about a water body, and what is not.
+ *
+ *  Written so the absences read as findings rather than as a panel that
+ *  failed to load: "no real-time data" is the answer for 2,714 of India's
+ *  2,740 monitored water bodies, and the reader should see that plainly.
+ */
+export function DataAvailabilityPanel({
+  availability,
+}: {
+  availability: DataAvailability | undefined;
+}) {
+  if (!availability) return null;
+  const rows: { label: string; yes: boolean; detail: string }[] = [
+    {
+      label: "Real-time data",
+      yes: availability.real_time,
+      detail: availability.real_time_detail,
+    },
+    {
+      label: "Historical data",
+      yes: availability.historical,
+      detail: availability.historical_detail,
+    },
+    {
+      label: "Mapped shape",
+      yes: availability.geometry,
+      detail: availability.geometry
+        ? "Matched to an OpenStreetMap feature"
+        : "No shape matched; the water body is shown as a point",
+    },
+    {
+      label: "Satellite evidence",
+      yes: availability.satellite_evidence,
+      detail: availability.satellite_evidence
+        ? "At least one scene passed the cloud and water checks"
+        : "No cloud-free scene has been accepted for this water body",
+    },
+    {
+      label: "Official classification",
+      yes: availability.official_classification,
+      detail: availability.official_classification
+        ? "An official assessment is recorded"
+        : "No official classification has been imported",
+    },
+  ];
+  return (
+    <ul className="availability-list">
+      {rows.map((row) => (
+        <li key={row.label} className={row.yes ? "is-yes" : "is-no"}>
+          <span className="availability-mark" aria-hidden>
+            {row.yes ? <Check size={14} /> : <Minus size={14} />}
+          </span>
+          <span className="availability-label">{row.label}</span>
+          <span className="availability-answer">{row.yes ? "Yes" : "No"}</span>
+          <span className="availability-detail">{row.detail}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

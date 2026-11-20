@@ -1,0 +1,212 @@
+{
+  "model_name": "sar-oil-slick-v2.2",
+  "architecture": "SAROilSlickMultiScaleCNN",
+  "param_count": 133466,
+  "decision_threshold": 0.5,
+  "training_samples": 501,
+  "validation_samples": 80,
+  "test_samples": 100,
+  "test_leakage_free": true,
+  "test_metrics": {
+    "TP": 44,
+    "FP": 21,
+    "TN": 29,
+    "FN": 6,
+    "Accuracy": 0.73,
+    "Precision": 0.6769,
+    "Recall": 0.88,
+    "F1": 0.7652,
+    "FPR": 0.42,
+    "FNR": 0.12
+  },
+  "baseline_comparison": {
+    "baseline_v1": {
+      "TP": 7,
+      "FP": 6,
+      "TN": 44,
+      "FN": 43,
+      "Accuracy": 0.51,
+      "Precision": 0.5385,
+      "Recall": 0.14,
+      "F1": 0.2222,
+      "FPR": 0.12,
+      "FNR": 0.86
+    },
+    "historical_v2_120": {
+      "TP": 46,
+      "FP": 20,
+      "TN": 30,
+      "FN": 4,
+      "Accuracy": 0.76,
+      "Precision": 0.697,
+      "Recall": 0.92,
+      "F1": 0.7931,
+      "FPR": 0.4,
+      "FNR": 0.08
+    },
+    "expanded_v2_1_500": {
+      "TP": 46,
+      "FP": 20,
+      "TN": 30,
+      "FN": 4,
+      "Accuracy": 0.76,
+      "Precision": 0.697,
+      "Recall": 0.92,
+      "F1": 0.7931,
+      "FPR": 0.4,
+      "FNR": 0.08
+    },
+    "new_v2_2_clean": {
+      "TP": 44,
+      "FP": 21,
+      "TN": 29,
+      "FN": 6,
+      "Accuracy": 0.73,
+      "Precision": 0.6769,
+      "Recall": 0.88,
+      "F1": 0.7652,
+      "FPR": 0.42,
+      "FNR": 0.12
+    }
+  },
+  "mcnemar_tests": {
+    "v2_2_vs_v2_1": {
+      "b": 4,
+      "c": 7,
+      "p_value": 0.5488
+    },
+    "v2_2_vs_v2_0": {
+      "b": 7,
+      "c": 10,
+      "p_value": 0.6291
+    },
+    "v2_2_vs_baseline": {
+      "b": 38,
+      "c": 16,
+      "p_value": 0.0038
+    }
+  },
+  "latency_benchmark_ms": {
+    "preprocessing": {
+      "mean": 4.5356869997340254,
+      "median": 3.326550002384465,
+      "p95": 9.802320010930996
+    },
+    "inference": {
+      "mean": 17.566275000281166,
+      "median": 11.537599995790515,
+      "p95": 69.23725500164437
+    },
+    "total": {
+      "mean": 22.10196200001519,
+      "median": 15.589300011924934,
+      "p95": 73.82370500345132
+    }
+  },
+  "validation_threshold_sweep": [
+    {
+      "threshold": 0.35,
+      "accuracy": 0.675,
+      "precision": 0.6094,
+      "recall": 0.975,
+      "f1": 0.75,
+      "tp": 39,
+      "fp": 25,
+      "tn": 15,
+      "fn": 1
+    },
+    {
+      "threshold": 0.4,
+      "accuracy": 0.725,
+      "precision": 0.65,
+      "recall": 0.975,
+      "f1": 0.78,
+      "tp": 39,
+      "fp": 21,
+      "tn": 19,
+      "fn": 1
+    },
+    {
+      "threshold": 0.45,
+      "accuracy": 0.725,
+      "precision": 0.65,
+      "recall": 0.975,
+      "f1": 0.78,
+      "tp": 39,
+      "fp": 21,
+      "tn": 19,
+      "fn": 1
+    },
+    {
+      "threshold": 0.5,
+      "accuracy": 0.7875,
+      "precision": 0.717,
+      "recall": 0.95,
+      "f1": 0.8172,
+      "tp": 38,
+      "fp": 15,
+      "tn": 25,
+      "fn": 2
+    },
+    {
+      "threshold": 0.55,
+      "accuracy": 0.7625,
+      "precision": 0.7059,
+      "recall": 0.9,
+      "f1": 0.7912,
+      "tp": 36,
+      "fp": 15,
+      "tn": 25,
+      "fn": 4
+    },
+    {
+      "threshold": 0.6,
+      "accuracy": 0.7625,
+      "precision": 0.7333,
+      "recall": 0.825,
+      "f1": 0.7765,
+      "tp": 33,
+      "fp": 12,
+      "tn": 28,
+      "fn": 7
+    },
+    {
+      "threshold": 0.65,
+      "accuracy": 0.7625,
+      "precision": 0.7442,
+      "recall": 0.8,
+      "f1": 0.7711,
+      "tp": 32,
+      "fp": 11,
+      "tn": 29,
+      "fn": 8
+    },
+    {
+      "threshold": 0.7,
+      "accuracy": 0.7625,
+      "precision": 0.7561,
+      "recall": 0.775,
+      "f1": 0.7654,
+      "tp": 31,
+      "fp": 10,
+      "tn": 30,
+      "fn": 9
+    }
+  ],
+  "false_positives_by_cluster": {
+    "nw_c03": 3,
+    "nw_c05": 3,
+    "nw_c06": 4,
+    "nc_c00": 2,
+    "nc_c01": 1,
+    "nw_c08": 2,
+    "nc_c04": 2,
+    "nw_c02": 1,
+    "nw_c10": 1,
+    "nc_c02": 1,
+    "nw_c07": 1
+  },
+  "false_negatives_by_subset": {
+    "ow": 6
+  }
+}

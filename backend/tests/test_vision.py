@@ -325,3 +325,271 @@ class TestYoloClassResolution:
             assert signature in det.supported_signatures
         for _label, signature in DEFAULT_CLASS_MAP.values():
             assert signature in det.supported_signatures
+
+
+class TestRecoveredCheckpoint:
+    def test_recovered_checkpoint_loads_when_present(self) -> None:
+        from pathlib import Path
+
+        repo_root = Path(__file__).resolve().parents[2]
+        ckpt = repo_root / "data" / "models" / "optical" / "best.pt"
+        if not ckpt.exists():
+            pytest.skip("best.pt is not present in local repo")
+        detector = YOLODetector(model_path=str(ckpt), conf_threshold=0.05)
+        assert detector.is_available is True
+        assert detector.class_names == {
+            0: "oil_spill",
+            1: "algae_bloom",
+            2: "plastic_waste",
+            3: "chemical_pollution",
+        }
+
+    def test_recovered_checkpoint_inference_and_geolocation(self) -> None:
+        from pathlib import Path
+
+        repo_root = Path(__file__).resolve().parents[2]
+        ckpt = repo_root / "data" / "models" / "optical" / "best.pt"
+        sample_img = repo_root / "data" / "samples" / "synthetic_slick.png"
+        if not ckpt.exists() or not sample_img.exists():
+            pytest.skip("best.pt or sample image not present")
+        detector = YOLODetector(model_path=str(ckpt), conf_threshold=0.05)
+        bounds = [72.0, 18.0, 74.0, 20.0]
+        detections = detector.predict(str(sample_img), geo_bounds=bounds)
+        assert len(detections) >= 1
+        d = detections[0]
+        assert d.evidence_level is EvidenceLevel.DETECTED
+        assert 0.0 <= d.confidence <= 1.0
+        assert len(d.bbox) == 4
+        assert d.geo_bbox is not None
+        assert 72.0 <= d.longitude <= 74.0
+        assert 18.0 <= d.latitude <= 20.0
+        assert any("Confidence is the raw detector score" in c for c in d.caveats)
+
+
+class TestVisionV2Taxonomy:
+    def test_v2_taxonomy_signature_mappings(self) -> None:
+        from app.vision.yolo_detector import LABEL_SIGNATURE_MAP
+        assert LABEL_SIGNATURE_MAP["oil_slick_candidate"] is PollutionSignature.OIL_LIKE_SIGNATURE
+        assert LABEL_SIGNATURE_MAP["algae_bloom_optical"] is PollutionSignature.ALGAE_BLOOM_SIGNATURE
+        assert LABEL_SIGNATURE_MAP["floating_plastic_debris"] is PollutionSignature.PLASTIC_DEBRIS_SIGNATURE
+        assert LABEL_SIGNATURE_MAP["surface_discolouration_plume"] is PollutionSignature.SURFACE_ANOMALY
+
+    def test_describe_honesty_metadata(self) -> None:
+        detector = YOLODetector()
+        desc = detector.describe()
+        assert desc["evaluation_status"] == "operational_locally_unvalidated"
+        assert desc["calibrated"] is False
+
+    def test_registry_v2_fallback_to_v1_or_mock(self) -> None:
+        from app.vision.registry import get_image_detector, reset_detectors
+        reset_detectors()
+        det = get_image_detector(force="yolo-v2")
+        # Since v2/best.pt does not exist, it falls back to V1 or MockDetector gracefully
+        assert det.is_available is True
+        assert det.name in ("yolo-pollution-detector", "mock-detector")
+
+    def test_chemical_pollution_remains_surface_anomaly(self) -> None:
+        detector = YOLODetector()
+        label, sig = detector.resolve_class(3)
+        assert label == "chemical_pollution"
+        assert sig is PollutionSignature.SURFACE_ANOMALY
+
+
+class TestSAROilSlickDetectorV2:
+    def test_sar_v2_checkpoint_loading(self) -> None:
+        from app.vision.sar_detector_v2 import SAROilSlickDetectorV2
+        det = SAROilSlickDetectorV2()
+        assert det.is_available is True
+        assert det.name == "sar-oil-slick-v2"
+        assert det.version == "2.0.0-experimental"
+        desc = det.describe()
+        assert desc["evaluation_status"] == "evaluated_on_labeled_test_data"
+        assert "test_metrics" in desc
+        assert desc["test_metrics"]["recall"] >= 0.90
+
+    def test_sar_v2_predict_on_real_samples(self) -> None:
+        from app.vision.sar_detector_v2 import SAROilSlickDetectorV2
+        from pathlib import Path
+        repo_root = Path(__file__).resolve().parents[2]
+        img_dir = repo_root / "data" / "training" / "sar_oil_v2" / "images"
+        if not img_dir.exists():
+            pytest.skip("SAR training images directory not found")
+
+        det = SAROilSlickDetectorV2(confidence_threshold=0.50)
+        oil_sample = img_dir / "ow-0001.jpg"
+        if oil_sample.exists():
+            res = det.predict(oil_sample)
+            assert len(res) == 1
+            assert res[0].signature is PollutionSignature.OIL_LIKE_SIGNATURE
+            assert res[0].confidence >= 0.50
+            assert res[0].confidence_is_calibrated is False
+            assert any("Candidate oil-slick signature" in c for c in res[0].caveats)
+
+    def test_sar_v2_accepts_numpy_array(self) -> None:
+        import numpy as np
+        from app.vision.sar_detector_v2 import SAROilSlickDetectorV2
+        det = SAROilSlickDetectorV2()
+        dummy_arr = np.full((224, 224), 128, dtype=np.uint8)
+        res = det.predict(dummy_arr)
+        assert len(res) == 1
+        assert res[0].signature in (
+            PollutionSignature.NO_ANOMALY,
+            PollutionSignature.DARK_FORMATION,
+            PollutionSignature.OIL_LIKE_SIGNATURE,
+        )
+
+    def test_sar_v2_registry_and_describe_all(self) -> None:
+        from app.vision.registry import (
+            describe_all,
+            get_sar_detector,
+            get_sar_v2_detector,
+            reset_detectors,
+        )
+        reset_detectors()
+        v1 = get_sar_detector(force="v1")
+        assert v1.name == "sar-dark-formation"
+
+        v2 = get_sar_detector(force="sar-v2")
+        assert v2.name == "sar-oil-slick-v2"
+
+        v2_direct = get_sar_v2_detector()
+        assert v2_direct.name == "sar-oil-slick-v2"
+
+        models = describe_all()
+        names = [m["name"] for m in models]
+        assert "sar-dark-formation" in names
+        assert "sar-oil-slick-v2" in names
+
+    def test_sar_v2_missing_checkpoint_graceful_handling(self, tmp_path) -> None:
+        from app.vision.sar_detector_v2 import SAROilSlickDetectorV2
+        fake_path = tmp_path / "non_existent.pt"
+        det = SAROilSlickDetectorV2(model_path=fake_path)
+        assert det.is_available is False
+        assert det.predict("some_path") == []
+
+    def test_sar_v2_expanded_checkpoint_loading(self) -> None:
+        from app.core.config import settings
+        from app.vision.sar_detector_v2 import SAROilSlickDetectorV2
+        if not settings.sar_v2_expanded_model_path:
+            pytest.skip("sar_v2_expanded_model_path not found")
+
+        det = SAROilSlickDetectorV2(model_path=settings.sar_v2_expanded_model_path)
+        assert det.is_available is True
+        assert det.name == "sar-oil-slick-v2"
+        desc = det.describe()
+        assert "SAROilSlickMultiScaleCNN" in desc["architecture"]
+        assert desc["test_metrics"]["accuracy"] == 0.77
+        assert desc["test_metrics"]["recall"] == 0.88
+        assert desc["test_metrics"]["precision"] == 0.7213
+        assert desc["test_metrics"]["f1_score"] == 0.7928
+        assert desc["test_metrics"]["false_positive_rate"] == 0.34
+        assert desc["test_metrics"]["false_negative_rate"] == 0.12
+
+    def test_sar_v2_expanded_prediction(self) -> None:
+        import numpy as np
+        from app.core.config import settings
+        from app.vision.sar_detector_v2 import SAROilSlickDetectorV2
+        if not settings.sar_v2_expanded_model_path:
+            pytest.skip("sar_v2_expanded_model_path not found")
+
+        det = SAROilSlickDetectorV2(model_path=settings.sar_v2_expanded_model_path)
+        arr = np.zeros((224, 224), dtype=np.uint8)
+        res = det.predict(arr)
+        assert len(res) == 1
+        assert res[0].signature is not None
+        assert res[0].extra["architecture"] == "SAROilSlickMultiScaleCNN"
+
+    def test_sar_v2_2_checkpoint_loading(self) -> None:
+        from app.core.config import settings
+        from app.vision.sar_detector_v2 import SAROilSlickDetectorV2
+        if not settings.sar_v2_2_model_path:
+            pytest.skip("sar_v2_2_model_path not found")
+
+        det = SAROilSlickDetectorV2(
+            model_path=settings.sar_v2_2_model_path,
+            name="sar-oil-slick-v2.2",
+            version="2.2.0-experimental",
+        )
+        assert det.is_available is True
+        assert det.name == "sar-oil-slick-v2.2"
+        assert det.version == "2.2.0-experimental"
+        desc = det.describe()
+        assert "SAROilSlickMultiScaleCNN" in desc["architecture"]
+        assert desc["test_metrics"]["accuracy"] == 0.73
+        assert desc["test_metrics"]["recall"] == 0.88
+        assert desc["test_metrics"]["precision"] == 0.6769
+        assert desc["test_metrics"]["f1_score"] == 0.7652
+        assert desc["test_metrics"]["false_positive_rate"] == 0.42
+        assert desc["test_metrics"]["false_negative_rate"] == 0.12
+
+    def test_sar_v2_2_prediction(self) -> None:
+        import numpy as np
+        from app.core.config import settings
+        from app.vision.sar_detector_v2 import SAROilSlickDetectorV2
+        if not settings.sar_v2_2_model_path:
+            pytest.skip("sar_v2_2_model_path not found")
+
+        det = SAROilSlickDetectorV2(
+            model_path=settings.sar_v2_2_model_path,
+            name="sar-oil-slick-v2.2",
+            version="2.2.0-experimental",
+        )
+        arr = np.zeros((224, 224), dtype=np.uint8)
+        res = det.predict(arr)
+        assert len(res) == 1
+        assert res[0].signature is not None
+        assert res[0].model_version == "2.2.0-experimental"
+        assert res[0].extra["architecture"] == "SAROilSlickMultiScaleCNN"
+
+    def test_sar_v2_2_registry_and_describe_all(self) -> None:
+        from app.vision.registry import (
+            describe_all,
+            get_sar_detector,
+            get_sar_v2_2_detector,
+            reset_detectors,
+        )
+        reset_detectors()
+        v2_2 = get_sar_detector(force="sar-v2.2")
+        assert v2_2.name == "sar-oil-slick-v2.2"
+
+        v2_2_direct = get_sar_v2_2_detector()
+        assert v2_2_direct.name == "sar-oil-slick-v2.2"
+
+        models = describe_all()
+        names = [m["name"] for m in models]
+        assert "sar-oil-slick-v2.2" in names
+
+    def test_sar_v2_2_manifest_leakage_free(self) -> None:
+        import json
+        from pathlib import Path
+        repo_root = Path(__file__).resolve().parents[2]
+        manifest_path = repo_root / "data" / "training" / "sar_oil_v2" / "sar_splits_v2_2_clean_manifest.json"
+        if not manifest_path.exists():
+            pytest.skip("Clean manifest not found")
+
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            manifest = json.load(f)
+
+        audit = manifest["metadata"]["audit_guarantees"]
+        assert audit["patch_overlap"] == 0
+        assert audit["connected_component_overlap"] == 0
+        assert audit["safe_identifier_overlap"] == 0
+        assert audit["test_group_seen_in_previous_phases"] is False
+
+        train_p = {x["image"] for x in manifest["splits"]["train"]}
+        val_p = {x["image"] for x in manifest["splits"]["val"]}
+        test_p = {x["image"] for x in manifest["splits"]["test"]}
+        assert len(train_p & val_p) == 0
+        assert len(train_p & test_p) == 0
+        assert len(val_p & test_p) == 0
+
+        train_s = {s for x in manifest["splits"]["train"] for s in x["safes"]}
+        val_s = {s for x in manifest["splits"]["val"] for s in x["safes"]}
+        test_s = {s for x in manifest["splits"]["test"] for s in x["safes"]}
+        assert len(train_s & val_s) == 0
+        assert len(train_s & test_s) == 0
+        assert len(val_s & test_s) == 0
+
+
+
+

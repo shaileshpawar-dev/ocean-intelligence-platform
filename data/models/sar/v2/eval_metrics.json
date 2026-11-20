@@ -1,0 +1,270 @@
+{
+  "model_name": "sar-oil-slick-v2",
+  "dataset": "PANGAEA 980773 / DARTIS 2019",
+  "test_metrics": {
+    "test_samples": 30,
+    "true_positives": 14,
+    "false_positives": 8,
+    "true_negatives": 7,
+    "false_negatives": 1,
+    "accuracy": 0.7,
+    "precision": 0.6364,
+    "recall": 0.9333,
+    "f1_score": 0.7568,
+    "avg_cpu_latency_ms": 5.55,
+    "p95_cpu_latency_ms": 6.66
+  },
+  "baseline_comparison": {
+    "baseline_name": "backscatter_contrast_threshold",
+    "accuracy": 0.6,
+    "precision": 0.8,
+    "recall": 0.2667,
+    "f1_score": 0.4,
+    "true_positives": 4,
+    "false_positives": 1,
+    "true_negatives": 14,
+    "false_negatives": 11
+  },
+  "test_predictions": [
+    {
+      "image": "oc-0203.jpg",
+      "subset": "oc",
+      "ground_truth": 1,
+      "predicted": 1,
+      "confidence": 0.8446,
+      "is_correct": true
+    },
+    {
+      "image": "oc-0303.jpg",
+      "subset": "oc",
+      "ground_truth": 1,
+      "predicted": 0,
+      "confidence": 0.8292,
+      "is_correct": false
+    },
+    {
+      "image": "ow-0613.jpg",
+      "subset": "ow",
+      "ground_truth": 1,
+      "predicted": 1,
+      "confidence": 0.777,
+      "is_correct": true
+    },
+    {
+      "image": "oc-0271.jpg",
+      "subset": "oc",
+      "ground_truth": 1,
+      "predicted": 1,
+      "confidence": 0.8846,
+      "is_correct": true
+    },
+    {
+      "image": "ow-0529.jpg",
+      "subset": "ow",
+      "ground_truth": 1,
+      "predicted": 1,
+      "confidence": 0.8506,
+      "is_correct": true
+    },
+    {
+      "image": "ow-0696.jpg",
+      "subset": "ow",
+      "ground_truth": 1,
+      "predicted": 1,
+      "confidence": 0.7612,
+      "is_correct": true
+    },
+    {
+      "image": "ow-0031.jpg",
+      "subset": "ow",
+      "ground_truth": 1,
+      "predicted": 1,
+      "confidence": 0.8354,
+      "is_correct": true
+    },
+    {
+      "image": "oc-0062.jpg",
+      "subset": "oc",
+      "ground_truth": 1,
+      "predicted": 1,
+      "confidence": 0.7526,
+      "is_correct": true
+    },
+    {
+      "image": "oc-0086.jpg",
+      "subset": "oc",
+      "ground_truth": 1,
+      "predicted": 1,
+      "confidence": 0.5195,
+      "is_correct": true
+    },
+    {
+      "image": "ow-0364.jpg",
+      "subset": "ow",
+      "ground_truth": 1,
+      "predicted": 1,
+      "confidence": 0.8728,
+      "is_correct": true
+    },
+    {
+      "image": "ow-0664.jpg",
+      "subset": "ow",
+      "ground_truth": 1,
+      "predicted": 1,
+      "confidence": 0.7273,
+      "is_correct": true
+    },
+    {
+      "image": "oc-0057.jpg",
+      "subset": "oc",
+      "ground_truth": 1,
+      "predicted": 1,
+      "confidence": 0.5674,
+      "is_correct": true
+    },
+    {
+      "image": "ow-0931.jpg",
+      "subset": "ow",
+      "ground_truth": 1,
+      "predicted": 1,
+      "confidence": 0.7018,
+      "is_correct": true
+    },
+    {
+      "image": "ow-0903.jpg",
+      "subset": "ow",
+      "ground_truth": 1,
+      "predicted": 1,
+      "confidence": 0.7692,
+      "is_correct": true
+    },
+    {
+      "image": "oc-0078.jpg",
+      "subset": "oc",
+      "ground_truth": 1,
+      "predicted": 1,
+      "confidence": 0.8027,
+      "is_correct": true
+    },
+    {
+      "image": "nw-0493-02-000150.jpg",
+      "subset": "nw",
+      "ground_truth": 0,
+      "predicted": 0,
+      "confidence": 0.6564,
+      "is_correct": true
+    },
+    {
+      "image": "nw-1325-08-000076.jpg",
+      "subset": "nw",
+      "ground_truth": 0,
+      "predicted": 0,
+      "confidence": 0.934,
+      "is_correct": true
+    },
+    {
+      "image": "nw-1441-09-000017.jpg",
+      "subset": "nw",
+      "ground_truth": 0,
+      "predicted": 1,
+      "confidence": 0.6441,
+      "is_correct": false
+    },
+    {
+      "image": "nw-1532-09-000108.jpg",
+      "subset": "nw",
+      "ground_truth": 0,
+      "predicted": 0,
+      "confidence": 0.9431,
+      "is_correct": true
+    },
+    {
+      "image": "nc-0047-00-000047.jpg",
+      "subset": "nc",
+      "ground_truth": 0,
+      "predicted": 0,
+      "confidence": 0.7156,
+      "is_correct": true
+    },
+    {
+      "image": "nw-0123-00-000123.jpg",
+      "subset": "nw",
+      "ground_truth": 0,
+      "predicted": 0,
+      "confidence": 0.6649,
+      "is_correct": true
+    },
+    {
+      "image": "nw-0764-05-000018.jpg",
+      "subset": "nw",
+      "ground_truth": 0,
+      "predicted": 1,
+      "confidence": 0.7118,
+      "is_correct": false
+    },
+    {
+      "image": "nw-0663-03-000160.jpg",
+      "subset": "nw",
+      "ground_truth": 0,
+      "predicted": 1,
+      "confidence": 0.8563,
+      "is_correct": false
+    },
+    {
+      "image": "nw-0685-04-000020.jpg",
+      "subset": "nw",
+      "ground_truth": 0,
+      "predicted": 1,
+      "confidence": 0.6338,
+      "is_correct": false
+    },
+    {
+      "image": "nw-0161-00-000161.jpg",
+      "subset": "nw",
+      "ground_truth": 0,
+      "predicted": 0,
+      "confidence": 0.9981,
+      "is_correct": true
+    },
+    {
+      "image": "nw-0438-02-000095.jpg",
+      "subset": "nw",
+      "ground_truth": 0,
+      "predicted": 1,
+      "confidence": 0.6903,
+      "is_correct": false
+    },
+    {
+      "image": "nw-0882-05-000136.jpg",
+      "subset": "nw",
+      "ground_truth": 0,
+      "predicted": 0,
+      "confidence": 0.5384,
+      "is_correct": true
+    },
+    {
+      "image": "nc-0347-04-000068.jpg",
+      "subset": "nc",
+      "ground_truth": 0,
+      "predicted": 1,
+      "confidence": 0.5442,
+      "is_correct": false
+    },
+    {
+      "image": "nw-0444-02-000101.jpg",
+      "subset": "nw",
+      "ground_truth": 0,
+      "predicted": 1,
+      "confidence": 0.6377,
+      "is_correct": false
+    },
+    {
+      "image": "nw-1590-09-000166.jpg",
+      "subset": "nw",
+      "ground_truth": 0,
+      "predicted": 1,
+      "confidence": 0.6569,
+      "is_correct": false
+    }
+  ]
+}
