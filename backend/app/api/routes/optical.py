@@ -7,6 +7,7 @@ slow by a satellite API, and the demo runs from the database.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -17,6 +18,14 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models import Region
 from app.models.optical import OpticalIndexObservation
+from app.vision.cmems_client import (
+    ATTRIBUTION as CMEMS_ATTRIBUTION,
+)
+from app.vision.cmems_client import (
+    CHLOROPHYLL_EVIDENCE,
+    CHLOROPHYLL_PRODUCT,
+    CACHE_DIR as CMEMS_CACHE_DIR,
+)
 from app.vision.marine_conditions import ATTRIBUTION as MARINE_ATTRIBUTION
 from app.vision.marine_conditions import EVIDENCE_LEVEL as MARINE_EVIDENCE_LEVEL
 from app.vision.marine_conditions import LOW_WIND_MS
@@ -70,6 +79,39 @@ INDEX_NOTES = {
 }
 
 
+def _chlorophyll_for(region_code: str) -> dict | None:
+    """The cached CMEMS chlorophyll reading for a region, if one exists.
+
+    Read straight from the fetch job's cache rather than the database: it is
+    a cross-check shown beside NDCI, not a measurement this platform claims
+    to have made, and giving it a table would overstate its standing here.
+    """
+    matches = sorted(CMEMS_CACHE_DIR.glob(f"chl_{region_code}_*.json"), reverse=True)
+    for path in matches:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        return {
+            "chl_mg_m3": round(float(payload["chl_mg_m3"]), 4),
+            "valid_on": payload["valid_on"],
+            "valid_pixels": payload.get("valid_pixels"),
+            "evidence_level": CHLOROPHYLL_EVIDENCE,
+            "product": CHLOROPHYLL_PRODUCT,
+            "attribution": CMEMS_ATTRIBUTION,
+            "note": (
+                "An independent chlorophyll-a retrieval from Copernicus "
+                "Marine, shown beside this platform's own NDCI. The two "
+                "estimate the same quantity by different routes: NDCI is a "
+                "two-band ratio computed here from raw reflectance, this is "
+                "a validated multi-sensor product. Neither is adjusted to "
+                "agree with the other -- where they disagree, that is the "
+                "useful part."
+            ),
+        }
+    return None
+
+
 def _has_thumbnail(region_code: str, observed_on: str) -> bool:
     """Whether a cached scene image exists for this reading.
 
@@ -86,6 +128,7 @@ def _row_to_dict(row: OpticalIndexObservation, region: Region) -> dict:
     observed_on = row.observed_on.isoformat()
     return {
         "has_thumbnail": _has_thumbnail(region.code, observed_on),
+        "chlorophyll_cross_check": _chlorophyll_for(region.code),
         "region_code": region.code,
         "region_name": region.name,
         "observed_on": observed_on,

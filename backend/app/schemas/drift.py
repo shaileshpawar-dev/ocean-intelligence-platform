@@ -39,8 +39,11 @@ class DriftSimulationRequestIn(BaseModel):
     spill_volume_m3: float = Field(default=50.0, ge=1.0, le=50000.0)
     wind_speed_ms: float | None = Field(None, ge=0.0, le=50.0)
     wind_direction_deg: float | None = Field(None, ge=0.0, le=360.0)
-    current_speed_ms: float = Field(default=0.20, ge=0.0, le=5.0)
-    current_direction_deg: float = Field(default=90.0, ge=0.0, le=360.0)
+    # Optional on purpose. Unset means "use the modelled current for this
+    # location" rather than "use 0.20 m/s due east", which was a placeholder
+    # dressed as a default.
+    current_speed_ms: float | None = Field(default=None, ge=0.0, le=5.0)
+    current_direction_deg: float | None = Field(default=None, ge=0.0, le=360.0)
 
 
 class DriftSimulationOut(BaseModel):
@@ -58,6 +61,9 @@ class DriftSimulationOut(BaseModel):
     wind_direction_deg: float
     current_speed_ms: float
     current_direction_deg: float
+    #: Which current field the track was computed from. See
+    #: DriftSimulation.current_source.
+    current_source: str | None = None
     final_evaporated_pct: float
     final_floating_pct: float
     final_beached_pct: float

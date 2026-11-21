@@ -41,6 +41,12 @@ class DriftSimulation(Base):
     wind_direction_deg: Mapped[float] = mapped_column(Float)
     current_speed_ms: Mapped[float] = mapped_column(Float, default=0.20)
     current_direction_deg: Mapped[float] = mapped_column(Float, default=90.0)
+    #: Where the current above came from. A drift track is only as good as
+    #: its current field, and the engine's default of 0.22 m/s due east is a
+    #: placeholder -- a run using it produces a drawing, not a forecast. The
+    #: distinction is stored rather than left to the response, so an old
+    #: simulation can still be told apart from a real one.
+    current_source: Mapped[str | None] = mapped_column(String(160), nullable=True)
     evaporated_pct: Mapped[float] = mapped_column(Float, default=0.0)
     floating_pct: Mapped[float] = mapped_column(Float, default=100.0)
     beached_pct: Mapped[float] = mapped_column(Float, default=0.0)

@@ -968,6 +968,9 @@ export interface OpticalIndexReading {
   total_pixels: number;
   water_fraction: number;
   has_thumbnail: boolean;
+  /** Independent CMEMS chlorophyll for the same region, or null if not
+   *  fetched. Shown beside NDCI; neither is adjusted to match the other. */
+  chlorophyll_cross_check: ChlorophyllCrossCheck | null;
   max_cloud_pct: number;
   evidence_level: string;
   source: string;
@@ -1048,4 +1051,15 @@ export interface MarineConditionsResponse {
     contains_simulated_data?: boolean;
     note?: string;
   };
+}
+
+/** An independent chlorophyll-a retrieval from Copernicus Marine. */
+export interface ChlorophyllCrossCheck {
+  chl_mg_m3: number;
+  valid_on: string;
+  valid_pixels: number | null;
+  evidence_level: string;
+  product: string;
+  attribution: string;
+  note: string;
 }

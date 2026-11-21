@@ -51,6 +51,7 @@ export default function OpticalObservations() {
   if (!data) return null;
   const { items, totals, provenance, indices: notes } = data;
   const lowWater = items.filter((item) => !item.characterises_region);
+  const crossChecked = items.filter((item) => item.chlorophyll_cross_check).length;
 
   return (
     <>
@@ -103,6 +104,7 @@ export default function OpticalObservations() {
                 <th>Scene</th>
                 <th>Acquired</th>
                 <th>NDCI</th>
+                <th>Chl-a (CMEMS)</th>
                 <th>NDTI</th>
                 <th>FDI</th>
                 <th>Water in frame</th>
@@ -141,6 +143,22 @@ export default function OpticalObservations() {
                   <td className="mono">
                     {item.characterises_region ? signed(item.ndci_mean, 3) : "—"}
                   </td>
+                  {/* The cross-check, not a second opinion we reconcile.
+                      NDCI is computed here from raw reflectance; this is a
+                      validated multi-sensor product. Shown side by side so a
+                      disagreement is visible rather than averaged away. */}
+                  <td className="mono">
+                    {item.chlorophyll_cross_check ? (
+                      <span
+                        title={`${item.chlorophyll_cross_check.product}, valid ${item.chlorophyll_cross_check.valid_on}`}
+                      >
+                        {item.chlorophyll_cross_check.chl_mg_m3.toFixed(2)}
+                        <span className="text-muted"> mg/m³</span>
+                      </span>
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
+                  </td>
                   <td className="mono">
                     {item.characterises_region ? signed(item.ndti_mean, 3) : "—"}
                   </td>
@@ -173,6 +191,21 @@ export default function OpticalObservations() {
           </ProvenanceNote>
         )}
       </SectionCard>
+
+      {crossChecked > 0 && (
+        <ProvenanceNote>
+          <strong>
+            Chlorophyll is shown twice, on purpose, for {crossChecked} of{" "}
+            {items.length} regions.
+          </strong>{" "}
+          NDCI is a two-band ratio this platform computes from raw Sentinel-2
+          reflectance. The Chl-a column is Copernicus Marine's validated,
+          atmospherically-corrected multi-sensor retrieval of the same
+          quantity. Neither is adjusted to agree with the other: where they
+          track together the NDCI reading is worth more, and where they
+          diverge that is the useful part.
+        </ProvenanceNote>
+      )}
 
       <SectionCard
         title="What these indices measure"

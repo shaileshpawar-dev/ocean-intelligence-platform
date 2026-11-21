@@ -1496,3 +1496,48 @@ draws about whether a detection means anything.
 
 **Tests:** 12 new, 732 passed total. Overview verified in-browser, no console
 errors.
+
+## FT-6 — Copernicus Marine
+
+**Done, 21 Nov.** Two products, two jobs.
+
+**Surface currents now drive the drift simulator.** The engine had always
+defaulted to **0.22 m/s due east** — a placeholder that produced a track
+indistinguishable from a real forecast. A run over the Gulf of Mannar now
+uses the modelled field:
+
+```
+current : 0.141 m/s toward 248 deg
+source  : Global Ocean Physics Analysis and Forecast (1/12 deg, daily mean),
+          valid 2026-11-21, from Gulf of Mannar, 47 km away
+```
+
+The source is a **stored column**, not just a response field (migration
+`e5f6a7b8c9d0`), because the two kinds of run look identical afterwards and
+old rows must stay distinguishable. Resolution is cache → live → placeholder,
+and the placeholder says it is one.
+
+**Chlorophyll-a sits beside NDCI as a cross-check**, not a correction. NDCI
+is a two-band ratio computed here from raw reflectance; the CMEMS product is
+a validated, atmospherically-corrected multi-sensor retrieval of the same
+quantity. Neither is adjusted toward the other — where they track together
+the NDCI reading is worth more, and where they diverge that is the useful
+part.
+
+**Evidence levels differ on purpose:** currents are `INFERRED` (an ocean
+model's analysis, which no instrument saw), chlorophyll is `OBSERVED`
+(processed, but derived from radiance a sensor recorded).
+
+**Gotcha 1 — the direction convention.** Oceanographers give the bearing
+water flows *toward*; meteorologists give the bearing wind comes *from*.
+They differ by 180°, which in a drift run is the difference between oil
+reaching the shore and oil heading out to sea. Pinned by test, not comment.
+
+**Gotcha 2 — the serving image has no Copernicus toolbox**, so the first
+wiring fell back to the placeholder on every request (correctly labelled,
+which is how it was spotted). Drift currents now resolve from the nearest
+cached *regional* current — the regions tile the EEZ, so any origin in it
+lands on real data with no network call, and the source names the region and
+its distance so a neighbour's current reads as the weaker claim it is.
+
+**Tests:** 16 new, 748 passed total.
