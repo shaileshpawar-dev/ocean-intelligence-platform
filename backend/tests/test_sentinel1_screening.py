@@ -103,20 +103,40 @@ class TestTheNodataMask:
 
         assert stretch(tile) is None
 
-    def test_a_full_tile_is_stretched_into_the_eight_bit_range(self):
-        from scripts_screen_sentinel1 import stretch
+    def test_a_full_tile_maps_into_the_eight_bit_range(self):
+        """Through the fixed window, not stretched to fill it: a tile that
+        does not span the whole window must not come out as though it did."""
+        from scripts_screen_sentinel1 import (
+            DB_WINDOW_HIGH,
+            DB_WINDOW_LOW,
+            stretch,
+        )
 
-        tile = np.linspace(-25.0, -5.0, 224 * 224).reshape(224, 224).astype(np.float32)
+        tile = np.linspace(-25.0, -10.0, 224 * 224).reshape(224, 224).astype(np.float32)
         out = stretch(tile)
 
         assert out is not None
         assert out.dtype == np.uint8
-        assert out.min() == 0 and out.max() == 255
+        assert 0 <= out.min() and out.max() <= 255
+        assert out.max() < 255, "this tile is well inside the window"
 
-    def test_a_flat_tile_is_rejected_rather_than_divided_by_zero(self):
+        spanning = np.linspace(
+            DB_WINDOW_LOW - 5, DB_WINDOW_HIGH + 5, 224 * 224
+        ).reshape(224, 224).astype(np.float32)
+        wide = stretch(spanning)
+        assert wide is not None
+        assert wide.min() == 0 and wide.max() == 255, "clipped at the window edges"
+
+    def test_a_flat_tile_is_valid_under_a_fixed_window(self):
+        """It had to be rejected under a percentile stretch, where a zero
+        range meant dividing by zero. A fixed window has no such problem:
+        uniform water is uniform grey, which is a true picture of it."""
         from scripts_screen_sentinel1 import stretch
 
-        assert stretch(np.full((224, 224), -12.0, dtype=np.float32)) is None
+        out = stretch(np.full((224, 224), -12.0, dtype=np.float32))
+
+        assert out is not None
+        assert out.std() == 0.0
 
 
 @pytest.fixture(autouse=True, scope="module")
@@ -138,3 +158,73 @@ def _import_script():
     spec.loader.exec_module(module)
     yield
     sys.modules.pop("scripts_screen_sentinel1", None)
+
+
+class TestThePreprocessingMatchesTraining:
+    """Why the model saturated, and what fixed it.
+
+    Two faults, both in how live tiles were prepared rather than in the
+    model. A per-tile percentile stretch rescaled every tile to fill the
+    8-bit range, tripling the contrast of calm water relative to the
+    training patches. And a 60% validity floor let through tiles that were a
+    third black, because Sentinel Hub renders outside-footprint pixels as
+    zero and zero decibels is negative infinity.
+
+    The model itself was never wrong: replayed over the 306 benchmark
+    patches it reproduces the stored scores to within one percent.
+    """
+
+    def test_the_window_is_fixed_not_per_tile(self):
+        """A per-tile stretch makes a tile's statistics depend on what else
+        happened to be in it, which is how calm water came to look like
+        high-contrast imagery."""
+        from scripts_screen_sentinel1 import DB_WINDOW_HIGH, DB_WINDOW_LOW, stretch
+
+        quiet = np.random.default_rng(0).normal(-16.0, 1.9, (224, 224)).astype(np.float32)
+        varied = np.random.default_rng(1).normal(-16.0, 6.0, (224, 224)).astype(np.float32)
+
+        quiet_out, varied_out = stretch(quiet), stretch(varied)
+
+        assert quiet_out is not None and varied_out is not None
+        assert quiet_out.std() < varied_out.std(), (
+            "a calm tile must stay calm; a stretch would equalise them"
+        )
+        assert DB_WINDOW_LOW < DB_WINDOW_HIGH < 0
+
+    def test_a_calm_tile_lands_near_the_training_profile(self):
+        """Measured open ocean has a sigma-nought spread under 2 dB. Through
+        this window that should produce the training patches' contrast."""
+        from scripts_screen_sentinel1 import TRAINING_PROFILE, stretch
+
+        water = np.random.default_rng(2).normal(-15.7, 1.9, (224, 224)).astype(np.float32)
+        out = stretch(water)
+
+        assert out is not None
+        assert abs(float(out.std()) - TRAINING_PROFILE["std"]) < 8.0, (
+            f"contrast {out.std():.1f} vs training {TRAINING_PROFILE['std']}"
+        )
+
+    def test_a_partly_covered_tile_is_rejected(self):
+        """The 60% floor let a third of a tile be solid black. Nothing in
+        the training set looks like that, and it is not a dimmer version of
+        a good tile -- it is a different kind of image."""
+        from scripts_screen_sentinel1 import MIN_VALID_FRACTION, stretch
+
+        tile = np.full((224, 224), -np.inf, dtype=np.float32)
+        keep = int(224 * 224 * 0.67)
+        tile.flat[:keep] = np.random.default_rng(3).normal(-16.0, 1.9, keep)
+
+        assert MIN_VALID_FRACTION > 0.9
+        assert stretch(tile) is None
+
+    def test_a_stray_invalid_pixel_does_not_darken_the_tile(self):
+        """A few bad pixels should not pull the statistics toward black."""
+        from scripts_screen_sentinel1 import stretch
+
+        tile = np.random.default_rng(4).normal(-15.7, 1.9, (224, 224)).astype(np.float32)
+        clean = stretch(tile.copy())
+        tile.flat[:50] = -np.inf
+        speckled = stretch(tile)
+
+        assert clean is not None and speckled is not None
+        assert abs(float(clean.mean()) - float(speckled.mean())) < 3.0

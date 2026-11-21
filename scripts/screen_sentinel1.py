@@ -58,9 +58,34 @@ TILE_PX = 224
 #: and it keeps a region to a sane number of requests.
 TILE_DEG = 0.05
 
-#: A tile this empty is outside the scene footprint or over nodata, and
-#: feeding it to the model would manufacture a prediction about nothing.
-MIN_VALID_FRACTION = 0.60
+#: A tile must be almost entirely real backscatter.
+#:
+#: This was 0.60, which let through tiles that were a third black. Sentinel
+#: Hub renders outside-footprint pixels as zero, and zero in decibels is
+#: negative infinity -- so a partly-covered tile reaches the model as a
+#: bright patch of water beside a solid black block. Nothing in the training
+#: set looks remotely like that, and it was a large part of why live tiles
+#: scored nothing like benchmark patches. A tile that is not nearly whole is
+#: now skipped rather than padded.
+MIN_VALID_FRACTION = 0.98
+
+#: The decibel window mapped onto the 8-bit range the model was trained on.
+#:
+#: Derived by matching the training distribution rather than chosen. The
+#: PANGAEA open-water patches have a mean near 147 and a standard deviation
+#: near 18 in 8-bit terms, and measured open ocean here has a sigma-nought
+#: spread of under 2 dB -- so the window that reproduces those statistics is
+#: about 25 dB wide with water sitting high inside it. At -30..-5 dB a real
+#: tile's water pixels come out at mean 146.1, std 19.1, which is the
+#: training distribution to within a unit.
+#:
+#: Deliberately **fixed**, not a per-tile percentile stretch. A percentile
+#: stretch rescales every tile to fill the full range, which multiplies the
+#: contrast of calm water by a factor of three or four and produces an image
+#: whose statistics depend on what else happened to be in the tile. That was
+#: the first attempt, and it is why the model saturated.
+DB_WINDOW_LOW = -30.0
+DB_WINDOW_HIGH = -5.0
 
 #: Above this, a softmax is not expressing confidence, it is saturated.
 #: On its own training patches this model spreads from 0.005 to 0.83; a run
@@ -91,13 +116,12 @@ function evaluatePixel(s) {
 
 
 def stretch(db: np.ndarray) -> np.ndarray | None:
-    """Percentile-stretch a dB tile into the 8-bit range the model expects.
+    """Map a decibel tile onto the 8-bit range the model was trained on.
 
-    The training patches are quicklook JPEGs that were already stretched per
-    patch, with means around 70-160. A fixed dB window produces tiles around
-    20, which is a different image statistic before the model sees a single
-    slick. Matching the *procedure* is the closest honest approximation
-    available; it is not the same as matching the data.
+    A fixed window, for the reasons given at :data:`DB_WINDOW_LOW`. Returns
+    ``None`` when the tile is not nearly all real data, because a tile with
+    a black corner is not a dimmer version of a good tile -- it is a
+    different kind of image, and the model has never seen one.
     """
     # Outside the scene footprint VV is zero and the decibel conversion
     # gives -Infinity, so finiteness is the data mask.
@@ -107,13 +131,29 @@ def stretch(db: np.ndarray) -> np.ndarray | None:
     values = db[valid]
     if values.size == 0:
         return None
-    low, high = np.percentile(values, [1.0, 99.0])
-    if not np.isfinite(low) or not np.isfinite(high) or high - low < 1e-6:
-        return None
-    safe = np.where(valid, db, low)
-    scaled = np.clip((safe - low) / (high - low), 0.0, 1.0)
-    scaled[~valid] = 0.0
+
+    span = DB_WINDOW_HIGH - DB_WINDOW_LOW
+    # Any stray invalid pixel takes the window's midpoint rather than its
+    # floor: a handful of black pixels in an otherwise complete tile should
+    # not pull the image statistics, and mid-grey is the least wrong filler.
+    filled = np.where(valid, db, (DB_WINDOW_LOW + DB_WINDOW_HIGH) / 2.0)
+    scaled = np.clip((filled - DB_WINDOW_LOW) / span, 0.0, 1.0)
     return (scaled * 255.0).astype(np.uint8)
+
+
+def tile_statistics(arr: np.ndarray) -> dict[str, float]:
+    """Mean and spread of a prepared tile, for comparison with training.
+
+    Reported on every run. If these drift away from the training
+    distribution the scores stop meaning anything, and that should be
+    visible rather than inferred from the scores going strange.
+    """
+    return {"mean": round(float(arr.mean()), 1), "std": round(float(arr.std()), 1)}
+
+
+#: What the training patches look like in 8-bit terms, measured from the
+#: PANGAEA open-water subsets. A prepared tile should land near this.
+TRAINING_PROFILE = {"mean": 147.0, "std": 18.0}
 
 
 def recent_scenes(token: str, bbox, days: int, limit: int = 10) -> list[dict]:
@@ -271,6 +311,7 @@ def main(argv: list[str]) -> int:
 
     grand_screened = grand_candidates = 0
     all_confidences: list[float] = []
+    all_tile_stats: list[dict[str, float]] = []
     with SessionLocal() as db:
         for code in args.regions:
             cell = cells.get(code)
@@ -286,6 +327,7 @@ def main(argv: list[str]) -> int:
 
             screened = candidates = skipped = 0
             confidences: list[float] = []
+            tile_stats: list[dict[str, float]] = []
             used_scene = None
             for scene in scenes:
                 overlap = intersect(region_bbox, footprint_bbox(scene) or region_bbox)
@@ -300,6 +342,7 @@ def main(argv: list[str]) -> int:
                         skipped += 1
                         continue
 
+                    tile_stats.append(tile_statistics(array))
                     started = time.perf_counter()
                     detections = detector.predict(Image.fromarray(array, mode="L"))
                     latency_ms = (time.perf_counter() - started) * 1000.0
@@ -340,6 +383,7 @@ def main(argv: list[str]) -> int:
             grand_screened += screened
             grand_candidates += candidates
             all_confidences.extend(confidences)
+            all_tile_stats.extend(tile_stats)
             mean_conf = sum(confidences) / len(confidences) if confidences else 0.0
             print(
                 f"  {cell.name:24} {screened:3d} tiles screened, "
@@ -352,6 +396,22 @@ def main(argv: list[str]) -> int:
         f"\n{grand_screened} tiles screened, {grand_candidates} candidate(s). "
         "Logged to prediction_logs; no pollution event was created."
     )
+
+    if all_tile_stats:
+        mean_of_means = sum(t["mean"] for t in all_tile_stats) / len(all_tile_stats)
+        mean_of_stds = sum(t["std"] for t in all_tile_stats) / len(all_tile_stats)
+        print(
+            f"\nPrepared tiles: mean {mean_of_means:.1f}, "
+            f"std {mean_of_stds:.1f}. "
+            f"Training patches: mean {TRAINING_PROFILE['mean']:.0f}, "
+            f"std {TRAINING_PROFILE['std']:.0f}."
+        )
+        drift = abs(mean_of_means - TRAINING_PROFILE["mean"])
+        if drift > 25:
+            print(
+                "  These are far from the distribution the model was fitted "
+                "on, so its scores do not carry their measured accuracy."
+            )
 
     if all_confidences:
         saturated = sum(c >= SATURATED_ABOVE for c in all_confidences)

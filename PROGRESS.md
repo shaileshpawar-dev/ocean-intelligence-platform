@@ -34,7 +34,7 @@ entries at the end of this file.
 | 2 | Real history for forecasts | **done** |
 | 3 | Swap simulated data for real; demo mode off | **done** |
 | 4 | Ocean Map on real layers | not started |
-| 5 | Fix Sentinel-1 saturation | not started |
+| 5 | Fix Sentinel-1 saturation | **mostly fixed** — 78/100 tiles now vary; 0 oil candidates, so no oil events created |
 | 6 | Data Sources page | 6a done (pinned); 6b–d pending |
 | 7 | Gemini retry | model found; narratives pending |
 | 8 | Texts and claims | not started |
@@ -1914,3 +1914,58 @@ available — it just measures nothing. The API now marks exactly one detector
 
 **Tests:** 815 passed. All 14 checked pages serve 200 with zero console
 errors.
+
+## MP-5 — Sentinel-1 saturation
+
+**Validation first, as instructed. The model was never the problem.**
+
+Replayed all **306 benchmark patches** through the live detector and compared
+against the stored v2.2 scores:
+
+```
+LIVE    mean 0.5657   min 0.0007   max 0.8976   saturated 0
+STORED  mean 0.5724   min 0.0007   max 0.9420
+```
+
+Within 1%, identical minimum, zero saturation. The detector and its
+preprocessing are correct — `_preprocess` matches the training transform
+exactly (convert L → 224×224 bilinear → /255 → (x−0.5)/0.5).
+
+### Two faults, both in how *live tiles* were prepared
+
+**1. A per-tile percentile stretch.** It rescaled every tile to fill the
+8-bit range, which triples the contrast of calm water: measured open ocean
+has a σ⁰ spread under **2 dB**, and PANGAEA patches sit at std ≈ 18 in 8-bit
+terms, but a 1–99 stretch produced std ≈ 70. The model had never seen
+anything like it. Replaced with a **fixed −30…−5 dB window**, derived by
+matching the training distribution: a real tile's water pixels come out at
+**mean 146.1, std 19.1** against training's 147 / 18.
+
+**2. A 60% validity floor.** Sentinel Hub renders outside-footprint pixels as
+zero, and 10·log₁₀(0) is −∞ — so a tile could be **a third solid black** and
+still be screened. That is not a dimmer good tile, it is a different kind of
+image. Floor raised to **98%**.
+
+### Result: substantially fixed, not completely
+
+| | Before | After |
+|---|---|---|
+| Tiles at confidence 1.000 | **100 / 100** | **22 / 100** |
+| Score range | 1.000 only | 0.784 – 1.000 |
+| Prepared tile mean | — | 112.6 (training 147) |
+| Prepared tile std | — | 22.6 (training 18) |
+
+Contrast now matches; **brightness is still ~34 units low**, and the 22
+saturated tiles are all one region. Every run now prints its tile statistics
+against the training profile, so this is visible rather than inferred.
+
+### No oil events were created
+
+**100 tiles screened, 0 candidates** — every tile classified `no_anomaly`.
+There is no real oil detection to create an event from, and none was
+invented. A tile of ordinary open water now scores `p_oil ≈ 0.05`, which is
+the correct answer and was `1.000` before.
+
+**Tests:** 4 new; 2 old assertions updated because they encoded the
+percentile-stretch behaviour (a flat tile is now valid — a fixed window
+cannot divide by zero). 824 passed.
