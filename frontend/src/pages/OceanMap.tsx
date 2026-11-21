@@ -113,7 +113,7 @@ export default function OceanMap() {
       <MarineScopeNote />
 
       {data?.provenance.contains_simulated_data && <SimulatedBanner />}
-      <SimulatedBanner detail="Full-scene SAR overlays and footprint probabilities are SYNTHETIC demonstration outputs. Candidate points are historical research detections; no live satellite acquisition is shown." />
+      <SimulatedBanner detail="The full-scene SAR overlay and its footprint probabilities remain SYNTHETIC demonstration outputs — that layer alone. Detection markers come from measured Sentinel-2 acquisitions, and candidate points are the PANGAEA research benchmark." />
 
       <div className="map-shell">
         <div className="map-frame">

@@ -653,7 +653,7 @@ function CandidateDetailDrawer({
               </button>
             </h3>
 
-            <SimulatedBanner detail="DEMONSTRATION DATA: vessels and tracks are seeded synthetic positions, not live AIS. Association scores are proximity heuristics and do not identify a responsible vessel." />
+            <SimulatedBanner detail="FICTIONAL VESSELS, deliberately. These candidates are research benchmark patches — nobody spilled anything — so naming a real ship as a source would be an accusation about an event that did not happen. Real vessel activity, aggregated and without identities, is on Ocean Overview from Global Fishing Watch." />
 
             {vesselsLoading && <p className="text-xs text-muted">Correlating proximate AIS vessel tracks...</p>}
 
@@ -723,7 +723,7 @@ function CandidateDetailDrawer({
               )}
             </h3>
 
-            <SimulatedBanner detail="SIMULATION: constant default wind and current forcing, a synthetic spill origin, and a particle model. Output is a workflow demonstration, not an operational drift forecast." />
+            <SimulatedBanner detail="PARTICLE MODEL over real forcing: surface currents come from the Copernicus Marine global physics analysis for this location and date, and wind from Open-Meteo. The spill origin and volume are chosen, not observed, so the track shows how this water moves rather than where a real release went." />
 
             {driftLoading && <p className="text-xs text-muted">Simulating Lagrangian particle advection & weathering...</p>}
 

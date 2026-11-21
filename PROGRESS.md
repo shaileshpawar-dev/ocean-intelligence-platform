@@ -32,7 +32,7 @@ entries at the end of this file.
 |---|---|---|
 | 1 | Real events from real detections | **done** |
 | 2 | Real history for forecasts | **done** |
-| 3 | Swap simulated data for real; demo mode off | not started |
+| 3 | Swap simulated data for real; demo mode off | **done** |
 | 4 | Ocean Map on real layers | not started |
 | 5 | Fix Sentinel-1 saturation | not started |
 | 6 | Data Sources page | 6a done (pinned); 6b–d pending |
@@ -41,10 +41,8 @@ entries at the end of this file.
 | 9 | Freeze | not started |
 | 10 | Final status report | not started |
 
-**Known mislabel, cleared by Step 3:** Pollution Events and the marine pages
-still show "events are SIMULATED" banners while now also carrying 34 real
-optical detections. Honest for the 666 seeded rows, wrong for the 34 real
-ones. Demo mode comes off in Step 3.
+**Cleared.** Demo mode is off, the seeded rows are deleted, and every banner
+has been re-read against what the page now holds.
 
 ---
 
@@ -1865,3 +1863,54 @@ one, every one passing the number check. The label now names the model —
 generation is an explicit POST, and a second call returns `cached`.
 
 **Tests:** 815 passed.
+
+## MP-3 — Real data replaces simulated, demo mode off
+
+**Done, 21 Nov.** Backup `backups/oip-before-step3.dump` (113 MB) first.
+
+**Deleted:** 666 seeded pollution events, their 666 risk assessments,
+2,400 synthetic satellite observations, and the 9 reports/agent runs that
+described them. **Kept:** 123 real optical-index events, 306 PANGAEA
+benchmark candidates, 337 prediction logs, 3,006 Sentinel-2 readings.
+
+**Regenerated from real events:** 6 agent runs and 6 reports, each over a
+measured Sentinel-2 detection, all with cached Gemini narratives.
+
+**`DEMO_MODE=false`.** The API reports `contains_simulated_data: false`
+with no notes, which it derives from the rows themselves rather than the
+flag — so the banners, which are conditional on it, went away on their own.
+
+### Two metrics that quietly broke, and were fixed
+
+**"Satellite Observations: 0"** on a platform holding 3,006 of them. The
+count read `satellite_observations`, now empty, while the real readings live
+in `optical_index_observations` — they are separate tables precisely so a
+measured index and a simulated backscatter statistic never differ by only a
+column. Now sums both and shows the breakdown.
+
+**"Slick-scale extent"** reads 0.0 km², and that is the correct answer: the
+only oil-like signatures were the simulated ones. The card now says *"No
+oil-like signature currently detected. Zero is the measurement, not a gap."*
+
+### Banner audit
+
+| Still says simulated | Why |
+|---|---|
+| `OceanMap` full-scene SAR overlay layer | **Genuinely synthetic.** That one layer is a demonstration output; labelled on the layer and in the legend. |
+| `CandidateReview` optical products | **Genuinely synthetic** reflectance arrays. Scene metadata is real Copernicus STAC. |
+| `CandidateReview` vessel suspects | **Deliberately fictional.** Naming a real ship against a benchmark patch would be an accusation. |
+| `Reports`, `SystemHealth`, `Overview` banners | **Conditional** on `contains_simulated_data` / `demo_mode`, both now false. Inert, not removed — they must still fire if simulated data ever returns. |
+| `Overview` "Nothing here is simulated" | Accurate prose about the real Sentinel-1 benchmark. |
+
+**Rewritten:** `MarineScopeNote` (events are no longer simulated; it now
+bounds the *statistical* claim instead), the Candidate Review drift banner
+(drift runs on **real CMEMS currents** now, not constant forcing), and the
+Ocean Map banner (scoped to the overlay layer alone).
+
+**Also:** "Active detector" showed `mock-detector`, because the page picked
+the first *available* detector and a simulated detector is perfectly
+available — it just measures nothing. The API now marks exactly one detector
+`is_active` (`sar-oil-slick-v2.2`) and flags the stub `is_simulated`.
+
+**Tests:** 815 passed. All 14 checked pages serve 200 with zero console
+errors.

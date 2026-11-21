@@ -569,12 +569,15 @@ export function ProvenanceNote({ children }: { children: ReactNode }) {
 
 /** What the marine module is, and is not.
  *
- *  The regions are now India's EEZ, matching the rest of the platform, but
- *  the events in them are still synthetic. That distinction is the whole
- *  point of this note: a realistic region name is exactly what would let a
- *  simulated detection pass for a real one, so it is said once per page
- *  rather than left to be inferred. The one page holding measured data --
- *  Candidate Review -- is pointed at rather than lost among the rest.
+ *  It used to say the events here were simulated, which was true and is no
+ *  longer. The 666 seeded detections were deleted on 21 Nov 2026 and
+ *  replaced by detections derived from measured Sentinel-2 indices.
+ *
+ *  The note stays because the claim still needs bounding, just differently:
+ *  these are *statistical anomalies* against each region's own twelve-month
+ *  baseline, not confirmed incidents and not measurements against a limit.
+ *  A realistic region name and a real satellite date make that distinction
+ *  easier to lose, not harder.
  */
 export function MarineScopeNote({ full = false }: { full?: boolean }) {
   return (
@@ -583,22 +586,23 @@ export function MarineScopeNote({ full = false }: { full?: boolean }) {
       <span>
         {full ? (
           <>
-            <strong>Indian EEZ, simulated events.</strong> The marine module
-            monitors 15 regions across India's exclusive economic zone — the
-            Arabian Sea and Gujarat approaches, the Konkan, Malabar and
-            Coromandel coasts, the Gulfs of Kutch, Khambhat and Mannar, the
-            Bay of Bengal, the Krishna–Godavari offshore basin, and the
-            Andaman &amp; Nicobar and Lakshadweep seas. The regions are real;
-            every pollution event in them is <strong>SIMULATED</strong>. The
-            real measured data in this module is the 306 Sentinel-1 benchmark
-            candidates in{" "}
+            <strong>Real detections, statistical thresholds.</strong> The
+            marine module monitors 15 regions across India&rsquo;s exclusive
+            economic zone. Every detection here is derived from a{" "}
+            <strong>measured Sentinel-2 acquisition</strong> on the date
+            shown. A detection means the reading sits in the{" "}
+            <strong>top 1% of that region&rsquo;s own last 12 months</strong>{" "}
+            &mdash; it is not a confirmed pollution incident and not a
+            measurement against a regulatory limit. See also the 306
+            Sentinel-1 benchmark candidates in{" "}
             <Link to="/app/candidate-review">Candidate Review</Link>.
           </>
         ) : (
           <>
-            Indian EEZ regions; events are <strong>SIMULATED</strong>. The
-            real data is the 306 Sentinel-1 candidates in{" "}
-            <Link to="/app/candidate-review">Candidate Review</Link>.
+            Indian EEZ. Detections are{" "}
+            <strong>statistical anomalies</strong> against each
+            region&rsquo;s own 12-month baseline from measured Sentinel-2
+            data &mdash; not confirmed incidents.
           </>
         )}
       </span>

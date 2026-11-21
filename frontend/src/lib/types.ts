@@ -72,6 +72,16 @@ export interface Overview {
   slick_scale_area_km2: number;
   dark_water_extent_km2: number;
   observations: number;
+  /** Where those observations came from. The SAR count is zero now that the
+   *  seeded rows are gone; the measured Sentinel-2 readings are their own
+   *  table, and counting only the former reported "0 observations" on a
+   *  platform holding three thousand. */
+  observations_breakdown?: {
+    sentinel2_index_readings: number;
+    sar_scene_statistics: number;
+  };
+  flagged_extent_km2?: number;
+  flagged_extent_note?: string;
   simulated_events: number;
   contains_simulated_data: boolean;
   notes: string[];
@@ -289,6 +299,10 @@ export interface DetectorInfo {
   supported_signatures: string[];
   class_names: Record<string, string> | null;
   checkpoint: string | null;
+  /** The one detector whose output the platform presents. */
+  is_active?: boolean;
+  /** True for the demonstration stub. */
+  is_simulated?: boolean;
 }
 
 export interface LatencySummary {

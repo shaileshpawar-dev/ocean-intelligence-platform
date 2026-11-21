@@ -168,7 +168,11 @@ export default function Overview() {
           icon={<Radar size={15} />}
           label="Satellite Observations"
           value={overview.data?.observations ?? <Unavailable />}
-          detail="Measurements stored across all monitored cells"
+          detail={
+            overview.data?.observations_breakdown
+              ? `${overview.data.observations_breakdown.sentinel2_index_readings.toLocaleString()} measured Sentinel-2 index readings`
+              : "Measurements stored across all monitored cells"
+          }
           tone="ok"
           evidence="OBSERVED"
         />
@@ -185,7 +189,11 @@ export default function Overview() {
               <Unavailable />
             )
           }
-          detail="Slick-plausible signatures only — not total dark water"
+          detail={
+            (overview.data?.slick_scale_area_km2 ?? 0) > 0
+              ? "Slick-plausible signatures only — not total flagged extent"
+              : "No oil-like signature currently detected. Zero is the measurement, not a gap."
+          }
           tone="warn"
           evidence="INFERRED"
         />

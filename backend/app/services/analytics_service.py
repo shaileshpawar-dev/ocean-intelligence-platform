@@ -331,7 +331,19 @@ def summary_counts(db: Session) -> dict:
     dark_water_extent = (
         db.scalar(select(func.sum(PollutionEvent.estimated_area_km2))) or 0.0
     )
-    observations = db.scalar(select(func.count(SatelliteObservation.id))) or 0
+    # Satellite observations, across both stores. The SAR table is empty
+    # now that the seeded rows are gone; the measured Sentinel-2 readings
+    # live in their own table because a real index and a simulated
+    # backscatter statistic should never have differed only by a column.
+    # Counting one and not the other reported "0 observations" on a platform
+    # holding three thousand of them.
+    from app.models.optical import OpticalIndexObservation
+
+    sar_observations = db.scalar(select(func.count(SatelliteObservation.id))) or 0
+    optical_observations = (
+        db.scalar(select(func.count(OpticalIndexObservation.id))) or 0
+    )
+    observations = sar_observations + optical_observations
     simulated = (
         db.scalar(
             select(func.count(PollutionEvent.id)).where(
@@ -347,11 +359,24 @@ def summary_counts(db: Session) -> dict:
         # Extent of regions whose signature is slick-plausible. This is the
         # figure a dashboard should headline.
         "slick_scale_area_km2": round(float(slick_scale_area), 2),
-        # Extent of all low-backscatter regions, dominated by coarse-grid
-        # dark formations. Useful for monitoring coverage; NOT a pollution
-        # figure, and must not be labelled as one.
+        # Total extent of every flagged region, whatever the instrument.
+        # Dominated by coarse-grid cells: an optical anomaly is averaged over
+        # the whole water area of its cell, and a SAR dark formation spans
+        # one. Useful for monitoring coverage; NOT a pollution figure, and
+        # must not be labelled as one. The key keeps its name because
+        # consumers read it, but it no longer means "low backscatter" alone.
         "dark_water_extent_km2": round(float(dark_water_extent), 2),
+        "flagged_extent_km2": round(float(dark_water_extent), 2),
+        "flagged_extent_note": (
+            "Sum of the water area each flagged cell was measured over, not "
+            "the extent of any anomaly within it. A regional mean cannot "
+            "give the size of the thing it averaged."
+        ),
         "observations": observations,
+        "observations_breakdown": {
+            "sentinel2_index_readings": optical_observations,
+            "sar_scene_statistics": sar_observations,
+        },
         "simulated_events": simulated,
         "contains_simulated_data": simulated > 0,
     }

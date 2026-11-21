@@ -52,7 +52,12 @@ export default function LiveMonitoring() {
     onSuccess: invalidateAll,
   });
 
-  const activeDetector = detectors.data?.find((detector) => detector.available);
+  // The detector whose output this platform presents, which the API now
+  // marks. "First available" returned the mock, because a simulated
+  // detector is perfectly available -- it just measures nothing.
+  const activeDetector =
+    detectors.data?.find((detector) => detector.is_active) ??
+    detectors.data?.find((detector) => detector.available && !detector.is_simulated);
 
   if (health.isLoading && overview.isLoading) {
     return <LoadingSkeleton rows={4} height={88} />;

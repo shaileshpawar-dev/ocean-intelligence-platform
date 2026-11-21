@@ -123,11 +123,30 @@ def reset_detectors() -> None:
     _sar_v2_2_detector = None
 
 
+#: The detector whose output this platform actually stands behind.
+#:
+#: Consumers asking "which detector is in use?" want this one, not whichever
+#: entry happens to sort first. The mock is listed for completeness and is
+#: *available* in the sense that it runs, which is why "the first available
+#: detector" was answering with it -- a simulated detector presented as the
+#: live one.
+ACTIVE_DETECTOR = "sar-oil-slick-v2.2"
+
+
 def describe_all() -> list[dict]:
-    """Metadata for every detector, for the /models endpoint."""
-    return [
+    """Metadata for every detector, for the /models endpoint.
+
+    Each entry carries ``is_active``: exactly one detector is the one whose
+    results the platform presents, and the rest are registered alternatives
+    or, in the mock's case, a demonstration stub.
+    """
+    described = [
         get_image_detector().describe(),
         get_sar_detector(force="v1").describe(),
         get_sar_v2_detector().describe(),
         get_sar_v2_2_detector().describe(),
     ]
+    for entry in described:
+        entry["is_active"] = entry.get("name") == ACTIVE_DETECTOR
+        entry["is_simulated"] = entry.get("method") == "simulated"
+    return described

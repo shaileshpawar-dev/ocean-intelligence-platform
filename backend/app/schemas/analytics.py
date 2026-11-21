@@ -133,6 +133,11 @@ class DetectorInfoOut(BaseModel):
     version: str
     method: str
     available: bool
+    #: The one detector whose output the platform presents. Asking
+    #: for "the first available detector" returned the mock.
+    is_active: bool = False
+    #: True for the demonstration stub: it runs, and measures nothing.
+    is_simulated: bool = False
     supported_signatures: list[str] = Field(
         description=(
             "Signatures this detector is permitted to emit. Emitting anything "
