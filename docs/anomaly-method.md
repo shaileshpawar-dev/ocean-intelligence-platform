@@ -7,8 +7,14 @@ that decides which are not.
 
 ## The method, in one paragraph
 
-A reading is raised as a detection when it sits in the **top 1% of what this
-platform has measured in that same region over the preceding twelve months**.
+A reading is raised as a detection when it meets **both** criteria: it sits
+in the **top 1% of what this platform has measured in that same region over
+the preceding twelve months**, *and* it clears an **absolute floor** taken
+from literature or physics. Either alone is not enough. A regional
+percentile flags about one percent of every region by construction, which
+measures the method rather than the water; an absolute floor alone ignores
+that the same value means different things off a river mouth and in clear
+water offshore.
 The threshold is the region's own 99th percentile, computed from its own
 stored readings, and a region needs at least 40 clear acquisitions before it
 gets one at all — below that a percentile is just the highest reading, and no
@@ -36,6 +42,39 @@ negative; over a full year it is **+0.028**. The sample was winter and the
 year contains the monsoon, so the threshold flagged **14% of all readings**.
 A detector that fires on one reading in seven is measuring the season.
 
+## The two criteria
+
+### 1. Regional anomaly
+
+The region's own 99th percentile, as described above.
+
+### 2. Absolute floor
+
+| Index | Floor | Source |
+|---|---|---|
+| NDCI | **≥ 0.08** | `ALGAL_BLOOM_NDCI_THRESHOLD`, the absolute chlorophyll-a level this platform already uses elsewhere for the same judgement. |
+| NDTI | **> 0** | The sign convention from Lacaux et al. (2007), where the index originates: positive values indicate turbid water, negative values clear water. Below zero the water is not turbid at all, whatever the region's distribution says. |
+| FDI | **none** | See below. |
+
+The NDTI floor is deliberately zero and not a higher figure. Published
+turbid-water *levels* are local calibrations against in-situ samples, and
+borrowing one from a Senegalese pond study for the Bay of Bengal would be the
+same error as a global percentile, wearing a citation.
+
+### FDI has no absolute floor, and is labelled for it
+
+Biermann et al. (2020), *Scientific Reports* 10:5364 — the paper that defines
+the Floating Debris Index — **publishes no threshold**. The word does not
+appear in it. Materials are classified with a Naïve Bayes model over a
+two-variable FDI/NDVI feature space, trained on nine plastic pixels, and
+detections are described as "bright pixels" relative to the surrounding
+water. The method is relative by design.
+
+So FDI detections carry only the regional criterion, and every one of them
+says **"relative anomaly only"** in its first caveat and names the reason.
+Inventing a floor and attributing it to Biermann would be worse than having
+none.
+
 ## What a detection does and does not claim
 
 It claims: *this reading is unusual for this stretch of water, as this
@@ -58,21 +97,6 @@ The signature names what the instrument can support, not a cause:
 | FDI | `floating_material` | Anything floating that is brighter in the near-infrared than the water. Not plastic — the index cannot identify a material. |
 | NDTI | `turbidity_plume` | Suspended sediment, frequently natural on this coast. |
 
-## The absolute check, for chlorophyll only
-
-"Unusual here" and "high in anyone's terms" are different questions, and for
-chlorophyll both can be answered. Alongside the regional anomaly, every NDCI
-event also reports whether the reading exceeds
-`MultiSensorIntegrator.ALGAL_BLOOM_NDCI_THRESHOLD` (**0.08**), a
-literature-based absolute level independent of what the region usually looks
-like. Both figures appear on the event, and neither replaces the other: an
-event that is both unusual locally and high absolutely is worth more than one
-that is only either.
-
-No equivalent absolute exists for FDI or NDTI that transfers between water
-types. Biermann et al. (2020) threshold FDI against local background rather
-than a constant, which is the same reasoning this page is built on.
-
 ## Reproducing it
 
 ```powershell
@@ -92,6 +116,21 @@ history, and the counts per signature.
 
 As of 21 November 2026: **3,006 readings** across 36 regions spanning
 21 Nov 2025 – 20 Nov 2026, of which 2,744 clear the water-pixel floor.
-**34 regions** have enough history for a baseline. **123 events** — 41 algal
-bloom, 41 floating material, 41 turbidity plume — which is what one percent
-per region per index should look like.
+**34 regions** have enough history for a baseline.
+
+**108 events:**
+
+| Signature | Events | Criteria met |
+|---|---|---|
+| Floating material (FDI) | 41 | Regional anomaly only — no citable floor exists |
+| Algal bloom (NDCI) | 35 | Regional anomaly **and** ≥ 0.08 |
+| Turbidity plume (NDTI) | 32 | Regional anomaly **and** > 0 |
+
+Adding the absolute floor removed **6 chlorophyll** detections that were
+unusual for their region but below any absolute level of concern, and **9
+turbidity** detections of water that was not turbid at all — negative NDTI,
+flagged only because that region's water is usually clearer still.
+
+Before the second criterion the counts were 41 / 41 / 41, which was the
+clearest possible sign that the method was describing itself rather than the
+sea.

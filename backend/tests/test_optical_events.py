@@ -32,7 +32,7 @@ from app.models.enums import DetectionMethod, PollutionSignature
 from app.models.optical import OpticalIndexObservation
 from app.services.optical_events import (
     MIN_BASELINE_READINGS,
-    NDCI_LITERATURE_THRESHOLD,
+    NDCI_ABSOLUTE_FLOOR,
     RELATIVE_THRESHOLD_CAVEAT,
     WATER_PIXEL_FLOOR,
     build_optical_events,
@@ -303,11 +303,11 @@ class TestWhatTheEventClaims:
     def test_an_ndci_event_also_reports_the_absolute_check(self, event):
         """"Unusual here" and "high in anyone's terms" are different
         questions, and for chlorophyll both can be answered."""
-        check = event.extra["literature_check"]
+        check = event.extra["absolute_floor"]
 
-        assert check["threshold"] == NDCI_LITERATURE_THRESHOLD
-        assert check["exceeds"] is True
-        assert "absolute" in check["source"]
+        assert check["applied"] is True
+        assert check["threshold"] == NDCI_ABSOLUTE_FLOOR
+        assert check["value"] >= NDCI_ABSOLUTE_FLOOR
 
     def test_it_carries_the_scene_date_index_and_attribution(self, event):
         extra = event.extra
@@ -346,3 +346,127 @@ class TestRerunning:
         assert first > 0
         assert second["events_created"] == 0
         assert second["already_present"] == first
+
+
+class TestTheAbsoluteFloor:
+    """The second criterion, which stops the percentile describing itself.
+
+    A regional 99th percentile flags about 1% of every region by
+    construction. On its own it produced exactly 41 events per index -- a
+    number that describes the method rather than the sea. A detection must
+    also clear an absolute floor, where one can be cited.
+    """
+
+    def test_a_regional_anomaly_below_the_ndci_floor_is_not_an_event(
+        self, db, region
+    ):
+        """Unusual for this water, and still not a notable chlorophyll
+        level by any absolute measure."""
+        from app.services.optical_events import NDCI_ABSOLUTE_FLOOR
+
+        # A baseline with spread on every index, so only the index under
+        # test can move. FDI has no absolute floor, so leaving it flat would
+        # let it fire on the default value and mask the thing being checked.
+        for offset in range(MIN_BASELINE_READINGS):
+            spread = offset / (MIN_BASELINE_READINGS - 1)
+            db.add(
+                _reading(
+                    region,
+                    observed_on=date(2026, 11, 19) - timedelta(days=offset),
+                    ndci_mean=-0.30 + spread * 0.05,
+                    ndti_mean=-0.20 + spread * 0.10,
+                    fdi_mean=0.005 + spread * 0.02,
+                )
+            )
+        db.commit()
+        _settle(db)
+
+        # Far above this region's own NDCI baseline, and still below the
+        # absolute floor. The other two indices sit at the quiet end.
+        db.add(
+            _reading(
+                region,
+                ndci_mean=NDCI_ABSOLUTE_FLOOR - 0.01,
+                ndti_mean=-0.20,
+                fdi_mean=0.005,
+            )
+        )
+        db.commit()
+
+        assert build_optical_events(db)["events_created"] == 0
+
+    def test_water_that_is_not_turbid_at_all_is_not_a_plume(self, db, region):
+        """Negative NDTI is clear water by the index's own sign convention,
+        however unusual it is for a region that is normally clearer still."""
+        _baseline(db, region)
+        _settle(db)
+
+        db.add(_reading(region, ndti_mean=-0.001))
+        db.commit()
+
+        assert build_optical_events(db)["events_created"] == 0
+
+    def test_clearing_both_criteria_raises_an_event(self, db, region):
+        _baseline(db, region)
+        _settle(db)
+
+        db.add(_reading(region, ndci_mean=LOUD))
+        db.commit()
+
+        assert build_optical_events(db)["events_created"] == 1
+
+    def test_fdi_has_no_floor_and_says_so(self, db, region):
+        """Biermann et al. (2020) publishes no FDI threshold -- the word does
+        not appear in the paper. Inventing one and citing them would be
+        worse than having none."""
+        from app.services.optical_events import (
+            ABSOLUTE_FLOORS,
+            RELATIVE_ONLY_LABEL,
+        )
+
+        floor, citation = ABSOLUTE_FLOORS["FDI"]
+
+        assert floor is None
+        assert "publishes no threshold" in citation
+        assert "Naive Bayes" in citation
+
+        _baseline(db, region)
+        _settle(db)
+        db.add(_reading(region, fdi_mean=LOUD))
+        db.commit()
+        build_optical_events(db)
+
+        event = (
+            db.query(PollutionEvent)
+            .filter(
+                PollutionEvent.signature == str(PollutionSignature.FLOATING_MATERIAL)
+            )
+            .order_by(PollutionEvent.id.desc())
+            .first()
+        )
+        assert RELATIVE_ONLY_LABEL in event.caveats[0]
+        assert event.extra["absolute_floor"]["applied"] is False
+
+    def test_an_ndci_event_records_the_floor_it_cleared(self, db, region):
+        from app.services.optical_events import NDCI_ABSOLUTE_FLOOR
+
+        _baseline(db, region)
+        _settle(db)
+        db.add(_reading(region, ndci_mean=LOUD))
+        db.commit()
+        build_optical_events(db)
+
+        event = (
+            db.query(PollutionEvent)
+            .filter(
+                PollutionEvent.signature
+                == str(PollutionSignature.ALGAE_BLOOM_SIGNATURE)
+            )
+            .order_by(PollutionEvent.id.desc())
+            .first()
+        )
+        record = event.extra["absolute_floor"]
+
+        assert record["applied"] is True
+        assert record["threshold"] == NDCI_ABSOLUTE_FLOOR
+        assert record["value"] >= NDCI_ABSOLUTE_FLOOR

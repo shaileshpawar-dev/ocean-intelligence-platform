@@ -72,16 +72,77 @@ PERCENTILE = 0.99
 #: by another region's water is the error this whole change exists to fix.
 MIN_BASELINE_READINGS = 40
 
-#: Reported alongside the NDCI anomaly, never instead of it.
+#: An event needs **both** criteria, not either.
 #:
-#: ``MultiSensorIntegrator.ALGAL_BLOOM_NDCI_THRESHOLD`` is a literature-based
-#: absolute: above it, chlorophyll-a is high in anyone's terms, regardless of
-#: what this region usually looks like. The two answer different questions --
-#: "unusual here" and "high in absolute terms" -- and an event that is both
-#: is worth more than one that is only either, so both are shown.
+#: The regional percentile alone flags about 1% of every region's readings by
+#: construction -- which produced exactly 41 events per index, a number that
+#: describes the method rather than the water. A detection should also have
+#: to clear an absolute floor: something that says the reading is notable in
+#: its own right, not merely notable *here*.
+#:
+#: Such a floor has to be citable or it is just a second arbitrary number.
+#: Two of the three indices have one; the third does not, and is labelled
+#: accordingly rather than given an invented figure.
 from app.vision.multi_sensor import MultiSensorIntegrator  # noqa: E402
 
-NDCI_LITERATURE_THRESHOLD = MultiSensorIntegrator.ALGAL_BLOOM_NDCI_THRESHOLD
+#: NDCI: an absolute chlorophyll-a level, independent of local conditions.
+#: ``MultiSensorIntegrator.ALGAL_BLOOM_NDCI_THRESHOLD`` (0.08), already used
+#: elsewhere in this platform for the same judgement.
+NDCI_ABSOLUTE_FLOOR = MultiSensorIntegrator.ALGAL_BLOOM_NDCI_THRESHOLD
+
+#: NDTI: the sign convention, which is the only absolute this index has.
+#:
+#: NDTI = (Red - Green) / (Red + Green). Positive values indicate turbid
+#: water and negative values indicate clear water -- the convention from
+#: Lacaux et al. (2007), *Remote Sensing of Environment* 106(1), where the
+#: index originates, and restated consistently since. Zero is therefore a
+#: real floor rather than a tuned one: below it the water is not turbid at
+#: all, whatever the region's own distribution says.
+#:
+#: Deliberately not a higher figure. Published turbid-water *levels* are
+#: local calibrations against in-situ samples, and borrowing one from a
+#: Senegalese pond study for the Bay of Bengal would be the same error as
+#: a global percentile, wearing a citation.
+NDTI_ABSOLUTE_FLOOR = 0.0
+
+#: FDI: **no citable absolute floor exists**, so there is none here.
+#:
+#: Biermann et al. (2020), *Scientific Reports* 10:5364, which defines the
+#: index, publishes no threshold -- the word does not appear in the paper.
+#: They classify with a Naive Bayes model over an FDI/NDVI feature space
+#: trained on nine plastic pixels, and detect "bright pixels" relative to
+#: surrounding water. The method is relative by design.
+#:
+#: So FDI detections are **relative anomaly only** and say so on the event.
+#: Inventing a floor and attributing it to Biermann would be worse than
+#: having none.
+FDI_ABSOLUTE_FLOOR: float | None = None
+
+#: index -> (floor, how to cite it). ``None`` means relative-only.
+ABSOLUTE_FLOORS: dict[str, tuple[float | None, str]] = {
+    "NDCI": (
+        NDCI_ABSOLUTE_FLOOR,
+        "Absolute chlorophyll-a level (ALGAL_BLOOM_NDCI_THRESHOLD = 0.08), "
+        "independent of this region's own distribution.",
+    ),
+    "NDTI": (
+        NDTI_ABSOLUTE_FLOOR,
+        "NDTI > 0. Positive values indicate turbid water and negative "
+        "values clear water -- the sign convention from Lacaux et al. "
+        "(2007), where the index originates. Below zero the water is not "
+        "turbid at all.",
+    ),
+    "FDI": (
+        FDI_ABSOLUTE_FLOOR,
+        "No absolute floor: Biermann et al. (2020), which defines the FDI, "
+        "publishes no threshold and classifies with a Naive Bayes model "
+        "over an FDI/NDVI feature space. This detection is a relative "
+        "anomaly only.",
+    ),
+}
+
+#: Shown on an event whose index has no citable absolute floor.
+RELATIVE_ONLY_LABEL = "relative anomaly only"
 
 #: Below this many water pixels a reading describes a puddle, not a region.
 #: Imported rather than redefined so the two cannot drift apart.
@@ -280,17 +341,41 @@ def _detections_for(
         value = float(getattr(row, column))
         if threshold is None or value != value or threshold != threshold:
             continue
-        if value >= threshold:
-            found.append(
-                OpticalDetection(
-                    observation=row,
-                    signature=signature,
-                    value=value,
-                    threshold=threshold,
-                    index_name=index_name,
-                )
+        if value < threshold:
+            continue
+        # Second criterion: an absolute floor, where one is citable. Without
+        # it the regional percentile alone flags ~1% of every region by
+        # construction, which measures the method rather than the water.
+        floor, _ = ABSOLUTE_FLOORS.get(index_name, (None, ""))
+        if floor is not None and value < floor:
+            continue
+        found.append(
+            OpticalDetection(
+                observation=row,
+                signature=signature,
+                value=value,
+                threshold=threshold,
+                index_name=index_name,
             )
+        )
     return found
+
+
+def _floor_record(detection: OpticalDetection) -> dict[str, Any]:
+    """What absolute criterion this detection cleared, if any."""
+    floor, citation = ABSOLUTE_FLOORS.get(detection.index_name, (None, ""))
+    if floor is None:
+        return {
+            "applied": False,
+            "label": RELATIVE_ONLY_LABEL,
+            "citation": citation,
+        }
+    return {
+        "applied": True,
+        "threshold": floor,
+        "value": round(detection.value, 5),
+        "citation": citation,
+    }
 
 
 def optical_event_id(region_code: str, observed_on: Any, signature: str) -> str:
@@ -437,8 +522,14 @@ def build_optical_events(
                 evidence_level=EvidenceLevel.INFERRED,
             )
 
+            floor, floor_citation = ABSOLUTE_FLOORS.get(
+                detection.index_name, (None, "")
+            )
             caveats = [
-                baseline.describe(detection.index_name) + ".",
+                baseline.describe(detection.index_name)
+                + ("" if floor is not None else f" ({RELATIVE_ONLY_LABEL})")
+                + ".",
+                floor_citation,
                 RELATIVE_THRESHOLD_CAVEAT,
                 *SIGNATURE_CAVEATS.get(detection.signature, []),
                 "Detector confidence is uncalibrated: it encodes how far the "
@@ -478,34 +569,10 @@ def build_optical_events(
                     "threshold": round(detection.threshold, 5),
                     "anomaly_label": baseline.describe(detection.index_name),
                     "baseline": baseline.to_dict(detection.index_name),
-                    # For chlorophyll the absolute question is also worth
-                    # answering: "unusual here" and "high in anyone's terms"
-                    # are different, and an event that is both is stronger
-                    # than one that is only either.
-                    **(
-                        {
-                            "literature_check": {
-                                "threshold": NDCI_LITERATURE_THRESHOLD,
-                                "exceeds": bool(
-                                    detection.value >= NDCI_LITERATURE_THRESHOLD
-                                ),
-                                "source": (
-                                    "MultiSensorIntegrator."
-                                    "ALGAL_BLOOM_NDCI_THRESHOLD -- an absolute "
-                                    "chlorophyll-a level, independent of what "
-                                    "this region usually looks like."
-                                ),
-                            }
-                        }
-                        if detection.index_name == "NDCI"
-                        else {}
-                    ),
-                    "area_basis": (
-                        "Water pixels observed in the cell at 1 km sampling. "
-                        "This is the area the index was averaged over, not "
-                        "the extent of the anomaly, which a regional mean "
-                        "cannot establish."
-                    ),
+                    # The second criterion, recorded whether or not the
+                    # index has one. "No citable floor" is itself a fact
+                    # about this detection that a reader should see.
+                    "absolute_floor": _floor_record(detection),
                     "water_pixels": row.water_pixels,
                     "total_pixels": row.total_pixels,
                     "max_cloud_pct": row.max_cloud_pct,
@@ -565,7 +632,10 @@ def build_optical_events(
             "percentile": PERCENTILE,
             "min_baseline_readings": MIN_BASELINE_READINGS,
             "min_water_pixels": WATER_PIXEL_FLOOR,
-            "ndci_literature_threshold": NDCI_LITERATURE_THRESHOLD,
+            "absolute_floors": {
+                name: ("none (relative anomaly only)" if floor is None else floor)
+                for name, (floor, _) in ABSOLUTE_FLOORS.items()
+            },
         },
     }
     logger.info("optical_events_built", extra=summary)
