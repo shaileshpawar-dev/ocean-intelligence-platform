@@ -21,6 +21,7 @@ import {
 } from "recharts";
 import { api } from "@/lib/api";
 import MarineConditionsPanel from "@/components/MarineConditionsPanel";
+import VesselActivityPanel from "@/components/VesselActivityPanel";
 import {
   ErrorState,
   EvidenceBadge,
@@ -57,10 +58,20 @@ export default function Overview() {
       { queryKey: ["trends", 30], queryFn: () => api.trends(30) },
       { queryKey: ["models"], queryFn: api.models },
       { queryKey: ["marine-conditions"], queryFn: api.marineConditions },
+      { queryKey: ["vessel-activity"], queryFn: api.vesselActivity },
     ],
   });
-  const [overview, health, metrics, drift, alerts, trends, models, conditions] =
-    results;
+  const [
+    overview,
+    health,
+    metrics,
+    drift,
+    alerts,
+    trends,
+    models,
+    conditions,
+    vesselActivity,
+  ] = results;
 
   if (results.every((result) => result.isLoading)) {
     return <LoadingSkeleton rows={5} height={96} />;
@@ -132,6 +143,8 @@ export default function Overview() {
       </Link>
 
       <MarineConditionsPanel query={conditions} />
+
+      <VesselActivityPanel query={vesselActivity} />
 
       {overview.data?.contains_simulated_data && (
         <SimulatedBanner

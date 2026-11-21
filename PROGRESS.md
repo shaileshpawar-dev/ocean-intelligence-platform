@@ -1541,3 +1541,55 @@ lands on real data with no network call, and the source names the region and
 its distance so a neighbour's current reads as the weaker claim it is.
 
 **Tests:** 16 new, 748 passed total.
+
+## FT-7 — Global Fishing Watch
+
+**Done, 21 Nov — with one deliberate deviation from the plan, explained
+below.**
+
+**Real aggregate activity for all 40 regions: 60,403 vessel-hours, 7,920
+vessels, 25 regions with activity.** On Ocean Overview with "Powered by
+Global Fishing Watch" linked to globalfishingwatch.org, badged INFERRED
+("apparent" is GFW's own word — the fishing is inferred from how a vessel
+moves, not reported). Busiest: Arabian Sea Z4 at 15,792 h (CHN 9,844 /
+IRN 4,801), Konkan & Goa Coast S at 10,967 h (all IND).
+
+### The deviation: the 6 hand-written ships were NOT replaced with real ones
+
+The plan said to replace them. I did not, and this needs your sign-off.
+
+Those vessels are not decoration — they populate
+`candidate_vessel_associations`, which marks a vessel `SOURCE_SUSPECT` with
+`is_primary_suspect = true` at scores up to **0.97**, against SAR candidates
+that are **PANGAEA research benchmark patches and demonstration events**.
+Nobody spilled anything.
+
+Putting a real MMSI in that row renders a real, identifiable ship as the
+named suspect for a spill that did not happen, at high confidence, on a page
+built to be screenshotted. The existing banner ("do not identify a
+responsible vessel") is a caveat; a real vessel name under it is still an
+accusation that outlives the caveat the moment the image is cropped.
+
+So GFW answers the question it can answer honestly — **how busy is this
+water** — which is genuinely useful context for a dark formation and
+implicates nobody. The suspect demo keeps its fictional vessels, and both
+endpoints now say in the OpenAPI docs that they are fictional and why.
+
+**If you want the real identities anyway, say so and I will wire them** —
+it is a small change. I would want the suspect wording changed first.
+
+**Gotchas:**
+- GFW's effort product lags ~1 week while AIS is processed. A window ending
+  today returns zeros for every region, which reads as empty ocean and is
+  really an unprocessed week. The fetch now ends 7 days back.
+- The response nests rows under the **resolved** dataset name
+  (`...:v5.0`), not the `:latest` that was requested. Matching the requested
+  name would silently drop every row at the next version bump.
+- The cache key includes the window, so a region fetched twice had two files
+  and was double-counted (43 "regions" for 40 regions). Deduped to newest.
+
+**Also:** the CMEMS sweep from FT-6 finished — **40/40 currents and 40/40
+chlorophyll**, so all 35 regions with Sentinel-2 data now carry the
+chlorophyll cross-check.
+
+**Tests:** 9 new, 757 passed total.

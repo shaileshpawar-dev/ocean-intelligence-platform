@@ -28,6 +28,7 @@ import type {
   ModelVersion,
   MarineConditionsResponse,
   OpticalIndexResponse,
+  VesselActivityResponse,
   Overview,
   PollutionEvent,
   PollutionEventDetail,
@@ -325,6 +326,8 @@ export const api = {
      fetch is a job, so a page load never waits on a satellite API. */
 
   marineConditions: () => get<MarineConditionsResponse>("/marine-conditions"),
+
+  vesselActivity: () => get<VesselActivityResponse>("/vessel-activity"),
 
   opticalIndices: (latestOnly = true, region?: string) =>
     get<OpticalIndexResponse>(

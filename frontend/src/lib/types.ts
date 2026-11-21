@@ -1063,3 +1063,49 @@ export interface ChlorophyllCrossCheck {
   attribution: string;
   note: string;
 }
+
+/* -------------------------------------------------------------------------
+   Global Fishing Watch vessel activity
+
+   Aggregate only — no vessel identity. See app/vision/gfw_client.py: naming
+   a real ship against a benchmark or demonstration detection would be an
+   accusation about something that did not happen.
+   ------------------------------------------------------------------------- */
+
+export interface VesselActivity {
+  cell_code: string;
+  region_name: string;
+  window_from: string;
+  window_to: string;
+  total_hours: number;
+  vessel_count: number;
+  grid_cells: number;
+  top_flags: { flag: string; hours: number }[];
+  evidence_level: string;
+  product: string;
+  provider: string;
+  attribution: string;
+  attribution_url: string;
+  note: string;
+}
+
+export interface VesselActivityResponse {
+  items: VesselActivity[];
+  available: boolean;
+  totals: {
+    regions_answered: number;
+    regions_with_activity: number;
+    total_vessel_hours: number;
+    total_vessels: number;
+  };
+  provenance: {
+    provider: string;
+    attribution: string;
+    attribution_url: string;
+    evidence_level: string;
+    product: string;
+    contains_simulated_data: boolean;
+    note: string;
+    identity_note: string;
+  };
+}

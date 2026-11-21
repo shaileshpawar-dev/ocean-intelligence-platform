@@ -3631,3 +3631,37 @@
 .row-caveated td {
   opacity: 0.55;
 }
+
+/* Compact metric row inside a section card, and the fictional-vessel notice. */
+.metric-grid.compact {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.mini-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: rgba(148, 163, 184, 0.07);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.mini-metric-label {
+  font-size: var(--fs-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #94a3b8);
+}
+
+.mini-metric strong {
+  font-size: var(--fs-lg, 1.15rem);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The attribution badge is a link; it must not inherit link underlines. */
+a.badge-real {
+  text-decoration: none;
+}

@@ -352,7 +352,24 @@ def get_candidate_vessels(
     candidate_id: str,
     db: Session = Depends(get_db),
 ) -> list[CandidateVesselAssociationOut]:
-    """Return correlated vessels within spatial-temporal search window with suspicion scores."""
+    """Return correlated vessels within the spatio-temporal search window.
+
+    **The vessels named here are fictional.** They are seeded synthetic
+    tracks, not live or historical AIS, and the association score is a
+    proximity heuristic -- it does not identify who was responsible for
+    anything.
+
+    This is deliberate and it is not a gap waiting to be filled with real
+    data. The candidates in this platform are research benchmark patches and
+    demonstration events; no oil was spilled by anyone. Putting a real MMSI
+    into a ``SOURCE_SUSPECT`` row at a confidence of 0.97 would name an
+    identifiable ship as the source of a spill that never happened.
+
+    Real vessel data does appear in this platform, at
+    ``/api/v1/vessel-activity``: aggregate AIS-derived activity per region
+    from Global Fishing Watch, with no identities attached to any
+    detection.
+    """
     return vessel_service.get_candidate_vessel_associations(db, candidate_id)
 
 
@@ -365,7 +382,12 @@ def correlate_candidate_vessels(
     candidate_id: str,
     db: Session = Depends(get_db),
 ) -> list[CandidateVesselAssociationOut]:
-    """Re-correlate AIS vessel trajectory pings against candidate coordinates and time."""
+    """Re-correlate vessel tracks against a candidate's coordinates and time.
+
+    Operates on the same fictional seeded tracks as ``GET
+    /{candidate_id}/vessels``; see that endpoint for why no real vessel
+    identity is used here.
+    """
     try:
         return vessel_service.trigger_candidate_vessel_correlation(db, candidate_id)
     except ValueError as e:

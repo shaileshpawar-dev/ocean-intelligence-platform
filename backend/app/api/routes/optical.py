@@ -26,6 +26,25 @@ from app.vision.cmems_client import (
     CHLOROPHYLL_PRODUCT,
     CACHE_DIR as CMEMS_CACHE_DIR,
 )
+from app.vision.gfw_client import (
+    ATTRIBUTION as GFW_ATTRIBUTION,
+)
+from app.vision.gfw_client import (
+    ATTRIBUTION_URL as GFW_ATTRIBUTION_URL,
+)
+from app.vision.gfw_client import (
+    CACHE_DIR as GFW_CACHE_DIR,
+)
+from app.vision.gfw_client import (
+    EVIDENCE_LEVEL as GFW_EVIDENCE_LEVEL,
+)
+from app.vision.gfw_client import (
+    PRODUCT as GFW_PRODUCT,
+)
+from app.vision.gfw_client import (
+    PROVIDER as GFW_PROVIDER,
+)
+from app.vision.gfw_client import RegionActivity
 from app.vision.marine_conditions import ATTRIBUTION as MARINE_ATTRIBUTION
 from app.vision.marine_conditions import EVIDENCE_LEVEL as MARINE_EVIDENCE_LEVEL
 from app.vision.marine_conditions import LOW_WIND_MS
@@ -338,6 +357,78 @@ def marine_conditions(db: Session = Depends(get_db)) -> dict:
                 "Below "
                 f"{LOW_WIND_MS} m/s a flat sea surface looks like oil in SAR, "
                 "so dark formations in those regions are ambiguous."
+            ),
+        },
+    }
+
+
+@router.get("/vessel-activity", summary="Real vessel activity by region (GFW)")
+def vessel_activity(db: Session = Depends(get_db)) -> dict:
+    """Aggregate AIS-derived vessel activity per region, from the cache.
+
+    Aggregate on purpose. This platform does not attach a real vessel
+    identity to any detection -- its candidates are research benchmark
+    patches and demonstration events, and naming a real ship as the source of
+    one would be an accusation about something that never happened. "How busy
+    is this water" is the question GFW can answer here honestly, and it is
+    useful context for a dark formation without implicating anybody.
+    """
+    names = {r.code: r.name for r in db.scalars(select(Region)).all()}
+
+    # One row per region, newest window. The cache key includes the window,
+    # so a region fetched over two date ranges has two files, and summing or
+    # listing both would double-count its traffic.
+    newest: dict[str, RegionActivity] = {}
+    for path in sorted(GFW_CACHE_DIR.glob("*.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            activity = RegionActivity(**payload)
+        except (json.JSONDecodeError, OSError, TypeError):
+            continue
+        # Regions only. Ad-hoc boxes used for probing are not places.
+        if activity.cell_code not in names:
+            continue
+        held = newest.get(activity.cell_code)
+        if held is None or activity.window_to > held.window_to:
+            newest[activity.cell_code] = activity
+
+    items = []
+    for activity in newest.values():
+        row = activity.to_dict()
+        row["region_name"] = names[activity.cell_code]
+        items.append(row)
+
+    items.sort(key=lambda d: -d["total_hours"])
+    active = [i for i in items if i["total_hours"] > 0]
+
+    return {
+        "items": items,
+        "available": bool(items),
+        "totals": {
+            "regions_answered": len(items),
+            "regions_with_activity": len(active),
+            "total_vessel_hours": round(sum(i["total_hours"] for i in items), 1),
+            "total_vessels": sum(i["vessel_count"] for i in items),
+        },
+        "provenance": {
+            "provider": GFW_PROVIDER,
+            "attribution": GFW_ATTRIBUTION,
+            "attribution_url": GFW_ATTRIBUTION_URL,
+            "evidence_level": GFW_EVIDENCE_LEVEL,
+            "product": GFW_PRODUCT,
+            "contains_simulated_data": False,
+            "note": (
+                "Apparent fishing effort derived from AIS. 'Apparent' is "
+                "GFW's own word: the activity is inferred from how a vessel "
+                "moves, not reported by it, which is why this is INFERRED "
+                "rather than OBSERVED. A region showing none observed means "
+                "GFW answered and saw no effort there -- not that the "
+                "question failed."
+            ),
+            "identity_note": (
+                "No vessel identity is stored or shown. The vessels named "
+                "elsewhere in this platform as detection suspects are "
+                "fictional and labelled as such."
             ),
         },
     }
