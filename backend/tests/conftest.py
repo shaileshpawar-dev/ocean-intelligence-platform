@@ -34,6 +34,21 @@ os.environ.setdefault("DETECTOR_BACKEND", "mock")
 os.environ.setdefault("LOG_LEVEL", "WARNING")
 os.environ.setdefault("GEE_ENABLED", "false")
 
+# No LLM, and not negotiable by the environment.
+#
+# These are set, not defaulted. Every other variable here uses setdefault so a
+# developer can override it; these two must not be overridable, because the
+# suite asserts on deterministic behaviour and a real provider changes it.
+# When LLM_PROVIDER=gemini was first put in a local .env, five tests began
+# failing -- not because the code was wrong, but because the suite had been
+# quietly reading whatever credentials happened to be on the machine. A test
+# run must mean the same thing on a laptop with keys and a CI box without.
+#
+# Tests that exercise a provider inject a stub (see test_llm_narrative.py).
+# Nothing in the suite calls a real model.
+os.environ["LLM_PROVIDER"] = "none"
+os.environ["GEMINI_API_KEY"] = ""
+
 from app.core.database import SessionLocal, engine, init_db  # noqa: E402
 from app.models import Base  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

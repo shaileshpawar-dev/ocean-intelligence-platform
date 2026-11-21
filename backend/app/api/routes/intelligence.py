@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.agents.tools import ToolRegistry
 from app.agents.workflow import describe_workflow, run_event_analysis
 from app.core.database import get_db
+from app.llm.narrative import AI_LABEL, generate_for_report
 from app.llm.providers import get_llm
 from app.models import AgentRun, PollutionEvent, Report
 from app.rag.service import answer_question, corpus_stats, search
@@ -188,6 +189,62 @@ def get_report(report_id: str, db: Session = Depends(get_db)) -> dict:
         "workflow_id": report.workflow_id,
         "created_at": report.created_at.isoformat(),
         "contains_simulated_data": report.contains_simulated_data,
+        "ai_summary": _ai_summary(report),
+    }
+
+
+def _ai_summary(report: Report) -> dict | None:
+    """The cached AI summary, or ``None`` when there isn't one.
+
+    Read-only: fetching a report never calls a model. Generation is an
+    explicit POST, so a page load cannot be made slow, or expensive, by a
+    provider having a bad day.
+    """
+    if not report.ai_narrative:
+        return None
+    return {
+        "label": AI_LABEL,
+        "text": report.ai_narrative,
+        "model": report.ai_model,
+        "generated_at": (
+            report.ai_generated_at.isoformat() if report.ai_generated_at else None
+        ),
+        "numbers_checked": (report.ai_check or {}).get("checked"),
+        "note": (
+            "Written by a language model from the computed values in this "
+            "report. Every figure in it was checked against those values "
+            "before it was stored; the figures themselves come from the "
+            "deterministic engines, not from the model."
+        ),
+    }
+
+
+@router.post(
+    "/reports/{report_id}/narrative", summary="Generate the AI summary for a report"
+)
+def generate_narrative(
+    report_id: str, force: bool = False, db: Session = Depends(get_db)
+) -> dict:
+    """Write, verify and cache an AI summary for one report.
+
+    Never fails the request: an unconfigured, slow or erroring provider, or a
+    summary caught carrying a figure that is not in the evidence, all come
+    back as a status the caller renders instead of a narrative. The report
+    itself is unaffected either way.
+    """
+    report = db.scalar(select(Report).where(Report.report_id == report_id))
+    if report is None:
+        raise HTTPException(status_code=404, detail=f"No report {report_id!r}")
+
+    result = generate_for_report(db, report, force=force)
+    return {
+        "report_id": report.report_id,
+        "status": result.status,
+        "label": AI_LABEL if result.usable else None,
+        "text": result.text,
+        "model": result.model,
+        "detail": result.detail,
+        "check": result.check.to_dict() if result.check else None,
     }
 
 

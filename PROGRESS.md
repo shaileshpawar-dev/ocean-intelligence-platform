@@ -1374,3 +1374,51 @@ behaviour is unchanged).
 
 **Tests:** 691 passed, 25 skipped. Ocean Map verified in-browser: centred on
 India, no console errors.
+
+## FT-3 — Gemini narrative layer
+
+**Code complete and tested. Live generation blocked: Gemini is down.**
+
+Built: `app/llm/narrative.py`, a `POST /reports/{id}/narrative` endpoint, five
+cache columns on `reports` (migration `c3d4e5f6a7b8`), and an "AI-generated
+summary" card on the report page that sits *after* the deterministic summary,
+never in place of it.
+
+**The number post-check is the substance of it.** Every figure in a generated
+summary must appear in the evidence the model was given; a summary that fails
+is **discarded, not flagged**. A paragraph whose numbers disagree with the
+table beside it is worse than no paragraph. The check catches a transposed
+digit (95.3 for 95.2), a helpful rounding ("nearly 5000 km²" for 4948.3), and
+a figure from nowhere, while letting through thousands separators and small
+counting numbers. 16 tests, all with a stubbed model — nothing in the suite
+calls a real one.
+
+**Blocked, and why it is not our bug:**
+
+- `gemini-2.5-flash` — the model Step 0 recommended — answers **404, "no
+  longer available to new users"**, naming `gemini-3.8-flash` as its
+  replacement. Default moved accordingly.
+- Every current flash model then answered **503 "experiencing high demand"**
+  or timed out, across 12 attempts over four model ids.
+
+**Gotcha, and the reason Step 0 missed this:** the smoke test checked that
+models were *listed*, not that they could be *called*. The catalogue happily
+returns ids this key is not allowed to use. `credential_smoke_test.py` now
+makes a real `generateContent` call and recommends the first id that answers.
+
+**Verified instead: the fallback, which is the path the demo will actually
+take.** With Gemini erroring, `POST /narrative` returns
+`status=error, detail=ReadTimeout`, stores nothing, and the report renders in
+full from its deterministic summary and five evidence sections. Nothing is
+fabricated and no page breaks.
+
+**Also found:** the test suite was reading the developer's `.env`. Adding
+`LLM_PROVIDER=gemini` locally broke five unrelated tests, which had been
+passing only because no key happened to be present. `conftest.py` now forces
+`LLM_PROVIDER=none` and an empty key — set, not defaulted — so a run means
+the same thing on a laptop with credentials and a CI box without.
+
+**To finish when Google recovers:** `POST /api/v1/reports/{id}/narrative` for
+the 8 reports. One command, no code change.
+
+**Tests:** 707 passed, 25 skipped.

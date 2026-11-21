@@ -3575,3 +3575,23 @@
   border-top-style: dashed;
   border-top-color: var(--muted, #94a3b8);
 }
+
+/* The AI-generated summary's badge.
+ *
+ * Deliberately quieter than the evidence badges beside it. OBSERVED and
+ * DETECTED describe where a measurement came from; this one says a paragraph
+ * was written by a model over measurements shown elsewhere on the page. It
+ * should read as a caveat, not as a sixth evidence level. */
+.badge-ai {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--r-full);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #94a3b8);
+  background: rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+}

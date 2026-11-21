@@ -83,25 +83,41 @@ class _SDKProvider(BaseLLM):
         return info
 
 
+#: Hard ceiling on a narrative call. A demo must not stall on a slow model:
+#: past this the caller falls back to the deterministic template, which is
+#: always available and always correct.
+GEMINI_TIMEOUT_SECONDS = 15.0
+
+
 class GeminiLLM(_SDKProvider):
-    """Google Gemini via ``google-generativeai``."""
+    """Google Gemini over the REST ``generateContent`` endpoint.
+
+    Called directly with ``httpx`` rather than through an SDK. The endpoint is
+    two fields of JSON, httpx is already a dependency, and the alternative
+    (``google-generativeai``) is deprecated in favour of a different package
+    again -- a dependency whose name keeps changing is not worth taking on for
+    one POST.
+
+    The API key travels as a header, never in the query string, so it cannot
+    be captured by proxy or server access logs.
+    """
 
     name = "gemini"
     env_key = "GEMINI_API_KEY"
-    default_model = "gemini-2.0-flash"
+    default_model = "gemini-3.8-flash"
+    base_url = "https://generativelanguage.googleapis.com/v1beta"
 
     def _load(self) -> Any:
-        if self._client is not None or self._error:
-            return self._client
-        try:
-            import google.generativeai as genai
+        """No client to construct: availability is just a key being present."""
+        if not self.api_key:
+            self._error = f"{self.env_key} is not set"
+            return None
+        return self
 
-            genai.configure(api_key=self.api_key)
-            self._client = genai.GenerativeModel(self.model)
-        except Exception as exc:
-            self._error = f"{type(exc).__name__}: {exc}"
-            logger.warning("llm_unavailable", extra={"provider": self.name})
-        return self._client
+    @property
+    def is_available(self) -> bool:
+        """True when a key is configured. Reachability is proven by calling."""
+        return bool(self.api_key)
 
     def generate(
         self,
@@ -110,28 +126,42 @@ class GeminiLLM(_SDKProvider):
         max_tokens: int = 800,
         temperature: float = 0.2,
     ) -> LLMResponse:
-        """Generate text, flattening the message list into Gemini's format."""
-        client = self._load()
-        if client is None:
+        """Generate text, mapping system turns to ``system_instruction``."""
+        if not self.api_key:
             return LLMResponse(
-                status=LLMStatus.UNAVAILABLE, provider=self.name, detail=self._error
+                status=LLMStatus.UNAVAILABLE,
+                provider=self.name,
+                detail=f"{self.env_key} is not set",
             )
+
+        import httpx
+
+        system = "\n\n".join(m.content for m in messages if m.role == "system")
+        turns = [
+            {
+                "role": "model" if m.role == "assistant" else "user",
+                "parts": [{"text": m.content}],
+            }
+            for m in messages
+            if m.role != "system"
+        ]
+        body: dict[str, Any] = {
+            "contents": turns or [{"role": "user", "parts": [{"text": ""}]}],
+            "generationConfig": {
+                "maxOutputTokens": max_tokens,
+                "temperature": temperature,
+            },
+        }
+        if system:
+            body["system_instruction"] = {"parts": [{"text": system}]}
+
         started = time.perf_counter()
         try:
-            prompt = "\n\n".join(f"[{m.role}] {m.content}" for m in messages)
-            result = client.generate_content(
-                prompt,
-                generation_config={
-                    "max_output_tokens": max_tokens,
-                    "temperature": temperature,
-                },
-            )
-            return LLMResponse(
-                status=LLMStatus.OK,
-                text=(result.text or "").strip(),
-                provider=self.name,
-                model=self.model,
-                latency_ms=(time.perf_counter() - started) * 1000,
+            response = httpx.post(
+                f"{self.base_url}/models/{self.model}:generateContent",
+                headers={"x-goog-api-key": self.api_key},
+                json=body,
+                timeout=GEMINI_TIMEOUT_SECONDS,
             )
         except Exception as exc:
             logger.warning("llm_call_failed", extra={"provider": self.name})
@@ -139,8 +169,57 @@ class GeminiLLM(_SDKProvider):
                 status=LLMStatus.ERROR,
                 provider=self.name,
                 model=self.model,
-                detail=f"{type(exc).__name__}: {exc}",
+                detail=f"{type(exc).__name__}",
+                latency_ms=(time.perf_counter() - started) * 1000,
             )
+
+        latency = (time.perf_counter() - started) * 1000
+        if response.status_code != 200:
+            logger.warning(
+                "llm_call_failed",
+                extra={"provider": self.name, "status": response.status_code},
+            )
+            # The body is not echoed: an API error can quote the request, and
+            # the request carries the key.
+            return LLMResponse(
+                status=LLMStatus.ERROR,
+                provider=self.name,
+                model=self.model,
+                detail=f"HTTP {response.status_code}",
+                latency_ms=latency,
+            )
+
+        payload = response.json()
+        candidates = payload.get("candidates") or []
+        text = "".join(
+            part.get("text", "")
+            for candidate in candidates[:1]
+            for part in (candidate.get("content") or {}).get("parts") or []
+        ).strip()
+        if not text:
+            # A truncated or filtered response is a failure, not an empty
+            # narrative to be rendered as though the model had nothing to say.
+            reason = (candidates[0].get("finishReason") if candidates else None) or "no candidates"
+            return LLMResponse(
+                status=LLMStatus.ERROR,
+                provider=self.name,
+                model=self.model,
+                detail=f"empty response ({reason})",
+                latency_ms=latency,
+            )
+
+        usage = payload.get("usageMetadata") or {}
+        return LLMResponse(
+            status=LLMStatus.OK,
+            text=text,
+            provider=self.name,
+            model=self.model,
+            latency_ms=latency,
+            usage={
+                "prompt": usage.get("promptTokenCount", 0),
+                "completion": usage.get("candidatesTokenCount", 0),
+            },
+        )
 
 
 class OpenAILLM(_SDKProvider):
@@ -308,7 +387,13 @@ def get_llm(force: str | None = None) -> BaseLLM:
             "openai": settings.openai_api_key,
             "anthropic": settings.anthropic_api_key,
         }[provider_name]
-        candidate = _PROVIDERS[provider_name](key, settings.llm_model)
+        # llm_model overrides for any provider; gemini_model is the
+        # per-provider default, resolved from the live model list rather than
+        # hardcoded to an id Google may have retired.
+        model = settings.llm_model
+        if provider_name == "gemini" and not model:
+            model = settings.gemini_model
+        candidate = _PROVIDERS[provider_name](key, model)
         if candidate.is_available:
             provider = candidate
         else:

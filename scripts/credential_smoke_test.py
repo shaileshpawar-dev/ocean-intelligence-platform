@@ -97,12 +97,41 @@ def check_gemini() -> None:
     flash = [m for m in usable if "flash" in m and "thinking" not in m]
     # Prefer a stable, non-preview flash build for a demo.
     stable = [m for m in flash if not any(t in m for t in ("preview", "exp", "-lite"))]
-    chosen = (stable or flash or usable or ["<none>"])[0]
+
+    # Listing a model is not the same as being allowed to call it. The
+    # catalogue happily returns ids that answer 404 "no longer available to
+    # new users" -- which is how gemini-2.5-flash came to be configured as
+    # the default on the strength of a passing check. So the candidates are
+    # actually called, cheapest prompt possible, and the first that answers
+    # is the one recommended.
+    tried: list[str] = []
+    for candidate in (stable or flash or usable)[:4]:
+        try:
+            probe = httpx.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/"
+                f"{candidate}:generateContent",
+                headers={"x-goog-api-key": key},
+                json={"contents": [{"role": "user", "parts": [{"text": "OK"}]}]},
+                timeout=TIMEOUT,
+            )
+        except Exception as exc:  # noqa: BLE001
+            tried.append(f"{candidate}={exc.__class__.__name__}")
+            continue
+        if probe.status_code == 200:
+            report(
+                "Gemini",
+                True,
+                f"{len(usable)} models listed; {candidate} answered a live "
+                f"generateContent call" + (f" (rejected: {', '.join(tried)})" if tried else ""),
+            )
+            return
+        tried.append(f"{candidate}=HTTP {probe.status_code}")
+
     report(
         "Gemini",
-        True,
-        f"{len(usable)} generateContent models; flash candidates="
-        f"{', '.join(flash[:6]) or 'none'}; RECOMMENDED={chosen}",
+        False,
+        f"key is valid ({len(usable)} models listed) but none answered: "
+        f"{'; '.join(tried) or 'no candidates'}",
     )
 
 

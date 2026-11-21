@@ -555,6 +555,21 @@ export interface ReportDetail {
   workflow_id: string | null;
   created_at: string;
   contains_simulated_data: boolean;
+  /** Present only when a generated summary passed its number check and was
+   *  cached. Null is the normal state: no provider, a provider that failed,
+   *  or a summary that was discarded for carrying an unsupported figure. */
+  ai_summary: AISummary | null;
+}
+
+/** A language model's prose over this report's computed values. */
+export interface AISummary {
+  label: string;
+  text: string;
+  model: string | null;
+  generated_at: string | null;
+  /** How many figures were verified against the evidence before storing. */
+  numbers_checked: number | null;
+  note: string;
 }
 
 /* -------------------------------------------------------------------------
