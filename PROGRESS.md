@@ -7,7 +7,7 @@ Branch `feature/real-data`. Fallbacks: tag `demo-2026-11-22.1`,
 
 | Step | What | Status | Date |
 |---|---|---|---|
-| 0 | Credential smoke test | **done** (CMEMS blocked) | 21 Nov |
+| 0 | Credential smoke test | **done** — all 5 services pass | 21 Nov |
 | 1 | Refresh real India water data | not started | |
 | 2 | Indian-regions consistency (a–d) | not started | |
 | 3 | Gemini narrative layer | not started | |
@@ -23,7 +23,7 @@ Branch `feature/real-data`. Fallbacks: tag `demo-2026-11-22.1`,
 | 13 | Forecasting on real data | not started | |
 | 14 | Final pass / freeze | not started | |
 
-**Blocked, needs you:** Step 6c (Copernicus Marine) — see the Step 0 entry.
+**Blocked, needs you:** nothing.
 
 **Note:** the plan refers to tags `demo-2026-11-22.1 / .2`. Only `.1` exists;
 there is no `.2`.
@@ -1133,7 +1133,7 @@ credential value is printed by the script, the tests, or this log.
 | **CDSE token** | **PASS** | via the **client_credentials** grant |
 | **CDSE Process API** | **PASS** | 32×32 S2 L2A PNG (2,016 bytes) over the Gulf of Kutch |
 | **Global Fishing Watch** | **PASS** | HTTP 200 authenticated — but **0 datasets listed** |
-| **Copernicus Marine** | **FAIL** | "Invalid credentials" with both the CMEMS *and* CDSE pairs |
+| **Copernicus Marine** | **PASS** (on retry) | login accepted after you reset the password |
 
 ### What this unblocks and blocks
 
@@ -1141,10 +1141,16 @@ credential value is printed by the script, the tests, or this log.
 - Step 7 (GFW) authenticates, but the datasets listing came back empty, so the
   token's scope is unproven. Treated as provisional until a real data endpoint
   is exercised in Step 7.
-- **Step 6c (Copernicus Marine) is blocked.** CMEMS is a separate account from
-  CDSE, registered at marine.copernicus.eu — the CDSE credentials are not
-  interchangeable, and both pairs were rejected. Steps 6a (Open-Meteo, no key)
-  and 6b (Natural Earth coastline) are unaffected and will proceed.
+- **Step 6c (Copernicus Marine) is unblocked.** The first attempt failed with
+  both the CMEMS *and* the CDSE pairs; after a password reset the CMEMS pair
+  was accepted. Worth remembering that CMEMS is a **separate account** from
+  CDSE, registered at marine.copernicus.eu — the credentials are not
+  interchangeable, which is why trying the CDSE pair as a fallback was never
+  going to work.
+- The toolbox writes a credentials file to
+  `~/.copernicusmarine/.copernicusmarine-credentials` on successful login.
+  That is outside the repository, and nothing credential-shaped exists inside
+  it — checked.
 
 ### Gotchas
 
