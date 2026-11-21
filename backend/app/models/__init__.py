@@ -33,6 +33,7 @@ from app.models.pollution import (
     ZoneHistory,
 )
 from app.models.drift_simulation import DriftSimulation
+from app.models.optical import OpticalIndexObservation
 from app.models.environmental_impact import (
     CandidateEnvironmentalImpact,
     MarineReceptor,
@@ -82,6 +83,7 @@ __all__ = [
     "DriftReport",
     "CandidateEnvironmentalImpact",
     "DriftSimulation",
+    "OpticalIndexObservation",
     "MarineReceptor",
     "DriftStatus",
     "EvidenceLevel",

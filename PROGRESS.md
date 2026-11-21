@@ -1422,3 +1422,45 @@ the same thing on a laptop with credentials and a CI box without.
 the 8 reports. One command, no code change.
 
 **Tests:** 707 passed, 25 skipped.
+
+## FT-4 — Real Sentinel-2 observations
+
+**Done, 21 Nov. The marine module now has measured data.**
+
+**253 readings across 35 of 40 regions, newest acquired 20 Nov 2026** —
+yesterday. NDCI (chlorophyll), NDTI (turbidity) and FDI (floating material)
+per region per acquisition date, computed by Copernicus over pixels the scene
+classification layer marks as water, so a coastal cell reports on its sea.
+New page **Real Observations**, first in Marine Monitoring, with a green
+"Real · Sentinel-2" badge and the true-colour scene each row was computed
+from. 35/35 thumbnails, zero console errors.
+
+Aggregated **per day, not per window**: each reading carries the date it was
+measured on. A 30-day mean would be a number with no moment attached.
+
+**FDI is labelled "possible floating material" and never "plastic".** The
+word appears twice in the payload, both times denying the inference —
+Biermann's own paper cannot separate plastics from seaweed, foam, timber or
+spume without further spectral analysis, and sun glint raises the index too.
+Pinned by a test, not by intention.
+
+**Gotcha 1 — a fixed grid cannot fit these cells.** 100×100 is 330 m/px on
+the Gulf of Kutch and 4,449 m/px on Bay of Bengal Z3; Copernicus refuses
+anything over 1,500. The first sweep **failed on 31 of 40 cells**. The grid
+is now derived per cell (longitude scaled by latitude), every cell lands at
+1,000 m/px, and the sweep fails on none. The same bug then hid in the
+thumbnails, where a fixed 320×320 was rejected for the two largest cells.
+
+**Gotcha 2 — readings computed from a handful of pixels.** Some cells were
+almost entirely cloud, leaving **1 to 10 water pixels**. Those statistics are
+valid arithmetic and describe nothing, and one of them (FDI −0.2084 from 8
+pixels) was **an order of magnitude from every other cell** — precisely the
+figure that becomes a story. Readings below 100 water pixels (100 km² of
+observed sea) are stored but marked: the page dims the row and prints "—"
+rather than the number. 4 of 35 rows are in that state.
+
+**Not invented:** 5 open-ocean Arabian Sea cells had no acquisition clearing
+30% cloud in the window. They get no row, no zero, and no carried-forward
+value.
+
+**Tests:** 13 new (grid, water floor, FDI wording, parser), 720 passed total.

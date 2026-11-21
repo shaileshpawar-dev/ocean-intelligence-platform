@@ -514,6 +514,23 @@ export function formatDateTime(iso: string | null | undefined): string {
   });
 }
 
+/** A calendar date, with no time of day.
+ *
+ *  A satellite acquisition date is a date, not an instant: rendering
+ *  "2026-11-20" through formatDateTime would invent a midnight the scene was
+ *  not taken at, and shift it by a timezone on top. */
+export function formatDate(value: string | null | undefined): string {
+  if (!value) return "—";
+  // Parsed as UTC noon so a local-timezone offset cannot move the day.
+  const date = new Date(`${value.slice(0, 10)}T12:00:00Z`);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+  });
+}
+
 export function formatTime(iso: string | null | undefined): string {
   if (!iso) return "—";
   const date = new Date(iso);

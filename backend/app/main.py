@@ -26,6 +26,7 @@ from app.api.routes import (
     intelligence,
     knowledge_graph,
     ml,
+    optical,
     pollution,
     receptors,
     sar_scenes,
@@ -203,6 +204,7 @@ app.include_router(vessels.router, prefix=API_PREFIX)
 app.include_router(drift.router, prefix=API_PREFIX)
 app.include_router(receptors.router, prefix=API_PREFIX)
 app.include_router(knowledge_graph.router, prefix=API_PREFIX)
+app.include_router(optical.router, prefix=API_PREFIX)
 
 
 @app.get("/preview", tags=["system"], include_in_schema=False)

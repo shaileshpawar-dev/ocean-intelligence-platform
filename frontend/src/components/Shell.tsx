@@ -27,6 +27,7 @@ import {
   Menu,
   Network,
   RefreshCcw,
+  Satellite,
   Search,
   Map,
   Scale,
@@ -59,9 +60,11 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
     title: "Marine Monitoring",
     items: [
-      // Candidate Review is first because it is the only page in this group
-      // backed by measured data: 306 real Sentinel-1 benchmark patches. The
-      // rest of the group is a simulated demonstration.
+      // The two measured pages lead the group. Real Satellite Observations
+      // is live Sentinel-2 over Indian waters; Candidate Review is the 306
+      // Sentinel-1 benchmark patches. Everything below them is a simulated
+      // demonstration, and the order says so before the labels have to.
+      { to: "/app/real-observations", label: "Real Observations", icon: Satellite },
       { to: "/app/candidate-review", label: "Candidate Review", icon: ClipboardCheck },
       { to: "/app/overview", label: "Ocean Overview", icon: Waves },
       { to: "/app/live", label: "Live Monitoring", icon: Activity },

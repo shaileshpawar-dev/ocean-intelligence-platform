@@ -943,3 +943,62 @@ export interface CandidateImpactAssessment {
   impacts: CandidateEnvironmentalImpact[];
   overall_mitigation_summary: string;
 }
+
+/* -------------------------------------------------------------------------
+   Real Sentinel-2 optical indices
+
+   Measured values, not a demonstration. `characterises_region` is false when
+   too few water pixels were in frame for the indices to mean anything, in
+   which case the page prints no number for that row.
+   ------------------------------------------------------------------------- */
+
+export interface OpticalIndexReading {
+  region_code: string;
+  region_name: string;
+  observed_on: string;
+  ndci_mean: number;
+  ndci_p50: number;
+  ndti_mean: number;
+  ndti_p50: number;
+  fdi_mean: number;
+  fdi_p90: number;
+  /** Always "possible floating material". Never "plastic". */
+  fdi_label: string;
+  water_pixels: number;
+  total_pixels: number;
+  water_fraction: number;
+  has_thumbnail: boolean;
+  max_cloud_pct: number;
+  evidence_level: string;
+  source: string;
+  attribution: string;
+  characterises_region: boolean;
+  caveat: string | null;
+}
+
+export interface OpticalIndexNote {
+  name: string;
+  formula: string;
+  reference: string;
+  means: string;
+}
+
+export interface OpticalIndexResponse {
+  items: OpticalIndexReading[];
+  provenance: {
+    evidence_level: string;
+    is_real: boolean;
+    source: string;
+    attribution: string;
+    contains_simulated_data: boolean;
+    note: string;
+  };
+  totals: {
+    readings_stored: number;
+    regions_with_data: number;
+    regions_total: number;
+    newest_acquisition: string | null;
+    min_water_pixels: number;
+  };
+  indices: Record<"ndci" | "ndti" | "fdi", OpticalIndexNote>;
+}

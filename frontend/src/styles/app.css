@@ -3595,3 +3595,39 @@
   background: rgba(148, 163, 184, 0.14);
   border: 1px solid rgba(148, 163, 184, 0.28);
 }
+
+/* Real-data badge, scene thumbnail, and the row that has no values.
+ *
+ * The badge is the only green one in the marine section. Everywhere else in
+ * this module carries a SIMULATED banner, so "Real · Sentinel-2" has to be
+ * visibly different at a glance -- that contrast is the information. */
+.badge-real {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--r-full);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #34d399;
+  background: rgba(52, 211, 153, 0.13);
+  border: 1px solid rgba(52, 211, 153, 0.35);
+}
+
+.scene-thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.25));
+  display: block;
+  background: rgba(148, 163, 184, 0.08);
+}
+
+/* A reading whose cell was almost entirely land or cloud. Dimmed rather than
+ * hidden: the acquisition happened, and saying so is worth a row. */
+.row-caveated td {
+  opacity: 0.55;
+}

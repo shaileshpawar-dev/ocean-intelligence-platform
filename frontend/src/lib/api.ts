@@ -26,6 +26,7 @@ import type {
   ListResponse,
   Metrics,
   ModelVersion,
+  OpticalIndexResponse,
   Overview,
   PollutionEvent,
   PollutionEventDetail,
@@ -317,6 +318,19 @@ export const api = {
     ),
   generateReport: (eventId: string) =>
     post<ReportDetail>("/reports/generate", { event_id: eventId }),
+
+  /* -- Real Sentinel-2 observations -------------------------------------
+     Measured indices from Copernicus scenes. Served from stored rows; the
+     fetch is a job, so a page load never waits on a satellite API. */
+
+  opticalIndices: (latestOnly = true, region?: string) =>
+    get<OpticalIndexResponse>(
+      `/optical-indices${qs({ latest_only: latestOnly, region })}`,
+    ),
+  /** Direct URL: the browser fetches the PNG itself, so this is not a get(). */
+  opticalThumbnailUrl: (regionCode: string, observedOn: string) =>
+    `${API_ROOT}/optical-indices/${encodeURIComponent(regionCode)}/thumbnail` +
+    `?observed_on=${encodeURIComponent(observedOn)}`,
 
   /* -- India water intelligence ----------------------------------------
      Every endpoint below is backed by CPCB observations ingested from the
