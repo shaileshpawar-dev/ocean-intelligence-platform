@@ -14,7 +14,15 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { CircleMarker, MapContainer, Polygon, Rectangle, TileLayer, Tooltip } from "react-leaflet";
+import {
+  CircleMarker,
+  MapContainer,
+  Polygon,
+  Polyline,
+  Rectangle,
+  TileLayer,
+  Tooltip,
+} from "react-leaflet";
 import { Layers, X } from "lucide-react";
 import { api } from "@/lib/api";
 import type {
@@ -53,13 +61,35 @@ export default function OceanMap() {
   const [showClean, setShowClean] = useState(true);
   const [showRefined, setShowRefined] = useState(true);
   const [minSeverity, setMinSeverity] = useState<Severity | "ALL">("ALL");
-  const [showCandidates, setShowCandidates] = useState(true);
+  // Off by default: the benchmark set is Mediterranean, so it sits
+  // outside this platform's area of interest and should not be the
+  // first thing a reader sees on a map of India.
+  const [showCandidates, setShowCandidates] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<CandidateMapPoint | null>(null);
 
   // Full-scene SAR detection state (Phase 14.2)
   const [showFullScenes, setShowFullScenes] = useState(true);
+  // Real data layers, all on by default: this is now the main content of
+  // the map rather than an overlay on a demonstration.
+  const [showVessels, setShowVessels] = useState(true);
+  const [showCurrents, setShowCurrents] = useState(true);
+  const [showChlorophyll, setShowChlorophyll] = useState(false);
+  const [showReplay, setShowReplay] = useState(true);
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
   const [selectedFootprint, setSelectedFootprint] = useState<CandidateFootprintFeature | null>(null);
+
+  const conditions = useQuery({
+    queryKey: ["marine-conditions"],
+    queryFn: () => api.marineConditions(),
+  });
+  const vessels = useQuery({
+    queryKey: ["vessel-activity"],
+    queryFn: () => api.vesselActivity(),
+  });
+  const replay = useQuery({
+    queryKey: ["incident-replay"],
+    queryFn: () => api.incidentReplay(),
+  });
 
   const { data: candidateMapPoints } = useQuery({
     queryKey: ["sar-candidate-map-points"],
@@ -107,7 +137,18 @@ export default function OceanMap() {
     <>
       <PageHeader
         title="Ocean Map"
-        subtitle={`${zones.length} monitored cells · ${detected} with an active detection · ${sarScenesData?.total ?? 0} SAR acquisition scenes`}
+        subtitle={[
+          `${zones.length} monitored cells`,
+          `${detected} with an active detection`,
+          vessels.data?.totals
+            ? `${vessels.data.totals.total_vessel_hours.toLocaleString()} vessel-hours`
+            : null,
+          conditions.data?.items.some((c) => c.surface_current)
+            ? `${conditions.data.items.filter((c) => c.surface_current).length} current fields`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
       />
 
       <MarineScopeNote />
@@ -220,6 +261,149 @@ export default function OceanMap() {
               })}
 
             {/* SAR Candidates Point Markers */}
+            {/* Real vessel activity, aggregated. Radius scales with the
+                square root of vessel-hours so a busy region reads as busy
+                without a single cell swallowing the map. */}
+            {showVessels &&
+              vessels.data?.items
+                .filter((item) => item.total_hours > 0)
+                .map((item) => {
+                  const region = conditions.data?.items.find(
+                    (c) => c.cell_code === item.cell_code,
+                  );
+                  if (!region) return null;
+                  return (
+                    <CircleMarker
+                      key={`gfw-${item.cell_code}`}
+                      center={[region.latitude, region.longitude]}
+                      radius={Math.min(26, 4 + Math.sqrt(item.total_hours) / 6)}
+                      pathOptions={{
+                        color: "#0E7490",
+                        fillColor: "#0E7490",
+                        fillOpacity: 0.18,
+                        weight: 1.5,
+                      }}
+                    >
+                      <Tooltip sticky>
+                        <strong>{item.region_name}</strong>
+                        <br />
+                        {item.total_hours.toLocaleString()} vessel-hours ·{" "}
+                        {item.vessel_count.toLocaleString()} vessels
+                        <br />
+                        <span>
+                          {item.top_flags
+                            .slice(0, 3)
+                            .map((f) => `${f.flag} ${Math.round(f.hours)}h`)
+                            .join(", ")}
+                        </span>
+                        <br />
+                        <em>Powered by Global Fishing Watch · INFERRED</em>
+                      </Tooltip>
+                    </CircleMarker>
+                  );
+                })}
+
+            {/* Surface currents. Drawn as a line from the region centre in
+                the direction the water flows toward -- the oceanographic
+                convention, which is 180 degrees from the meteorological one
+                and worth stating on the tooltip for that reason. */}
+            {showCurrents &&
+              conditions.data?.items
+                .filter((item) => item.surface_current)
+                .map((item) => {
+                  const current = item.surface_current!;
+                  const bearing = (current.direction_deg * Math.PI) / 180;
+                  // Length scaled for legibility, not to scale.
+                  const length = Math.min(0.5, 0.12 + current.speed_ms * 1.2);
+                  const end: [number, number] = [
+                    item.latitude + Math.cos(bearing) * length,
+                    item.longitude +
+                      (Math.sin(bearing) * length) /
+                        Math.max(Math.cos((item.latitude * Math.PI) / 180), 0.1),
+                  ];
+                  return (
+                    <Polyline
+                      key={`cur-${item.cell_code}`}
+                      positions={[[item.latitude, item.longitude], end]}
+                      pathOptions={{ color: "#2563EB", weight: 2, opacity: 0.8 }}
+                    >
+                      <Tooltip sticky>
+                        <strong>{item.region_name}</strong>
+                        <br />
+                        {current.speed_ms.toFixed(3)} m/s toward{" "}
+                        {current.direction_deg.toFixed(0)}&deg;
+                        <br />
+                        <span>Valid {current.valid_on}</span>
+                        <br />
+                        <em>Copernicus Marine · INFERRED · flows toward</em>
+                      </Tooltip>
+                    </Polyline>
+                  );
+                })}
+
+            {/* Chlorophyll-a from Copernicus Marine ocean colour. Off by
+                default: it is a cross-check for the NDCI readings rather
+                than a detection layer. */}
+            {showChlorophyll &&
+              conditions.data?.items
+                .filter((item) => item.chlorophyll)
+                .map((item) => (
+                  <CircleMarker
+                    key={`chl-${item.cell_code}`}
+                    center={[item.latitude, item.longitude]}
+                    radius={9}
+                    pathOptions={{
+                      color: "#15803D",
+                      fillColor: "#15803D",
+                      fillOpacity: Math.min(
+                        0.75,
+                        0.12 + (item.chlorophyll!.chl_mg_m3 ?? 0) / 4,
+                      ),
+                      weight: 1,
+                    }}
+                  >
+                    <Tooltip sticky>
+                      <strong>{item.region_name}</strong>
+                      <br />
+                      Chlorophyll-a {item.chlorophyll!.chl_mg_m3.toFixed(2)} mg/m&sup3;
+                      <br />
+                      <span>Valid {item.chlorophyll!.valid_on}</span>
+                      <br />
+                      <em>Copernicus Marine ocean colour · OBSERVED</em>
+                    </Tooltip>
+                  </CircleMarker>
+                ))}
+
+            {/* The historical incident replay position. */}
+            {showReplay &&
+              replay.data?.items.map((item) => (
+                <CircleMarker
+                  key={`replay-${item.incident.imo}`}
+                  center={[item.incident.latitude, item.incident.longitude]}
+                  radius={10}
+                  pathOptions={{
+                    color: "#B91C1C",
+                    fillColor: "transparent",
+                    weight: 2.5,
+                    dashArray: "4 3",
+                  }}
+                >
+                  <Tooltip sticky>
+                    <strong>{item.incident.name}</strong> (IMO {item.incident.imo})
+                    <br />
+                    Sank {item.incident.sank_at.slice(0, 10)} ·{" "}
+                    {item.incident.position_text}
+                    <br />
+                    <span>
+                      {item.screening.tiles_screened} tiles screened ·{" "}
+                      {item.verdict}
+                    </span>
+                    <br />
+                    <em>Historical incident replay</em>
+                  </Tooltip>
+                </CircleMarker>
+              ))}
+
             {showCandidates &&
               candidateMapPoints?.map((cand) => (
                 <CircleMarker
@@ -313,10 +497,42 @@ export default function OceanMap() {
             <label className="map-toggle">
               <input
                 type="checkbox"
+                checked={showVessels}
+                onChange={(event) => setShowVessels(event.target.checked)}
+              />
+              Vessel activity (Global Fishing Watch)
+            </label>
+            <label className="map-toggle">
+              <input
+                type="checkbox"
+                checked={showCurrents}
+                onChange={(event) => setShowCurrents(event.target.checked)}
+              />
+              Surface currents (Copernicus Marine)
+            </label>
+            <label className="map-toggle">
+              <input
+                type="checkbox"
+                checked={showChlorophyll}
+                onChange={(event) => setShowChlorophyll(event.target.checked)}
+              />
+              Chlorophyll-a (Copernicus Marine)
+            </label>
+            <label className="map-toggle">
+              <input
+                type="checkbox"
+                checked={showReplay}
+                onChange={(event) => setShowReplay(event.target.checked)}
+              />
+              Historical incident replay
+            </label>
+            <label className="map-toggle">
+              <input
+                type="checkbox"
                 checked={showCandidates}
                 onChange={(event) => setShowCandidates(event.target.checked)}
               />
-              SAR Candidates (Experimental)
+              Benchmark dataset (Mediterranean, PANGAEA 980773)
             </label>
             <label className="map-toggle">
               <input

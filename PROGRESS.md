@@ -33,7 +33,7 @@ entries at the end of this file.
 | 1 | Real events from real detections | **done** |
 | 2 | Real history for forecasts | **done** |
 | 3 | Swap simulated data for real; demo mode off | **done** |
-| 4 | Ocean Map on real layers | not started |
+| 4 | Ocean Map on real layers | **done** |
 | 5 | Fix Sentinel-1 saturation | **mostly fixed** — 78/100 tiles now vary; 0 oil candidates, so no oil events created |
 | 6 | Data Sources page | 6a done (pinned); 6b–d pending |
 | 7 | Gemini retry | model found; narratives pending |
@@ -2027,3 +2027,38 @@ comes out — pinned by test, since a result that only appears when
 favourable is not a result.
 
 **Tests:** 7 new.
+
+## OV-B — Ocean Map on real layers
+
+**Done.** Four real layers added, all existing ones kept:
+
+- **Vessel activity** (GFW) — bubbles scaled by √vessel-hours, flags in the
+  tooltip, "Powered by Global Fishing Watch".
+- **Surface currents** (CMEMS) — a line per region in the direction the
+  water flows *toward*, with the convention named on the tooltip because it
+  is 180° from the meteorological one.
+- **Chlorophyll-a** (CMEMS) — off by default; it is a cross-check for NDCI,
+  not a detection layer.
+- **Historical incident replay** — the MSC ELSA 3 position, dashed, with the
+  screening verdict.
+
+**PANGAEA benchmark layer is now off by default** and relabelled *"Benchmark
+dataset (Mediterranean, PANGAEA 980773)"* — it sits outside this platform's
+area of interest and should not be the first thing a reader sees on a map
+of India.
+
+**Header counts are real:** `36 monitored cells · 34 with an active
+detection · 60,403 vessel-hours · 40 current fields`.
+
+### A Step-3 regression this caught
+
+**The map layer was empty — 0 zones.** `list_zones` skipped any region with
+no row in `satellite_observations`, and that table was emptied when the
+seeded rows went. The platform's real observations are Sentinel-2 index
+readings in a different table, so every region was being skipped as
+"never looked at" while holding 3,006 measurements. Zones now fall back to
+the optical observation, reporting `platform: Sentinel-2` and a **null**
+backscatter — backscatter is a radar quantity and an optical cell has none,
+so putting a number there would be inventing one.
+
+**Tests:** 831 passed. Map verified in-browser, zero console errors.

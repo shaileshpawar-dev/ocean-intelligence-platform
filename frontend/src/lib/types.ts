@@ -1042,6 +1042,20 @@ export interface MarineCondition {
   sea_surface_temp_c: number | null;
   sar_ambiguous: boolean | null;
   low_wind_threshold_ms: number;
+  /** Region bounds, so the map can draw a cell without a second request. */
+  bbox?: number[];
+  /** Modelled surface current, where one is cached. Bearing is the
+   *  direction the water flows *toward* — the oceanographic convention,
+   *  180° from the meteorological one. */
+  surface_current?: {
+    speed_ms: number;
+    direction_deg: number;
+    valid_on: string;
+    evidence_level: string;
+    attribution: string;
+  } | null;
+  /** Independent chlorophyll-a retrieval for the same region. */
+  chlorophyll?: ChlorophyllCrossCheck | null;
   evidence_level: string;
   provider: string;
   attribution: string;

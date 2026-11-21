@@ -296,6 +296,40 @@ def thumbnail(region_code: str, observed_on: str) -> FileResponse:
     return FileResponse(Path(candidate), media_type="image/png")
 
 
+def _cached_currents() -> dict[str, dict]:
+    """Every region's most recent cached CMEMS surface current.
+
+    Read from the fetch job's cache rather than a table: currents are
+    context for the map and the drift simulator, not something this platform
+    claims to have measured.
+    """
+    from app.vision.cmems_client import (
+        ATTRIBUTION as CMEMS_ATTRIBUTION,
+    )
+    from app.vision.cmems_client import (
+        CACHE_DIR as CMEMS_CACHE,
+    )
+    from app.vision.cmems_client import CurrentReading
+
+    out: dict[str, dict] = {}
+    for path in sorted(CMEMS_CACHE.glob("current_*.json"), reverse=True):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            reading = CurrentReading(**payload)
+        except Exception:  # noqa: BLE001
+            continue
+        if reading.cell_code in out:
+            continue
+        out[reading.cell_code] = {
+            "speed_ms": round(reading.speed_ms, 4),
+            "direction_deg": round(reading.direction_deg, 1),
+            "valid_on": reading.valid_on,
+            "evidence_level": "INFERRED",
+            "attribution": CMEMS_ATTRIBUTION,
+        }
+    return out
+
+
 @router.get("/marine-conditions", summary="Current wind, waves and SST by region")
 def marine_conditions(db: Session = Depends(get_db)) -> dict:
     """Open-Meteo conditions for every monitored region, from the cache.
@@ -323,11 +357,30 @@ def marine_conditions(db: Session = Depends(get_db)) -> dict:
             },
         }
 
-    names = {r.code: r.name for r in db.scalars(select(Region)).all()}
+    regions = {r.code: r for r in db.scalars(select(Region)).all()}
+    names = {code: r.name for code, r in regions.items()}
+    currents = _cached_currents()
+    chlorophyll = {
+        code: _chlorophyll_for(code) for code in regions
+    }
+
     items = []
     for item in cached.get("items", []):
+        code = item["cell_code"]
         enriched = dict(item)
-        enriched["region_name"] = names.get(item["cell_code"], item["cell_code"])
+        enriched["region_name"] = names.get(code, code)
+        # Currents and chlorophyll ride along so the map can draw them
+        # without a second round trip per layer.
+        enriched["surface_current"] = currents.get(code)
+        enriched["chlorophyll"] = chlorophyll.get(code)
+        region = regions.get(code)
+        if region is not None:
+            enriched["bbox"] = [
+                region.min_lon,
+                region.min_lat,
+                region.max_lon,
+                region.max_lat,
+            ]
         items.append(enriched)
     items.sort(key=lambda d: d["region_name"])
 
