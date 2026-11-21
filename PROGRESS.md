@@ -1593,3 +1593,50 @@ chlorophyll**, so all 35 regions with Sentinel-2 data now carry the
 chlorophyll cross-check.
 
 **Tests:** 9 new, 757 passed total.
+
+## FT-8 — Sentinel-1 through the v2.2 detector
+
+**Done, 21 Nov. The pipeline works end to end. The model does not transfer —
+and that is the finding.**
+
+Real Sentinel-1 GRD scenes over three Indian regions, VV sigma-nought pulled
+from Copernicus as float dB, percentile-stretched, tiled to 224 px and run
+through `sar-oil-slick-v2.2`. One scene was acquired **this morning**
+(`S1D_IW_GRDH_1SDV_20261121T003240`).
+
+```
+Gulf of Kutch W      10 tiles screened, 0 candidates, 11 skipped, mean confidence 1.0000
+Mumbai Offshore W    10 tiles screened, 0 candidates,  0 skipped, mean confidence 1.0000
+Gulf of Mannar       10 tiles screened, 0 candidates,  0 skipped, mean confidence 1.0000
+```
+
+**Every tile came back at confidence 1.0000.** That is not certainty, it is a
+saturated softmax. On its own training patches this model spreads from 0.005
+to 0.83 — verified directly, in the same session, through the same detector.
+A flat 1.000 on real Sentinel-1 says the input is unlike anything it was
+fitted on, so **neither the zero candidates nor any positive would carry
+weight**. The script says this itself at the end of every run rather than
+leaving it to a reader.
+
+Why: the model was trained on PANGAEA 980773 / DARTIS **quicklook JPEGs**,
+already contrast-stretched by whoever built the dataset (means 70–160).
+These are sigma-nought dB at a different resolution over different water.
+The per-tile percentile stretch narrows that gap and does not close it.
+
+### The bug worth recording
+
+The first run printed **"24 tiles screened, 24 candidates"** — a 100% hit
+rate. It was exactly backwards. The v2.2 model is a *scene classifier*: it
+returns one `Detection` per tile whose `signature` is the class it chose, so
+`if detections:` means "it answered", not "it found oil". The model had
+answered **`no_anomaly` 24 times**, at confidence 1.000.
+
+A 100% detection rate is the sort of number that gets repeated in a demo. It
+was caught by running known training patches through the same detector and
+noticing that `nw-` negatives also returned a "detection" — with
+`p_oil = 0.0099`. Counting now tests the signature, and a test pins it.
+
+**Nothing was written as a pollution event.** Predictions go to
+`prediction_logs`, where unverified model output belongs.
+
+**Tests:** 10 new, 767 passed total.
