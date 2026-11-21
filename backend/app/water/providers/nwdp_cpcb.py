@@ -42,6 +42,8 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+
+from app.water.pinned_tls import PinnedCertificateMismatch, context_for
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -398,7 +400,17 @@ class NWDPCPCBProvider(WaterDataProvider):
                 request = urllib.request.Request(
                     url, headers={"Accept": "application/json"}
                 )
-                with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT) as response:
+                # NWDP sits behind a Fortinet appliance presenting its factory
+                # CA certificate, which no public trust store carries and
+                # which expired on 20 Nov 2026. `context_for` returns a
+                # pinned context for exactly that host -- having first
+                # confirmed the server still presents the one certificate
+                # recorded in app/water/pinned_tls.py -- and None for anything
+                # else, which keeps full verification everywhere else.
+                context = context_for(url)
+                with urllib.request.urlopen(
+                    request, timeout=REQUEST_TIMEOUT, context=context
+                ) as response:
                     payload = json.loads(response.read().decode("utf-8"))
                 if not payload.get("success"):
                     raise ProviderUnavailableError(

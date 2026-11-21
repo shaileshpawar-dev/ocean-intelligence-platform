@@ -233,12 +233,21 @@ export const api = {
       `/trends${qs({ days, parent_region: parentRegion })}`,
     ),
 
-  forecast: (regionCode: string, horizon = 7, model = "holt", historyDays = 60) =>
+  forecast: (
+    regionCode: string,
+    horizon = 7,
+    model = "holt",
+    historyDays = 60,
+    /** "ndci" | "ndti" | "fdi" to project a measured index instead of
+     *  detection activity. Null keeps the original behaviour. */
+    index: string | null = null,
+  ) =>
     get<Forecast>(
       `/forecast/${encodeURIComponent(regionCode)}${qs({
         horizon,
         model,
         history_days: historyDays,
+        index,
       })}`,
     ),
 

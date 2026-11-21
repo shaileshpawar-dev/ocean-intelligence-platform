@@ -70,6 +70,9 @@ class ForecastOut(BaseModel):
     """A forecast plus the evidence that it is worth anything."""
 
     region_code: str
+    #: Which measured Sentinel-2 index was projected, when one was. None
+    #: means this is the detection-activity forecast.
+    index: str | None = None
     model_name: str
     forecast_kind: str = Field(
         description=(

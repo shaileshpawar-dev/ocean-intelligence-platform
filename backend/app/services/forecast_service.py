@@ -20,7 +20,11 @@ from app.forecasting.baseline import (
     NaiveForecaster,
 )
 from app.models.enums import Severity
-from app.services.analytics_service import get_region_series
+from app.services.analytics_service import (
+    INDEX_SERIES,
+    get_region_index_series,
+    get_region_series,
+)
 
 logger = get_logger(__name__)
 
@@ -131,3 +135,82 @@ def available_models() -> list[dict]:
 
 def _today() -> date:
     return datetime.now(UTC).date()
+
+
+#: Said on every index forecast. The thing being projected is a measured
+#: water property, which is a different claim from projecting detections.
+INDEX_SCOPE_CAVEAT = (
+    "This projects a measured Sentinel-2 index for the region, not a "
+    "pollutant concentration and not a detection count. The index is a band "
+    "ratio: it tracks a water property, and what causes that property to "
+    "change is outside what this forecast can say."
+)
+
+#: Sentinel-2 revisits every few days, so an index series is mostly carried
+#: forward. Worth stating more sharply than for detection activity.
+INDEX_SPARSITY_CAVEAT = (
+    "Sentinel-2 revisits every few days and cloud removes more, so most days "
+    "in the fitted grid are carried forward from the last clear acquisition "
+    "rather than measured. The real sampling rate is given as "
+    "'acquisitions' below."
+)
+
+
+def forecast_region_index(
+    db: Session,
+    region_code: str,
+    index: str,
+    horizon: int = 7,
+    model: str = DEFAULT_MODEL,
+    history_days: int = 365,
+) -> ForecastResult:
+    """Forecast one measured Sentinel-2 index for one region.
+
+    Same forecaster and same backtest as the detection-activity forecast --
+    including ``beats_naive``, which is the point. A projection of real
+    measurements that loses to last-value-carried-forward should say so just
+    as loudly as one of synthetic counts.
+
+    ``status`` is ``INSUFFICIENT_DATA`` when the region has too few clear
+    acquisitions, never a fabricated curve.
+    """
+    spec = INDEX_SERIES.get(index.lower())
+    if spec is None:
+        return ForecastResult(
+            model_name=DEFAULT_MODEL,
+            forecast_kind=ForecastKind.DETECTION_ACTIVITY,
+            status=ForecastStatus.INSUFFICIENT_DATA,
+            n_observations=0,
+            message=(
+                f"Unknown index {index!r}. Available: "
+                f"{', '.join(sorted(INDEX_SERIES))}."
+            ),
+            caveats=[],
+        )
+
+    forecaster = MODELS.get(model, MODELS[DEFAULT_MODEL])()
+    values, dates = get_region_index_series(db, region_code, index, history_days)
+
+    if not values:
+        return ForecastResult(
+            model_name=forecaster.name,
+            forecast_kind=ForecastKind.DETECTION_ACTIVITY,
+            status=ForecastStatus.INSUFFICIENT_DATA,
+            n_observations=0,
+            message=(
+                f"No stored {spec['label']} history for region "
+                f"{region_code!r}. Nothing is projected."
+            ),
+            caveats=[INDEX_SCOPE_CAVEAT],
+        )
+
+    start = dates[-1] + timedelta(days=1)
+    result = forecaster.forecast(values, horizon, start)
+    result.caveats.append(INDEX_SCOPE_CAVEAT)
+    result.caveats.append(INDEX_SPARSITY_CAVEAT)
+    if result.beats_naive is False:
+        result.message += (
+            " This model did not beat the naive last-value baseline in "
+            "backtesting; treat the trend as weakly supported."
+        )
+    return result

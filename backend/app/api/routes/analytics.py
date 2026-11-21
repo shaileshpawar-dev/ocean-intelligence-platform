@@ -66,13 +66,24 @@ def forecast(
     horizon: int = Query(7, ge=1, le=30),
     model: str = Query("holt", description="naive | moving_average | holt"),
     history_days: int = Query(60, ge=7, le=365),
+    index: str | None = Query(
+        None,
+        description=(
+            "Forecast a measured Sentinel-2 index instead of detection "
+            "activity: ndci | ndti | fdi. Omit for detection activity."
+        ),
+    ),
     db: Session = Depends(get_db),
 ) -> ForecastOut:
-    """Forecast the trend in this platform's own detections for a region.
+    """Forecast a region's detection activity, or one measured index.
 
-    This is **not** a physical dispersion forecast: the system ingests no
-    current, wind or wave fields, so it cannot predict where a slick will
-    drift. ``forecast_kind`` makes the distinction explicit on every response.
+    Without ``index`` this forecasts the trend in this platform's own
+    detections. With it, the same model and the same backtest are run over a
+    **measured** Sentinel-2 series instead -- real acquisitions on real dates.
+
+    Neither is a physical dispersion forecast: the system does not model where
+    a slick will drift. ``forecast_kind`` and the caveats make the distinction
+    explicit on every response.
     """
     if model not in forecast_service.MODELS:
         raise HTTPException(
@@ -108,11 +119,25 @@ def forecast(
     if region is None:
         raise HTTPException(status_code=404, detail=f"No region {region_code!r}")
 
-    result = forecast_service.forecast_region(
-        db, region_code, horizon=horizon, model=model, history_days=history_days
-    )
+    if index:
+        # An index series is sparse (Sentinel-2 revisit plus cloud), so it
+        # gets the longer default window rather than the 60 days that suit
+        # daily detection counts.
+        result = forecast_service.forecast_region_index(
+            db,
+            region_code,
+            index,
+            horizon=horizon,
+            model=model,
+            history_days=max(history_days, 365),
+        )
+    else:
+        result = forecast_service.forecast_region(
+            db, region_code, horizon=horizon, model=model, history_days=history_days
+        )
     payload = result.to_dict()
     payload["region_code"] = region_code
+    payload["index"] = index
     payload["bands"] = forecast_service.forecast_to_severity_bands(result)
     return ForecastOut(**payload)
 

@@ -1748,3 +1748,36 @@ and as an *event* that is an alert rather than a dimmed row. Pinned by test.
 
 **Tests:** 13 new. Events, Live Monitoring, Risk Analysis and Overview show
 all five signatures with colour, icon, filter and a legend.
+
+## MP-6a — NWDP certificate pinning (done early, during a Step 2 wait)
+
+**The TLS problem is solved. A different one is now visible underneath it.**
+
+Pinned the **leaf** certificate's SHA-256 for `nwdp.nwic.gov.in` only
+(`app/water/pinned_tls.py`). This is narrower than a CA chain, not wider: a
+public CA vouches for millions of certificates, this vouches for one, and an
+attacker needs that certificate's private key. Every other host keeps full
+verification, pinned by test.
+
+The certificate turned out to have expired **the previous day** — valid
+20 Nov 2025 to 20 Nov 2026 — on top of chaining to the FortiGate *factory*
+CA, whose private key ships on every such appliance. Hence pinning the leaf
+rather than the chain: the issuer proves nothing.
+
+**Result:** the error moved from `CERTIFICATE_VERIFY_FAILED` to **HTTP 403**.
+The handshake now completes; the Fortinet appliance serves a WAF block page
+and refuses automated access as policy. That is the operator's decision and
+I did not try to get around it — an attempt to probe it with a
+browser-impersonating User-Agent was blocked by the permission classifier,
+correctly, and I did not retry it another way. Honest identification gets the
+same 403.
+
+So the feeds stay unavailable, but **for an accurate reason**, and the
+pinning will work the moment the policy or the certificate changes. A changed
+fingerprint raises `PinnedCertificateMismatch` naming both values and fetches
+nothing — a person updates the pin, not the code.
+
+**Next:** Step 6b wording on the Data Sources card uses this reason, not
+"certificate expired".
+
+**Tests:** 10 new.
