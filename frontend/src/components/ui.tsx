@@ -10,12 +10,138 @@
 
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, Info, Inbox, RefreshCw, ServerCrash } from "lucide-react";
+import {
+  AlertTriangle,
+  Droplets,
+  Info,
+  Inbox,
+  Layers,
+  Leaf,
+  Moon,
+  Package,
+  RefreshCw,
+  ServerCrash,
+  Waves as WavesIcon,
+} from "lucide-react";
 import type { EvidenceLevel, Severity } from "@/lib/types";
 
 /* -------------------------------------------------------------------------
    Evidence
    ------------------------------------------------------------------------- */
+
+/** What each detection signature is, in one line, with its own colour.
+ *
+ *  The wording matters as much as the colour. A signature names *what was
+ *  seen by a given instrument*, not what caused it: FDI responds to anything
+ *  floating and cannot identify plastic, NDTI responds to sediment that is
+ *  usually a river doing its job, and a SAR dark formation is a flat patch
+ *  whose cause is undetermined. Each label here is written to survive being
+ *  read on its own, because on a crowded page that is how it will be read.
+ */
+export const SIGNATURE_META: Record<
+  string,
+  { label: string; hint: string; colour: string; Icon: typeof AlertTriangle }
+> = {
+  oil_like_signature: {
+    label: "Oil-like",
+    hint: "Dark formation whose shape and contrast are consistent with a surface film. Not a confirmed spill.",
+    colour: "var(--sig-oil, #B91C1C)",
+    Icon: Droplets,
+  },
+  dark_formation: {
+    label: "Dark formation",
+    hint: "Low-backscatter patch in radar, cause undetermined. Calm water and rain cells look the same.",
+    colour: "var(--sig-dark, #6B21A8)",
+    Icon: Moon,
+  },
+  algae_bloom_signature: {
+    label: "Algal bloom",
+    hint: "Elevated chlorophyll-a in Sentinel-2 (NDCI). Productive water, which may be a bloom, upwelling or a nutrient plume.",
+    colour: "var(--sig-algae, #15803D)",
+    Icon: Leaf,
+  },
+  floating_material: {
+    label: "Floating material",
+    hint: "Near-infrared brighter than the surrounding water (FDI). Says something is floating; does not identify it, and is not evidence of plastic.",
+    colour: "var(--sig-floating, #C2410C)",
+    Icon: Package,
+  },
+  turbidity_plume: {
+    label: "Turbidity plume",
+    hint: "Elevated suspended sediment (NDTI). Frequently natural on this coast — river discharge and runoff raise it.",
+    colour: "var(--sig-turbidity, #A16207)",
+    Icon: WavesIcon,
+  },
+  plastic_debris_signature: {
+    label: "Floating material (legacy)",
+    hint: "A deprecated label kept only for stored rows. The index behind it cannot identify plastic; new detections use Floating material.",
+    colour: "var(--sig-floating, #C2410C)",
+    Icon: Package,
+  },
+  surface_anomaly: {
+    label: "Surface anomaly",
+    hint: "Anomalous but unclassifiable under the available instrument.",
+    colour: "var(--sig-anomaly, #0E7490)",
+    Icon: Layers,
+  },
+  no_anomaly: {
+    label: "No anomaly",
+    hint: "Measured and found unremarkable. An explicit negative is data too.",
+    colour: "var(--sig-none, #64748B)",
+    Icon: Info,
+  },
+};
+
+export function signatureMeta(signature: string) {
+  return (
+    SIGNATURE_META[signature] ?? {
+      label: signature.replace(/_/g, " "),
+      hint: "",
+      colour: "var(--sig-none, #64748B)",
+      Icon: Layers,
+    }
+  );
+}
+
+/** A detection signature, with its colour and icon. */
+export function SignatureBadge({
+  signature,
+  showHint = false,
+}: {
+  signature: string;
+  showHint?: boolean;
+}) {
+  const meta = signatureMeta(signature);
+  const { Icon } = meta;
+  return (
+    <span className="signature-badge" style={{ color: meta.colour }} title={meta.hint}>
+      <Icon size={13} aria-hidden />
+      <span>{meta.label}</span>
+      {showHint && meta.hint && <em className="signature-hint">{meta.hint}</em>}
+    </span>
+  );
+}
+
+/** Legend for whichever signatures are actually present in a view. */
+export function SignatureLegend({ signatures }: { signatures: string[] }) {
+  const seen = [...new Set(signatures)].filter((s) => s in SIGNATURE_META);
+  if (seen.length === 0) return null;
+  return (
+    <div className="signature-legend">
+      {seen.map((signature) => {
+        const meta = signatureMeta(signature);
+        const { Icon } = meta;
+        return (
+          <span key={signature} className="signature-legend-item">
+            <Icon size={13} aria-hidden style={{ color: meta.colour }} />
+            <strong style={{ color: meta.colour }}>{meta.label}</strong>
+            <span>{meta.hint}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
 const EVIDENCE_META: Record<
   string,

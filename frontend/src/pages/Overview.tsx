@@ -34,6 +34,7 @@ import {
   PageHeader,
   RiskBadge,
   SectionCard,
+  SignatureBadge,
   SimulatedBanner,
   StatusBadge,
   titleise,
@@ -338,7 +339,7 @@ export default function Overview() {
                   <Link to={`/app/risk/${alert.event_id}`} className="alert-row">
                     <RiskBadge severity={alert.severity} score={alert.risk_score} />
                     <span className="alert-body">
-                      <strong>{titleise(alert.signature)}</strong>
+                      <SignatureBadge signature={alert.signature} />
                       <span>{alert.region_name}</span>
                     </span>
                     <span className="alert-conf">

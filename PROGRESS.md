@@ -23,6 +23,31 @@ Branch `feature/real-data`. Fallbacks: tag `demo-2026-11-22.1`,
 | 13 | Forecasting on real data | not started | |
 | 14 | Final pass / freeze | not started | |
 
+## Master prompt — real-data completion (started 21 Nov)
+
+A fresh session can pick this up by reading this checklist and the step
+entries at the end of this file.
+
+| # | Step | State |
+|---|---|---|
+| 1 | Real events from real detections | **done** |
+| 2 | Real history for forecasts | not started |
+| 3 | Swap simulated data for real; demo mode off | not started |
+| 4 | Ocean Map on real layers | not started |
+| 5 | Fix Sentinel-1 saturation | not started |
+| 6 | Data Sources page | not started |
+| 7 | Gemini retry | not started |
+| 8 | Texts and claims | not started |
+| 9 | Freeze | not started |
+| 10 | Final status report | not started |
+
+**Known mislabel, cleared by Step 3:** Pollution Events and the marine pages
+still show "events are SIMULATED" banners while now also carrying 34 real
+optical detections. Honest for the 666 seeded rows, wrong for the 34 real
+ones. Demo mode comes off in Step 3.
+
+---
+
 **Resolved, no decision needed.** Two of the three Indian water feeds (`nwdp`)
 are behind an **expired FortiGate appliance certificate** — left as an honest
 "Unavailable", and not worth pinning. The third, CPCB's real-time feed, was
@@ -1686,3 +1711,40 @@ and script both state it, and the script says out loud that the number moved
 the wrong way and was not re-windowed to look better.
 
 **Tests:** 767 passed, 25 skipped. Frontend type-check clean.
+
+---
+
+# Master prompt — real-data completion
+
+## MP-1 — Real events from real detections
+
+**Done, 21 Nov. 34 real pollution events from measured Sentinel-2 readings:**
+10 algal bloom (NDCI), 13 turbidity plume (NDTI), 11 floating material (FDI).
+Evidence `DETECTED`, method `optical_index`, each linked to its scene date,
+region and attribution, scored by the existing risk engine.
+
+**Thresholds are stated, not invented.** NDCI ≥ 0.20 is anchored to Mishra &
+Mishra (2012) and sits above this dataset's p95. FDI ≥ 0.040 and NDTI ≥
+−0.010 are **the p95 of this platform's own 253 stored readings** — there is
+no absolute published cut-off that transfers between water types, and
+Biermann thresholds FDI against local background rather than a constant. So
+every event carries the caveat that it means *"unusual for these waters as
+measured here"*, which is **not** "polluted".
+
+**New signatures:** `floating_material` and `turbidity_plume`.
+`plastic_debris_signature` is deprecated in place — stored rows reference it,
+but nothing new is written with it, because FDI cannot identify a material.
+
+**Wind, waves and currents are attached, not scored.** Real Open-Meteo sea
+state and CMEMS currents ride on each event's `extra.environment` with their
+own provenance. They are deliberately *not* new risk factors: the engine's
+six factors and weights are tested and normalised, and adding a seventh would
+silently renormalise every score already in the database.
+
+**Gotcha:** `area_method` is `varchar(64)`; the explanation moved to
+`extra.area_basis`. And the 100-water-pixel floor matters far more here than
+on the table — an 8-pixel cell produced an FDI ten times every other reading,
+and as an *event* that is an alert rather than a dimmed row. Pinned by test.
+
+**Tests:** 13 new. Events, Live Monitoring, Risk Analysis and Overview show
+all five signatures with colour, icon, filter and a legend.

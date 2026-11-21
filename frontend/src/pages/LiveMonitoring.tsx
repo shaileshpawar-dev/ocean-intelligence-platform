@@ -21,7 +21,7 @@ import {
   PageHeader,
   RiskBadge,
   SectionCard,
-  titleise,
+  SignatureBadge,
   Unavailable,
 } from "@/components/ui";
 
@@ -194,7 +194,7 @@ export default function LiveMonitoring() {
                 </span>
                 <span className="feed-dot" />
                 <span className="feed-body">
-                  <strong>{titleise(event.signature)}</strong>
+                  <SignatureBadge signature={event.signature} />
                   <span className="muted-note">
                     {event.region_name} · confidence{" "}
                     {(event.confidence * 100).toFixed(1)}%

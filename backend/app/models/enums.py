@@ -61,7 +61,21 @@ class PollutionSignature(StrEnum):
     """Optical-only. Elevated chlorophyll-a / discolouration."""
 
     PLASTIC_DEBRIS_SIGNATURE = "plastic_debris_signature"
-    """Optical-only, high uncertainty. Floating debris-like reflectance."""
+    """Deprecated. Retained because stored rows reference it; nothing new is
+    written with it. The index that would produce it (FDI) cannot distinguish
+    plastic from seaweed, foam, timber or spume, so the name claims more than
+    any measurement here supports. Use ``FLOATING_MATERIAL``."""
+
+    FLOATING_MATERIAL = "floating_material"
+    """Optical. Near-infrared brighter than the surrounding water, which is
+    what the Floating Debris Index responds to. Says material is floating
+    there; says nothing about what the material is."""
+
+    TURBIDITY_PLUME = "turbidity_plume"
+    """Optical. Elevated suspended sediment against the regional background.
+    On the Indian coast this is frequently natural -- river discharge and
+    post-monsoon runoff -- so it is a condition worth seeing, not a pollutant
+    by itself."""
 
     SURFACE_ANOMALY = "surface_anomaly"
     """Anomalous but unclassifiable under the available modality."""
@@ -81,6 +95,10 @@ class DetectionMethod(StrEnum):
 
     MANUAL = "manual"
     """Human-entered."""
+
+    OPTICAL_INDEX = "optical_index"
+    """Published band-ratio index computed over Sentinel-2 L2A reflectance
+    (NDCI, NDTI, FDI), water-masked by the scene classification layer."""
 
     SIMULATED = "simulated"
     """Demo-mode fixture."""

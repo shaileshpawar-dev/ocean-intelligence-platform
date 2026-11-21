@@ -22,6 +22,9 @@ import {
   PageHeader,
   RiskBadge,
   SectionCard,
+  SignatureBadge,
+  SignatureLegend,
+  signatureMeta,
   SimulatedBanner,
   titleise,
   Unavailable,
@@ -243,7 +246,7 @@ export default function Events() {
             <option value="ALL">All signatures</option>
             {signatures.map((option) => (
               <option key={option} value={option}>
-                {titleise(option)}
+                {signatureMeta(option).label}
               </option>
             ))}
           </select>
@@ -288,7 +291,7 @@ export default function Events() {
                     }}
                   >
                     <td>
-                      <strong>{titleise(event.signature)}</strong>
+                      <SignatureBadge signature={event.signature} />
                       <span className="cell-sub">{event.region_name}</span>
                     </td>
                     <td>
@@ -317,6 +320,10 @@ export default function Events() {
             </table>
           </div>
         )}
+
+        {/* What each signature means, for the ones actually on screen. A
+            colour alone would make the table prettier and no clearer. */}
+        <SignatureLegend signatures={all.map((event) => event.signature)} />
       </SectionCard>
 
       {eventId && (

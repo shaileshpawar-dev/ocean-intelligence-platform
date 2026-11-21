@@ -3665,3 +3665,57 @@
 a.badge-real {
   text-decoration: none;
 }
+
+/* Detection signatures: colour, icon and legend.
+ *
+ * Colours are chosen to be distinguishable without relying on hue alone --
+ * every badge carries an icon and a word as well, because a reader with
+ * colour-vision deficiency should lose nothing. */
+:root {
+  --sig-oil: #B91C1C;
+  --sig-dark: #6B21A8;
+  --sig-algae: #15803D;
+  --sig-floating: #C2410C;
+  --sig-turbidity: #A16207;
+  --sig-anomaly: #0E7490;
+  --sig-none: #64748B;
+}
+
+.signature-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.signature-hint {
+  font-weight: 400;
+  font-style: normal;
+  color: var(--text-muted, #94a3b8);
+  margin-left: 6px;
+}
+
+.signature-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--border, rgba(148, 163, 184, 0.22));
+  background: rgba(148, 163, 184, 0.05);
+}
+
+.signature-legend-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: var(--fs-2xs);
+  max-width: 420px;
+  color: var(--text-muted, #94a3b8);
+  line-height: 1.45;
+}
+
+.signature-legend-item strong {
+  font-size: var(--fs-xs);
+}
