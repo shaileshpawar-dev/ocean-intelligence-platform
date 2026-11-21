@@ -27,8 +27,23 @@ from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-SCENE_STORAGE_ROOT = REPO_ROOT / "data" / "objects" / "evidence" / "sar_scenes"
-SCENE_STORAGE_ROOT.mkdir(parents=True, exist_ok=True)
+def _storage_root() -> Path:
+    """Where scene evidence is written, honouring ``WATER_OBJECT_DIR``.
+
+    ``REPO_ROOT`` is three parents up from the module, which is the repository
+    on a developer machine and ``/`` inside the container -- so hardcoding it
+    here resolved to an unwritable ``/data`` and killed the web process at
+    import time. The configured object directory is the right anchor; it is
+    the same one the S3-or-local object store uses.
+    """
+    configured = Path(settings.water_object_dir)
+    base = configured if configured.is_absolute() else REPO_ROOT / configured
+    return base / "evidence" / "sar_scenes"
+
+
+SCENE_STORAGE_ROOT = _storage_root()
+# Created lazily, not at import. A directory that cannot be made is a problem
+# for whoever stores a scene, not a reason for the API to refuse to boot.
 
 
 @dataclass(slots=True)

@@ -23,6 +23,28 @@ SQLAlchemy>=2.0.36,<3.0
 # Postgres driver. SQLite (the default) needs no driver.
 psycopg[binary]>=3.2 ; sys_platform != "emscripten"
 
+# ── Vision runtime ────────────────────────────────────────────────────────
+# app/vision/__init__.py imports the SAR v2 detector eagerly, and app.main
+# reaches it through the candidates router, so these are load-bearing for the
+# web process -- not optional, whatever the Dockerfile header says. The
+# running container had them pip-installed by hand into the live container,
+# which meant the image could not be rebuilt and a restart lost them. CPU
+# wheels only: there is no GPU here and the CUDA build is an extra ~2 GB.
+# (The cleaner fix is to make the torch import lazy so the platform really
+# does "run without them" as documented. Recorded as a next step.)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.2,<3.0
+pillow>=10.0,<12.0
+requests>=2.31,<3.0
+
+# ── Arrays ────────────────────────────────────────────────────────────────
+# Not optional. app/vision/sar_detector_v2.py imports numpy at module level
+# and app.main reaches it through the candidates router, so the web process
+# cannot start without it. It was missing here while the running image still
+# carried it from an earlier build, which left the image un-rebuildable:
+# `docker compose build backend` produced a container that died on import.
+numpy>=1.26,<3.0
+
 # ── Optional: satellite ingestion ─────────────────────────────────────────
 # The app runs without these; satellite endpoints report unavailable.
 # earthengine-api>=1.4

@@ -163,3 +163,31 @@ class TestTheFeedGoesAway:
         ).all()
         assert [r.status for r in runs] == ["success", "failed"]
         assert runs[1].errors
+
+
+class TestAProbeThatWasNeverWritten:
+    """``health()`` must not answer "OK" for a provider it never probed.
+
+    The real-time feed was reported healthy for weeks by the default
+    implementation while a trust-store gap made it unreachable from the
+    development host. "No probe implemented" is honest; dressing it as a
+    green light is the one answer that cannot be right.
+    """
+
+    def test_the_default_probe_reports_unknown_not_success(self):
+        class _Unprobed(_Flaky):
+            pass
+
+        ok, detail = _Unprobed().health()
+
+        assert ok is None, "an unprobed provider must not claim to be healthy"
+        assert "no health probe" in detail.lower()
+
+    def test_the_real_time_feed_has_a_real_probe(self):
+        """The concrete provider overrides the default, so it never reports
+        unknown: it either reached the station catalogue or it did not."""
+        from app.water.providers.cpcb_rtwqms import CPCBRealTimeProvider
+
+        assert (
+            CPCBRealTimeProvider.health is not WaterDataProvider.health
+        ), "cpcb_rtwqms must implement its own probe, not inherit the stub"

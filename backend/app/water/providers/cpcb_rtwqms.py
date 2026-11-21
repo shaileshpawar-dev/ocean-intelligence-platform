@@ -41,11 +41,13 @@ nothing and the next hour inserts one new row per series.
 from __future__ import annotations
 
 import json
+import ssl
 import time
 import urllib.error
 import urllib.request
 from collections.abc import Iterator
 from datetime import UTC, datetime
+from functools import lru_cache
 
 from app.core.logging import get_logger
 from app.water.freshness import Cadence
@@ -66,6 +68,27 @@ LAYER_PATH = "/data/internet/layers/10/index.json"
 TIMEOUT = 60
 MAX_RETRIES = 3
 RETRY_BACKOFF_SECONDS = 2.0
+
+
+@lru_cache(maxsize=1)
+def _ssl_context() -> ssl.SSLContext:
+    """Verify this host against certifi rather than the OS trust store.
+
+    CPCB serves a valid certificate chaining to ``emSign Root CA - G1``
+    (eMudhra), a root in the Mozilla programme and therefore in certifi, but
+    *not* present in a default Windows certificate store. Plain
+    ``urlopen`` uses the OS store, so the same feed verified inside the Debian
+    container and failed on a Windows developer machine -- which is how this
+    source came to be recorded as unreachable when it was in fact up.
+
+    Naming the bundle fixes the trust decision to one we ship, so the answer
+    no longer depends on which machine asks. Verification stays fully on:
+    hostname checking and expiry are unchanged, and an untrusted chain still
+    raises.
+    """
+    import certifi
+
+    return ssl.create_default_context(cafile=certifi.where())
 
 #: The feed's series names, mapped to this platform's canonical parameters.
 #: Only what is genuinely the same quantity: ``Depth`` and ``S`` measure the
@@ -184,6 +207,21 @@ class CPCBRealTimeProvider(WaterDataProvider):
         """
         return None
 
+    def health(self) -> tuple[bool | None, str]:
+        """Probe the station catalogue, the smallest of the feed's documents.
+
+        The catalogue is used rather than the measurement layer because it is
+        an order of magnitude smaller and proves the same two things: that TLS
+        verifies against this host and that it is serving JSON.
+        """
+        try:
+            stations = self._get(STATIONS_PATH)
+        except ProviderUnavailableError as exc:
+            return False, str(exc)
+        if not stations:
+            return False, f"{BASE_URL}{STATIONS_PATH} returned an empty catalogue."
+        return True, f"RTWQMS reachable; {len(stations)} stations in the catalogue."
+
     # -- fetching ----------------------------------------------------------
     def fetch(self, plan: FetchPlan) -> Iterator[ObservationRow]:
         """Yield one row per (station, parameter) reading for this state."""
@@ -277,7 +315,9 @@ class CPCBRealTimeProvider(WaterDataProvider):
                 request = urllib.request.Request(
                     url, headers={"Accept": "application/json"}
                 )
-                with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+                with urllib.request.urlopen(
+                    request, timeout=TIMEOUT, context=_ssl_context()
+                ) as response:
                     payload = json.load(response)
                 if isinstance(payload, list):
                     return payload

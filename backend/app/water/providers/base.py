@@ -173,10 +173,14 @@ class WaterDataProvider(ABC):
         """
         return None
 
-    def health(self) -> tuple[bool, str]:
+    def health(self) -> tuple[bool | None, str]:
         """Cheap reachability probe.
 
-        Returns ``(ok, detail)``. The default reports that no probe is
-        implemented rather than claiming success.
+        Returns ``(ok, detail)`` where ``ok`` is ``True`` for reachable,
+        ``False`` for a proven failure and ``None`` for *unknown*.
+
+        The default is ``None``, not ``True``. A provider with no probe has
+        not been shown to work, and reporting it as OK is the one answer that
+        cannot be right -- it reads as a green light on a feed nobody checked.
         """
-        return True, "No health probe implemented for this provider."
+        return None, "No health probe implemented for this provider."

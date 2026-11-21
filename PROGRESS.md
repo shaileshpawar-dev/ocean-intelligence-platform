@@ -23,9 +23,12 @@ Branch `feature/real-data`. Fallbacks: tag `demo-2026-11-22.1`,
 | 13 | Forecasting on real data | not started | |
 | 14 | Final pass / freeze | not started | |
 
-**Needs a decision from you:** all three Indian water feeds are unreachable
-behind an untrusted TLS chain. See the Step 1 entry — option B needs your
-say-so.
+**Resolved, no decision needed.** Two of the three Indian water feeds (`nwdp`)
+are behind an **expired FortiGate appliance certificate** — left as an honest
+"Unavailable", and not worth pinning. The third, CPCB's real-time feed, was
+never down: it failed only on this Windows host, for want of a root that
+certifi carries and Windows does not. It now serves **real readings from
+today**. See FT-1.
 
 **Note:** the plan refers to tags `demo-2026-11-22.1 / .2`. Only `.1` exists;
 there is no `.2`.
@@ -1259,3 +1262,78 @@ sync date (26 Sep). Counts are unchanged and still honest: **2,740 total —
 **Tests:** 689 passed, 25 skipped.
 
 **Next:** Step 2 — Indian-regions consistency.
+
+---
+
+# Fast-track to demo (21 Nov)
+
+## FT-1 — CPCB TLS, and a correction
+
+**Inspected both chains with `openssl s_client` instead of assuming.** They
+are not the same failure, and the Step 1 entry above is wrong about one of
+them:
+
+- **nwdp.nwic.gov.in** (`cpcb_nwdp`, `cwc_nwdp`) — the chain is issued by
+  **`CN=FortiGate CA, O=Fortinet`**, a firewall appliance's factory
+  certificate, **and it has expired**. Not CCA India, so per the plan:
+  **option A, left as an honest "Unavailable".** Pinning was rejected on the
+  merits — a FortiGate factory CA ships on every such appliance, so pinning
+  it would authenticate nothing, and it is expired besides.
+- **rtwqmsdb1.cpcb.gov.in** (`cpcb_rtwqms`) — **valid chain, verifies
+  cleanly** (eMudhra → `emSign Root CA - G1`, a Mozilla-programme root). It
+  was never a server problem. `emSign Root CA - G1` is in **certifi** but not
+  in the **Windows** certificate store, and the provider called plain
+  `urlopen`, which uses the OS store — so the identical feed verified inside
+  the Debian container and failed on this Windows host. Recording it as
+  unreachable was a trust-store gap on one machine, reported as an outage.
+
+**Gotcha:** the earlier diagnosis table only ever probed `nwdp`, then
+generalised to all three. One host's failure was taken as evidence for
+another's.
+
+**Fixes**
+1. `cpcb_rtwqms` now verifies against **certifi** explicitly, so the trust
+   decision is one we ship rather than whatever the host OS carries.
+   Verification stays fully on — hostname and expiry unchanged.
+2. The default `health()` returned `(True, "No health probe implemented")`,
+   which reported an unchecked feed as **OK**. It now returns `None` =
+   **UNKN**, and `cli health` exits non-zero on unknown. `cpcb_rtwqms` got a
+   real probe against the station catalogue.
+
+**Result — real current data, for the first time:** ingest inserted **356
+live observations**, newest timestamped **21 Nov 08:30 UTC**. Coverage moved
+from **0 current → 19 current** (19 / 7 / 2,714 of 2,740). `cpcb_rtwqms` is
+`is_available = true` with today's success timestamp.
+
+```
+cpcb_nwdp      DOWN  expired FortiGate appliance certificate
+cwc_nwdp       DOWN  expired FortiGate appliance certificate
+cpcb_rtwqms    OK    RTWQMS reachable; 40 stations in the catalogue.
+```
+
+### Found on the way: the container image could not be rebuilt
+
+Rebuilding the backend produced a container that died on import, three
+separate causes deep. The running container had been serving from a stale
+image for weeks, with `numpy`/`torch`/`pillow` **pip-installed by hand into
+the live container** — so nobody had noticed:
+
+- `numpy`, `torch`, `pillow`, `requests` missing from `requirements.txt`
+  while `app/vision/__init__.py` imports them eagerly and `app.main` reaches
+  that through the candidates router. Added, CPU-only wheels.
+- `sar_scene_processor.py` and `cog_extractor.py` anchored evidence paths on
+  `REPO_ROOT`, which is `/` in-image → `PermissionError: /data`. Both now use
+  the configured object directory; the import-time `mkdir` is gone, because a
+  directory that cannot be made is not a reason for the API to refuse to boot.
+- `WATER_OBJECT_DIR` added to the image ENV beside `WATER_CACHE_DIR`.
+
+Backend is **up and healthy** on the rebuilt image. Worth saying plainly: had
+this not surfaced now, the first clean restart during the demo would have
+taken the whole platform down.
+
+**Noted, not fixed:** the Dockerfile header still claims torch is optional and
+the platform "reports those components as unavailable" without it. It does not
+— the import is eager. Making it lazy is the cleaner fix; listed as a next
+step rather than done under time pressure.
+
+**Tests:** `test_provider_outage.py` 8 passed (2 new).

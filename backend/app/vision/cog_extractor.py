@@ -14,7 +14,7 @@ from typing import Any
 
 import numpy as np
 
-from app.core.config import REPO_ROOT
+from app.core.config import REPO_ROOT, settings
 from app.core.logging import get_logger
 from app.vision.copernicus_client import CDSEAuthManager
 from app.vision.optical_screener import (
@@ -34,7 +34,18 @@ from app.vision.optical_screener import (
 
 logger = get_logger(__name__)
 
-EVIDENCE_MARINE_ROOT = REPO_ROOT / "data" / "objects" / "evidence" / "marine"
+def _marine_root() -> Path:
+    """Marine evidence directory, anchored on the configured object store.
+
+    ``REPO_ROOT`` is ``/`` inside the container, so the old constant pointed
+    at an unwritable ``/data``. See ``sar_scene_processor._storage_root``.
+    """
+    configured = Path(settings.water_object_dir)
+    base = configured if configured.is_absolute() else REPO_ROOT / configured
+    return base / "evidence" / "marine"
+
+
+EVIDENCE_MARINE_ROOT = _marine_root()
 
 
 class COGExtractor:

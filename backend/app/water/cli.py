@@ -488,12 +488,15 @@ def _archive_evidence(limit: int | None) -> int:
 def _health() -> int:
     from app.water.providers import all_providers
 
-    ok_all = True
+    labels = {True: "OK  ", False: "DOWN", None: "UNKN"}
+    worst = 0
     for provider in all_providers():
         ok, detail = provider.health()
-        ok_all &= ok
-        print(f"{provider.info.key:14} {'OK  ' if ok else 'DOWN'} {detail}")
-    return 0 if ok_all else 1
+        # Unknown is not success. It exits non-zero so a probe that was never
+        # written cannot pass for a healthy feed in CI or a pre-demo check.
+        worst = max(worst, {True: 0, None: 1, False: 2}[ok])
+        print(f"{provider.info.key:14} {labels[ok]} {detail}")
+    return 0 if worst == 0 else 1
 
 
 def bootstrap_in_background() -> threading.Thread | None:

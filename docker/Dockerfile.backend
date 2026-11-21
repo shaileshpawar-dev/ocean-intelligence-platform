@@ -59,7 +59,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:$PATH" \
     DATABASE_URL="sqlite:////app/data/oip.db" \
-    WATER_CACHE_DIR="/app/data/raw"
+    WATER_CACHE_DIR="/app/data/raw" \
+    WATER_OBJECT_DIR="/app/data/objects"
 
 # libexpat is the one shared library the OSM extract reader (osmium) needs;
 # the slim base does not carry it. ~100 KB, and only the extract job uses it.
