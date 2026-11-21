@@ -1337,3 +1337,40 @@ the platform "reports those components as unavailable" without it. It does not
 step rather than done under time pressure.
 
 **Tests:** `test_provider_outage.py` 8 passed (2 new).
+
+## FT-2 — Indian-regions consistency
+
+**Done, 21 Nov.**
+
+- **Orphaned reports/runs:** all 10 `event_id IS NULL` rows were reports for
+  regions that no longer exist (Persian Gulf SE/SW, Yellow Sea NW, North Sea
+  SE, Gulf of Mexico SE). Deleted, and 5 fresh runs generated through
+  `POST /agents/analyze-event` over Gulf of Kutch W, Gulf of Mannar, Konkan &
+  Goa Coast N, Bay of Bengal Z4 and Andaman Sea NW. Now **8 runs / 8 reports,
+  every one attached to an event**, across 6 Indian regions.
+  `unresolved_citations = 0`.
+- **Refine skipped — the trigger condition is not met.** The plan says refine
+  "if CRITICAL = 0 or slick extent = 0". Actual: **81 CRITICAL events** and
+  21.4M km² of total estimated extent. Nothing to fix, so nothing was run.
+- **Banners:** `MarineScopeNote` said the module monitors the Gulf of Mexico,
+  North Sea, Malacca, Yellow Sea, Persian Gulf and Java Sea. Rewritten for
+  the Indian EEZ. The note now makes the sharper point that the *regions* are
+  real and the *events* are simulated — with a plausible Indian region name
+  attached, that distinction matters more than it did before, not less.
+- **Ocean Map** opened on `[20, 40]` — the Red Sea. Now `[15.5, 79]` zoom 4,
+  chosen from the actual region bounds (8.0–23.3 N, 64.0–94.4 E) so all 40
+  cells are in frame from Lakshadweep to the Andamans.
+- **Docs:** `agents.md` and `ai-pipeline.md` examples re-cut to current
+  regions. The `agents.md` narrative is now copied **verbatim** from
+  `agent_runs.result` rather than written to look plausible.
+
+**Gotcha:** `rag.md` quotes a real retrieval transcript whose top hit is the
+Kuwait Regional Convention for a Persian Gulf query. **Left alone on
+purpose** — the corpus really does contain ROPME, and swapping the region
+name would have turned a genuine transcript into an invented one. The
+Research page's suggested question moved to the Arabian Sea instead (all
+three candidate phrasings return `retrieval_only` with 0 citations, so
+behaviour is unchanged).
+
+**Tests:** 691 passed, 25 skipped. Ocean Map verified in-browser: centred on
+India, no console errors.

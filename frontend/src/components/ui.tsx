@@ -434,9 +434,11 @@ export function ProvenanceNote({ children }: { children: ReactNode }) {
 
 /** What the marine module is, and is not.
  *
- *  The marine regions are global while the rest of the platform is India, and
- *  the events in them are synthetic. Said once per page so nobody has to work
- *  it out from the region names, and so the one page holding real data --
+ *  The regions are now India's EEZ, matching the rest of the platform, but
+ *  the events in them are still synthetic. That distinction is the whole
+ *  point of this note: a realistic region name is exactly what would let a
+ *  simulated detection pass for a real one, so it is said once per page
+ *  rather than left to be inferred. The one page holding measured data --
  *  Candidate Review -- is pointed at rather than lost among the rest.
  */
 export function MarineScopeNote({ full = false }: { full?: boolean }) {
@@ -446,18 +448,21 @@ export function MarineScopeNote({ full = false }: { full?: boolean }) {
       <span>
         {full ? (
           <>
-            <strong>Global demonstration.</strong> The marine module monitors
-            the Gulf of Mexico, North Sea, Strait of Malacca, Yellow Sea,
-            Persian Gulf and Java Sea — not Indian waters, unlike the rest of
-            this platform. Every pollution event here is{" "}
-            <strong>SIMULATED</strong>. The real measured data in this module
-            is the 306 Sentinel-1 benchmark candidates in{" "}
+            <strong>Indian EEZ, simulated events.</strong> The marine module
+            monitors 15 regions across India's exclusive economic zone — the
+            Arabian Sea and Gujarat approaches, the Konkan, Malabar and
+            Coromandel coasts, the Gulfs of Kutch, Khambhat and Mannar, the
+            Bay of Bengal, the Krishna–Godavari offshore basin, and the
+            Andaman &amp; Nicobar and Lakshadweep seas. The regions are real;
+            every pollution event in them is <strong>SIMULATED</strong>. The
+            real measured data in this module is the 306 Sentinel-1 benchmark
+            candidates in{" "}
             <Link to="/app/candidate-review">Candidate Review</Link>.
           </>
         ) : (
           <>
-            Global demonstration module; events are <strong>SIMULATED</strong>.
-            The real data is the 306 Sentinel-1 candidates in{" "}
+            Indian EEZ regions; events are <strong>SIMULATED</strong>. The
+            real data is the 306 Sentinel-1 candidates in{" "}
             <Link to="/app/candidate-review">Candidate Review</Link>.
           </>
         )}

@@ -21,7 +21,7 @@ import {
 
 const SUGGESTIONS = [
   "What rules govern oil discharge from ships?",
-  "Which convention covers the Persian Gulf?",
+  "Which convention covers the Arabian Sea?",
   "What are the look-alikes for oil in SAR imagery?",
   "How is the risk score renormalised?",
   "What does MARPOL Annex V say about plastics?",

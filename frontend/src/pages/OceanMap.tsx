@@ -117,9 +117,14 @@ export default function OceanMap() {
 
       <div className="map-shell">
         <div className="map-frame">
+          {/* Indian EEZ. The monitored regions span 8.0-23.3 N and
+              64.0-94.4 E, so this centre and zoom frame all 40 cells --
+              Lakshadweep in the west to the Andamans in the east -- without
+              the user having to pan. It used to open on [20, 40], the Red
+              Sea, left over from the global region set. */}
           <MapContainer
-            center={[20, 40]}
-            zoom={3}
+            center={[15.5, 79]}
+            zoom={4}
             minZoom={2}
             scrollWheelZoom
             worldCopyJump

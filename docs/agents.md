@@ -58,10 +58,15 @@ else.
 The template narrative is not a degraded fallback. It is the default, and it
 states only values already computed:
 
-> A oil like signature was detected in Gulf of Mexico NW at an uncalibrated
-> confidence of 0.72 by sar-dark-formation:1.0.0. The deterministic risk
-> engine scored it 77.9/100 (CRITICAL) from 5 evaluable factors, with 1
-> factor unavailable. This is a detection, not a confirmed pollution incident.
+> A oil like signature was detected in Gulf of Kutch W at an uncalibrated
+> confidence of 0.73 by sar-dark-formation:1.0.0. The deterministic risk
+> engine scored it 95.2/100 (CRITICAL) from 5 evaluable factors, with 1
+> factor(s) unavailable. This is a detection, not a confirmed pollution
+> incident.
+
+Copied verbatim from `agent_runs.result` for the run over
+`evt_demo_gulf_of_kutch_w_49_127`, so the wording above is the wording the
+code emits rather than a tidied version of it.
 
 ## Tools
 
