@@ -16,11 +16,11 @@
 
 ## Current status
 
-Last verified 20 November 2026, after a clean restart (`docker compose down`,
-`up -d db`, API restarted) with every count checked against the running
-application.
+Last verified 21 November 2026, after a clean restart (`docker compose down`
+then `up -d backend`) with every count checked against the running
+application and all 24 pages loaded with zero console errors.
 
-**Tests: 689 passing, 25 skipped, 0 failing.**
+**Tests: 767 passing, 25 skipped, 0 failing.**
 
 ```bash
 cd backend && ../.venv/Scripts/python.exe -m pytest tests/ -q
@@ -35,15 +35,22 @@ destroyed the live database.
 
 | | Status | Detail |
 |---|---|---|
-| **India water observations** | **Real** | 4,601,153 measurements, 2,740 water bodies, 4,951 stations, 35 states, 613 districts — CPCB and CWC via NWDP |
+| **India water observations** | **Real** | 4,601,509 measurements, 2,740 water bodies, 4,951 stations, 35 states, 613 districts — CPCB and CWC via NWDP |
+| **India water, current** | **Real, live** | CPCB real-time analysers: 19 of 2,740 water bodies have a reading from the last 2 days. The two NWDP feeds are down behind an expired certificate and report that, with the error and last sync date |
+| **Sentinel-2 water indices** | **Real, live** | 253 readings over 35 of 40 regions, newest acquired 20 Nov 2026. NDCI, NDTI and FDI over SCL-masked water, with the scene thumbnail each was computed from |
+| **Chlorophyll cross-check** | **Real** | Copernicus Marine ocean colour beside our own NDCI for all 35 regions; neither adjusted to match the other |
+| **Sea conditions** | **Real** | Open-Meteo wind, waves and SST for all 40 regions. INFERRED — a weather model's analysis, not a measurement |
+| **Surface currents** | **Real** | Copernicus Marine physics for all 40 regions; drives the drift simulator, replacing a hardcoded 0.22 m/s placeholder |
+| **Vessel activity** | **Real** | Global Fishing Watch: 60,403 vessel-hours, 7,920 vessels, 25 of 40 regions. Aggregate only — no identities |
 | **SAR candidates** | **Real** | 306 Sentinel-1 patches, PANGAEA 980773 (CC BY 4.0), collocated with ECMWF ERA5 wind |
 | **SAR model metrics** | **Real** | 3 evaluated models; v2.2 precision 0.677 / recall 0.880 / F1 0.765 on a 100-sample leakage-free split |
-| **Inference latency & drift** | **Real measurements** | 305 genuine inferences; the timestamps placing them in drift windows are assigned, and every row and panel says so |
-| **Knowledge graph** | **Real** | 4,378 nodes / 4,504 edges, built only from foreign keys; 40 citation edges resolved from JSON and drawn separately |
-| **Marine pollution events** | **Simulated** | All 686, tagged `SIMULATED` by the API; every page in that module states it |
-| **Marine regions** | **Global demo** | Gulf of Mexico, North Sea, Malacca, Yellow Sea, Persian Gulf, Java Sea — not Indian waters |
-| **Vessels / AIS** | **Simulated** | 6 hand-written vessels |
-| **LLM narrative** | **Absent** | `llm_provider = none`; agent findings are templated and reports are structured, not written |
+| **Live Sentinel-1 screening** | **Real imagery, unusable output** | 30 tiles from 3 recent scenes went through the v2.2 detector. Every tile returned confidence 1.000 — a saturated softmax, not certainty. The model was fitted on pre-stretched quicklooks and does not transfer to calibrated backscatter |
+| **Inference latency & drift** | **Real measurements** | 337 genuine inferences; the timestamps placing them in drift windows are assigned, and every row and panel says so |
+| **Knowledge graph** | **Real** | 4,131 nodes / 4,459 edges from foreign keys only; 32 citation edges resolved from JSON and drawn separately, 0 unresolved |
+| **Marine pollution events** | **Simulated** | All 666, tagged `SIMULATED` by the API; every page in that module states it |
+| **Marine regions** | **Real geography** | 15 regions / 40 cells across India's EEZ — Arabian Sea, Gujarat gulfs, Konkan, Malabar, Coromandel, Bay of Bengal, Krishna-Godavari, Andaman & Nicobar, Lakshadweep |
+| **Vessels / AIS suspects** | **Simulated** | 6 fictional vessels. Real identities are deliberately not used: the detections are benchmark patches, and naming a real ship as the source of one would be an accusation |
+| **LLM narrative** | **Built, provider down** | Gemini layer with a number-grounding check that discards any summary containing a figure not in its evidence. Google retired the integrated model mid-build; the deterministic fallback renders every report in full |
 
 Unevaluated things report `null` and render as "Not evaluated", never as zero.
 Drift currently reports **WARNING** (PSI 0.11), which is a genuine finding and
@@ -55,12 +62,21 @@ After a restore these should be exact:
 
 | | |
 |---|---|
-| Pollution events | 686 (10 CRITICAL) |
+| Pollution events | 666 (81 CRITICAL) |
 | SAR candidates | 306 |
-| Prediction logs | 307 |
+| Prediction logs | 337 |
 | Model versions | 5 (3 evaluated) |
-| Water observations | 4,601,153 |
-| Regions | 270 |
+| Water observations | 4,601,509 |
+| Regions | 40 |
+| Sentinel-2 index readings | 253 (35 of 40 regions) |
+| Reports / agent runs | 8 / 8, every one attached to an event |
+| Knowledge graph | 4,131 nodes / 4,459 edges, 0 unresolved citations |
+
+Cached external data lives in the container's `oipdata` volume and survives a
+restart: Sentinel-2 indices and thumbnails, Copernicus Marine currents and
+chlorophyll, Open-Meteo conditions, and GFW activity. The `scripts/fetch_*.py`
+commands refresh them against the live services; none of them is needed to
+run the demo.
 
 ### Resetting the demo database
 
@@ -486,8 +502,8 @@ The screening grid uses cells of 10⁴–10⁵ km². That resolution is right fo
 The answer is to look closer, not to loosen the gate:
 
 ```
-Stage 1   38 cells, one observation each, whole ocean
-          → "Persian Gulf SW has anomalous dark structure"
+Stage 1   40 cells, one observation each, whole Indian EEZ
+          → "Gulf of Kutch W has anomalous dark structure"
           → signature: dark_formation          (the maximum claim at this resolution)
 
 Stage 2   subdivide 6×6 → 9,334 km² sub-cells, re-observe

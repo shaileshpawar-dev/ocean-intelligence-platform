@@ -1640,3 +1640,49 @@ noticing that `nw-` negatives also returned a "detection" — with
 `prediction_logs`, where unverified model output belongs.
 
 **Tests:** 10 new, 767 passed total.
+
+## FT-9 — Freeze
+
+**Done, 21 Nov.**
+
+- **Clean restart passes.** `docker compose down` then `up -d backend` — the
+  thing that would have failed before FT-1 fixed the image. All cached
+  external data survives in the `oipdata` volume.
+- **All 24 routes serve 200; all 24 pages load with zero console errors**,
+  walked individually in a fresh tab.
+- **DEMO_SCRIPT.md** rewritten: new sections 2b (Real Satellite
+  Observations) and 2c (sea state and vessel traffic), a "what is real" table
+  up front, six new likely questions including **"Is that plastic?"**, and a
+  **Next steps — deliberately not done** list so nothing reads as forgotten.
+- **README** status, real/simulated table and expected counts updated.
+- **`backups/oip-demo-final.dump`** created; `reset_demo.sh` now points at it
+  by name rather than following "newest after-window dump", and prints the
+  current expected counts.
+- **Deck rebuilt** at `~/Downloads/OIP-Demo.pptx` — 21 slides, 0 geometry
+  issues, outside the repo. Three new real-data slides.
+
+### Stale figures found and corrected
+
+Checked every number in the docs against the running application rather than
+trusting them:
+
+| Was | Now |
+|---|---|
+| 4,601,153 observations | **4,601,509** |
+| Current data 0, recent 26 | **19 current, 7 recent** |
+| 686 events, 10 CRITICAL | **666 events, 81 CRITICAL** |
+| 307 prediction logs | **337** |
+| 270 regions | **40** |
+| 4,378 nodes / 4,504 edges | **4,131 / 4,459**, 0 unresolved |
+| P95 9.63 ms | **37.5 ms** |
+| 689 tests | **767** |
+
+### The one that moved the wrong way
+
+**Forecasts: "1 of 38 regions beat the naive baseline" is now 0 of 40.**
+Re-cutting the regions to India's EEZ lost the single region that used to
+win. Checked directly against all 40 forecasts rather than assumed. The deck
+and script both state it, and the script says out loud that the number moved
+the wrong way and was not re-windowed to look better.
+
+**Tests:** 767 passed, 25 skipped. Frontend type-check clean.

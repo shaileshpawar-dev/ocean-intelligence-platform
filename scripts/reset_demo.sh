@@ -7,7 +7,7 @@
 # back in under a minute.
 #
 # Usage:
-#   scripts/reset_demo.sh                     # newest backups/oip-after-*.dump
+#   scripts/reset_demo.sh                     # backups/oip-demo-final.dump
 #   scripts/reset_demo.sh path/to/file.dump   # a specific dump
 #   FORCE=1 scripts/reset_demo.sh             # skip the confirmation prompt
 #
@@ -26,16 +26,24 @@ cd "$REPO_ROOT"
 # ---------------------------------------------------------------------------
 # Pick the dump
 # ---------------------------------------------------------------------------
+# The frozen demo state, by name rather than by timestamp. "Newest
+# after-window dump" was fine while windows were the unit of work, but it
+# silently follows whatever ran last -- and the dump that should come back
+# mid-demo is a specific known-good state, not the most recent one.
+FINAL_DUMP="backups/oip-demo-final.dump"
+
 if [ $# -ge 1 ]; then
   DUMP="$1"
+elif [ -f "$FINAL_DUMP" ]; then
+  DUMP="$FINAL_DUMP"
 else
-  # Newest after-window dump. Deliberately not the newest file in backups/:
-  # a before-window dump is a rollback point, not a known-good demo state.
+  # Fallback for a checkout without the frozen dump. A before-window dump is
+  # a rollback point, not a known-good demo state, so those stay excluded.
   DUMP="$(ls -1t backups/oip-after-*.dump 2>/dev/null | head -1 || true)"
 fi
 
 if [ -z "${DUMP:-}" ] || [ ! -f "$DUMP" ]; then
-  echo "No dump found. Looked for backups/oip-after-*.dump" >&2
+  echo "No dump found. Looked for $FINAL_DUMP, then backups/oip-after-*.dump" >&2
   echo "Pass one explicitly: scripts/reset_demo.sh backups/<file>.dump" >&2
   exit 1
 fi
@@ -104,14 +112,24 @@ SELECT 'Regions',                 count(*)::text FROM regions
 UNION ALL
 SELECT 'Zone history buckets',    count(*)::text FROM zone_history
 UNION ALL
-SELECT 'Water quality observations', count(*)::text FROM water_quality_observations;
+SELECT 'Water quality observations', count(*)::text FROM water_quality_observations
+UNION ALL
+SELECT 'Sentinel-2 index readings', count(*)::text FROM optical_index_observations
+UNION ALL
+SELECT 'Reports',                  count(*)::text FROM reports
+UNION ALL
+SELECT 'Agent runs',               count(*)::text FROM agent_runs;
 SQL
   awk -F'|' '{ printf "  %-28s %s\n", $1, $2 }'
 
 echo
-echo "Expected after window 3/4a: 686 events, 10 CRITICAL, 306 candidates,"
-echo "307 prediction logs, 5 model versions (3 evaluated), 4.6M water obs."
+echo "Expected (oip-demo-final, frozen 21 Nov 2026):"
+echo "  666 events, 81 CRITICAL, 306 candidates, 337 prediction logs,"
+echo "  5 model versions (3 evaluated), 4,601,509 water obs, 40 regions,"
+echo "  253 Sentinel-2 index readings, 8 reports, 8 agent runs."
+echo
+echo "The cached external data (Sentinel-2, Copernicus Marine, Open-Meteo,"
+echo "GFW) lives in the oipdata volume, not in this dump, and is untouched."
 echo
 echo "Restart the API so it reconnects cleanly:"
-echo "  (stop the uvicorn process, then)"
-echo "  cd backend && ../.venv/Scripts/python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8001"
+echo "  docker compose restart backend"

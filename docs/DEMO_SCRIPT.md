@@ -1,23 +1,48 @@
-# Demo script — 22 November 2026
+# Demo script — 25 November 2026
 
-Eight to ten minutes. Every number below was read off the running application
-on 20 November after a clean restart. If a figure on screen does not match,
-say so rather than talking over it — the platform's whole argument is that it
-reports what it has.
+Ten to twelve minutes. Every number below was read off the running
+application on **21 November after a clean restart**. If a figure on screen
+does not match, say so rather than talking over it — the platform's whole
+argument is that it reports what it has.
 
 **Before you start**
 
 ```bash
-docker compose up -d db
-cd backend && ../.venv/Scripts/python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8001
+docker compose up -d backend
 ```
 
-Open `http://127.0.0.1:8001/app/india`. If anything looks wrong, run
-`scripts/reset_demo.sh` and restart the API — about a minute.
+Open `http://localhost:8000/app/india`. If anything looks wrong, run
+`scripts/reset_demo.sh` — about a minute.
+
+The caches the real-data pages read are inside the container's data volume
+and survive a restart. To refresh them against the live services (optional,
+and not needed for the demo):
+
+```bash
+python scripts/fetch_marine_conditions.py   # ~10 s
+python scripts/fetch_gfw_activity.py        # ~3 min
+python scripts/fetch_sentinel2_indices.py   # ~15 min
+python scripts/fetch_cmems.py               # ~25 min
+```
 
 **The one-sentence framing, if you only get one:** *this platform separates
 what was measured from what was inferred, and refuses to state anything it
 cannot support — including when that makes it look worse.*
+
+**What is real, in one list.** Worth having straight before you start, because
+it is the first thing you will be asked:
+
+| Layer | Source | Evidence | Status |
+|---|---|---|---|
+| India water quality | CPCB real-time analysers | OBSERVED | **Live** — 19 of 2,740 water bodies have a reading from the last 2 days |
+| India water quality (historic) | CPCB / CWC via NWDP | OBSERVED | 2.7M readings to 2025; the two NWDP feeds are **down** (expired certificate) and say so |
+| Water-quality indices | Sentinel-2 L2A via Copernicus | OBSERVED | **Live** — 253 readings, 35 of 40 regions, newest 20 Nov |
+| Chlorophyll cross-check | Copernicus Marine ocean colour | OBSERVED | **Live** — all 35 regions |
+| Sea conditions | Open-Meteo | INFERRED | **Live** — all 40 regions |
+| Surface currents | Copernicus Marine physics | INFERRED | **Live** — all 40 regions, drives drift |
+| Vessel activity | Global Fishing Watch | INFERRED | **Live** — 60,403 vessel-hours |
+| SAR benchmark candidates | PANGAEA 980773 (CC BY 4.0) | MEASURED | 306 patches, real |
+| Pollution events, vessel suspects | Demonstration data | SIMULATED | Labelled on every page |
 
 ---
 
@@ -26,8 +51,17 @@ cannot support — including when that makes it look worse.*
 ### 1a. India Overview — `/app/india`
 
 **On screen:** 2,740 water bodies · 4,951 monitoring stations ·
-**4,601,153 observations** · Current data **0** · Recent data **26** ·
+**4,601,509 observations** · Current data **19** · Recent data **7** ·
 Historical only **2,714** · 35 states · 613 districts.
+
+**Say this, it is new and it is the strongest line on the page:**
+
+> "Nineteen water bodies have a reading from the last two days. Until
+> yesterday that number was zero — CPCB's real-time analysers were being
+> reported as unreachable, and that turned out to be a missing root
+> certificate on this laptop rather than anything wrong at CPCB. One
+> machine's trust gap had been recorded as a national outage. The newest
+> reading in there now is from this morning."
 
 > "This is real data — four and a half million parameter measurements from
 > CPCB and CWC, covering 2,740 water bodies across all 35 states and union
@@ -92,12 +126,96 @@ now: no recent data…"*, 5 citations, a limitations note.
 
 ---
 
+## 2b · Real Satellite Observations — `/app/real-observations` (2 min)
+
+**The strongest page in the marine half. Do not rush it.**
+
+Open it. Point at the green **Real · Sentinel-2** badge and the **OBSERVED**
+tile.
+
+> "253 readings over 35 of our 40 regions. The newest was acquired on the
+> 20th — yesterday. These are not a demonstration: Copernicus computed them
+> from actual Sentinel-2 scenes, and only from pixels the scene
+> classification layer marks as water, so a coastal cell reports on its sea
+> rather than on the land in frame."
+
+Point at a thumbnail.
+
+> "That is the scene the numbers in that row came from. Not a stock image —
+> the actual pass, on the actual date."
+
+**Then the part that matters.** Scroll to a dimmed row — Bay of Bengal Z6,
+Gulf of Khambhat, Lakshadweep Sea NE or Odisha Coast W.
+
+> "Four rows have no numbers. The satellite did pass over, but the cell was
+> almost entirely cloud — one of these was computed from a single water
+> pixel. The arithmetic works fine; it describes nothing. One of them gave a
+> floating-material index ten times every other cell, which is exactly the
+> figure that would become a headline. Below a hundred water pixels the page
+> prints a dash."
+
+**If they ask about the FDI column — and they will:**
+
+> "Floating Debris Index. It responds to anything floating that is brighter
+> in the near-infrared than the water around it. The paper that defines it
+> cannot separate plastic from seaweed, foam, timber or spume without
+> further spectral analysis, and sun glint raises it too. So it says
+> *possible floating material*. The word plastic appears on this page only
+> where it is being ruled out."
+
+**The Chl-a column:**
+
+> "Chlorophyll twice, deliberately. NDCI is a two-band ratio we compute here
+> from raw reflectance. The Chl-a column is Copernicus Marine's validated
+> multi-sensor retrieval of the same quantity. Neither is adjusted to agree
+> with the other — where they track together our cheap measure is worth
+> something, and where they diverge, that is the useful part."
+
+---
+
+## 2c · Ocean Overview — live sea state and traffic (1.5 min)
+
+`/app/overview`, scroll to **Sea conditions**.
+
+> "Wind, waves and sea-surface temperature for all forty regions, from
+> Open-Meteo. Labelled INFERRED, not OBSERVED — it is a weather model's
+> analysis, not a measurement, and the platform does not promote one to the
+> other just because it is accurate."
+
+**The line to land:**
+
+> "Eighteen of forty regions are below three metres per second right now.
+> Below that the sea goes flat, and a flat sea in C-band radar looks exactly
+> like oil. So any dark formation reported in those regions today is
+> ambiguous on the physics, before any model is involved. That caveat has
+> always been in the detector's documentation; this attaches it to today's
+> weather."
+
+Scroll to **Vessel activity**.
+
+> "Global Fishing Watch — 60,403 vessel-hours across 25 of 40 regions.
+> Arabian Sea Z4 is the busiest at 15,800 hours, mostly Chinese and Iranian
+> flagged. Konkan and Goa at 11,000, all Indian."
+
+**If asked why no vessel names — this is a good answer, use it:**
+
+> "Deliberately absent. This platform has a table that marks a vessel as the
+> source suspect for a detection at up to 0.97 confidence, and its
+> detections are research benchmark patches — nobody spilled anything. A
+> real ship's identity in that row names an identifiable vessel as the
+> source of a spill that never happened, on a page built to be
+> screenshotted. The caveat underneath does not survive a crop. So the
+> suspect demo uses fictional vessels, and Global Fishing Watch answers the
+> question it can answer honestly: how busy is this water."
+
+---
+
 ## 3 · Model Performance — measured, not claimed (2 min)
 
 `/app/models`
 
 **On screen:** Registered models **5** · Evaluated **3** ·
-Inference P95 **9.63 ms · 105 request(s) · sar-oil-slick-v2.2**.
+Inference P95 **37.5 ms · 131 request(s) · sar-oil-slick-v2.2**.
 
 > "Three models have been evaluated against held-out test splits. Two have
 > not, and their metrics are null — the page says 'Not evaluated' rather than
@@ -159,19 +277,25 @@ Predicted class distribution PSI **0.0322** — Stable.
 
 `/app/forecasts`
 
-Select **Java Sea SE**.
+Select **Gulf of Kutch W**.
 
-**On screen:** 23d observed · backtest MAE **0.785** vs naive **0.791** →
-**beats** the naive baseline.
+**On screen:** 55 observations · backtest MAE **5.59** vs naive **3.99** →
+"did **NOT** beat the naive last-value baseline; treat the trend as weakly
+supported."
 
-Now select **Arabian Sea NE**.
+Try one or two more. They all say the same thing.
 
-**On screen:** MAE **1.368** vs naive **0.572** → "does **NOT** beat the
-naive baseline."
+> "Every forecast is backtested against last-value-carried-forward — predict
+> today what you saw yesterday. Of forty regions, **not one beats it**. Each
+> chart says so in its own words, and the model still runs and still shows
+> its intervals, with the verdict attached."
 
-> "Every forecast is backtested against last-value-carried-forward. Of 38
-> regions, exactly **one** beats it, and barely. The other 37 lose, and each
-> one says so on its own chart."
+**The line worth saying out loud:**
+
+> "On the old region set this was one region out of thirty-eight. Re-cutting
+> the regions to India's EEZ made it zero out of forty. The number moved the
+> wrong way, and it is reported as it stands — I did not go looking for a
+> window where it looked better."
 
 > "That is the honest result for a damped-trend model on sparse detection
 > counts. A dashboard that hid the comparison would look far cleverer."
@@ -193,9 +317,9 @@ naive baseline."
 
 `/app/knowledge-graph`
 
-**On screen:** 38 regions in the selector, default centre with roughly
-**113 nodes / 137 edges** at 2 hops. Summary below: **4,378 nodes /
-4,504 edges**.
+**On screen:** 40 Indian regions in the selector, default centre with
+roughly **104 nodes / 125 edges** at 2 hops. Summary below: **4,131 nodes /
+4,459 edges**, and **0 unresolved citations**.
 
 > "Built entirely from foreign keys already in the schema — no new data, and
 > nothing inferred from similarity. Rings are hop distance from the centre."
@@ -203,8 +327,9 @@ naive baseline."
 **Hover a node** → evidence level and attributes appear.
 **Click a pollution event** → the graph re-centres on it.
 
-Now centre on a region whose events carry reports (**Gulf of Mexico SE**),
-click through to an event, and point at the dashed edges.
+Now centre on a region whose events carry reports (**Gulf of Kutch W** or
+**Gulf of Mannar**), click through to an event, and point at the dashed
+edges.
 
 > "The dashed grey edges are different. Those are citations resolved from
 > `reports.sources` — a JSON column, not a declared relationship. The ids do
@@ -255,6 +380,60 @@ If time collapses, do these three and nothing else.
 
 # Likely questions
 
+**Is that plastic?** *(The FDI column. Expect this one.)*
+No, and the platform will not say it is. The Floating Debris Index responds
+to anything floating that is brighter in the near-infrared than the water
+around it. Biermann's 2020 paper, which defines the index, separates floating
+material into plastics, seaweed, sea-snot, foam, timber and spume — and needs
+further spectral analysis to tell them apart. At ten metres a positive pixel
+is roughly a tennis court of *something*. Sargassum, foam lines and sun glint
+all raise it. So it is labelled "possible floating material", and there is no
+threshold anywhere in the code above which it gets called plastic.
+
+**How much of this is actually real?**
+Point at the table at the top of this script. The India water data, the
+Sentinel-2 indices, the chlorophyll, the sea state, the currents, the vessel
+activity and the 306 benchmark SAR patches are real. The pollution events and
+the vessel suspects are simulated and labelled SIMULATED on every page that
+shows them. The honest summary is that the *measurement* layers are real and
+the *incident* layer is a demonstration.
+
+**Did your detector find any oil in the real Sentinel-1 imagery?**
+It found nothing, and the more interesting part is that the result does not
+count. Thirty tiles from three recent scenes — one acquired that morning —
+went through the trained classifier and came back `no_anomaly` every time, at
+confidence 1.000 on every single tile. That is not certainty, it is a
+saturated softmax. On its own training patches the same model spreads from
+0.005 to 0.83. A flat 1.000 means the input is unlike anything it was fitted
+on: it was trained on pre-stretched quicklook JPEGs and these are calibrated
+backscatter. So the pipeline works end to end and the model needs retraining
+on this product before its output means anything. The script says so itself
+at the end of every run.
+
+**Why do two of the Indian water feeds say Unavailable?**
+Because they are. Both NWDP endpoints sit behind a firewall appliance
+presenting its factory certificate, which has expired. That is recorded
+through the real ingestion pipeline with the exact error and the last
+successful sync, not hand-edited. The third CPCB feed — the real-time
+analysers — works, and is where the live readings come from. Worth adding:
+it was *also* reported as down until yesterday, and that turned out to be a
+missing root certificate on this Windows machine rather than anything wrong
+at CPCB. One host's trust gap had been recorded as a national outage.
+
+**Why does Gemini not write the report summaries?**
+Google retired the model mid-build: the one we had integrated now answers 404
+"no longer available to new users", and every current replacement answered
+503 or timed out across a dozen attempts. The layer is built, tested and
+cached — and the fallback is the thing worth showing, because the report
+renders in full from computed values with nothing fabricated. There is also a
+check that would discard any AI summary containing a number not present in
+the evidence it was given.
+
+**Why no vessel names on the detections?**
+See section 2c. Short version: naming a real ship as the suspect for a spill
+that did not happen is an accusation, and the caveat underneath does not
+survive a screenshot crop.
+
 **Why does drift say WARNING? Is something broken?**
 No. It compares two independent held-out benchmarks and found the confidence
 distribution shifted — PSI 0.11, just past the 0.10 line — while the predicted
@@ -292,18 +471,24 @@ object detector, but its test split was never committed, so its metrics are
 null too.
 
 **How much of this is simulated?**
-The India water data is real: 4.6 million CPCB and CWC observations. The 306
-SAR candidates are real Sentinel-1 patches from PANGAEA 980773. The marine
-pollution events — all 686 — are synthetic, tagged `SIMULATED` by the API,
-and every page in that module says so. Nothing is simulated without a label.
+See the table at the top of this script. Real: 4.6M CPCB and CWC water
+observations with 19 water bodies current today, 253 Sentinel-2 index
+readings, Copernicus Marine chlorophyll and currents, Open-Meteo sea state,
+60,403 vessel-hours from Global Fishing Watch, and 306 benchmark Sentinel-1
+patches from PANGAEA 980773. Simulated: the 666 marine pollution events and
+the vessel suspects, both tagged and labelled on every page that shows them.
+Nothing is simulated without a label.
 
-**Why are the marine regions global when the rest is India?**
-Honestly: the marine module was built first, against globally distributed
-demo regions, and the India work came later and became the substantial part.
-Rather than renaming regions to look coherent, every marine page states that
-it is a global demonstration and points at Candidate Review for the real data.
-Re-centring on Indian waters — the Gulf of Kutch, Gulf of Mannar — is the
-first thing I would do next.
+**The marine regions are Indian now — were they always?**
+No, and it is worth being straight about it. The marine module was built
+first against globally distributed demo regions, and the India work came
+later and became the substantial part. They were re-cut to India's EEZ: 15
+regions, 40 cells, from the Gulf of Kutch to the Andamans, with the risk
+engine's coastal and protected-area factors now pointing at real Indian
+receptors. The *regions* are real geography; the *events* in them are still
+simulated, and every marine page says so. If anything that distinction
+matters more now than it did — "Gulf of Mannar" is far easier to mistake for
+a real incident than "Java Sea SE" ever was.
 
 **Why can't I reach the SAR candidates from a region in the graph?**
 Because no foreign key connects them. `sar_candidates` has no FKs at all, so
@@ -333,9 +518,47 @@ also deterministic, so it does not rearrange itself between renders, and at
 exploration over thousands of nodes I would add a real library.
 
 **What would you do next, with more time?**
-Four things, in order: live Sentinel-1 ingestion through the Copernicus API so
-the marine side stops being a demonstration; re-centre the marine regions on
-Indian waters so the platform is one project rather than two; calibrate the
-SAR confidence scores so the threshold is a probability instead of a ranking
-cut; and add an LLM narrative layer over the report structure that already
-exists — generation last, because the grounding is what makes it safe.
+
+The four answers I used to give here are now done — the marine regions are
+Indian, Sentinel-1 and Sentinel-2 come through Copernicus, and the LLM
+narrative layer exists with its grounding check. What that work produced was
+a better list:
+
+1. **Retrain the SAR classifier on calibrated backscatter.** The current
+   model was fitted on pre-stretched quicklook JPEGs and saturates to 1.000
+   on real Sentinel-1 product. Until that is fixed, live screening proves
+   the pipeline and nothing about the ocean. This is the single highest-value
+   item and everything else is secondary to it.
+2. **Calibrate the confidence scores** so the 0.5 threshold is a probability
+   rather than a ranking cut. The saturation above is the sharpest evidence
+   yet that it currently is not.
+3. **Finish the Gemini narratives** once Google's capacity recovers — one
+   command, no code change.
+4. **Pin the CPCB certificate chain** if the NWDP feeds are needed, or wait
+   for CPCB to renew. Currently reported as unavailable, which is correct.
+
+---
+
+# Next steps — deliberately not done
+
+Listed so nobody has to guess whether these were forgotten or declined.
+
+- **Natural Earth coastline.** The risk engine measures distance to the
+  nearest of 90 coastal reference points, not to a real coastline, and says
+  so in every assessment. A real polygon would tighten the coastal factor.
+- **WDPA protected-area boundaries.** Same shape of problem: 28 curated
+  marine protected areas by centroid, which under-states proximity for large
+  reserves. The platform states that limitation where it uses the number.
+- **Legal corpus expansion.** The RAG corpus answers from what it holds and
+  refuses otherwise; it simply holds less than it could.
+- **MARIDA marine-debris classifier.** A second trained model. Not attempted
+  — the existing one needs retraining first (item 1 above), and adding a
+  second unvalidated model would be worse than having one.
+- **Experiments page and optical YOLO evaluation.** Scaffolding exists; no
+  measured results, which is why the page says so rather than showing
+  placeholder metrics.
+- **CPCB forecasting.** The forecaster runs on marine regions; pointing it at
+  the water-quality series needs the daily-bucket work redone for a different
+  cadence.
+- **Real vessel identities on detections.** Declined on purpose, not pending.
+  See section 2c.
