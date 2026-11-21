@@ -21,6 +21,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Info, Satellite, Waves } from "lucide-react";
 import { api } from "@/lib/api";
+import IncidentReplayPanel from "@/components/IncidentReplayPanel";
 import {
   ErrorState,
   EvidenceBadge,
@@ -41,6 +42,13 @@ export default function OpticalObservations() {
   const indices = useQuery({
     queryKey: ["optical-indices"],
     queryFn: () => api.opticalIndices(),
+  });
+  // A documented incident put through the same detector. Validation
+  // evidence for the SAR side, shown here because this is the page about
+  // what the platform has actually measured.
+  const replay = useQuery({
+    queryKey: ["incident-replay"],
+    queryFn: () => api.incidentReplay(),
   });
 
   if (indices.isLoading) return <LoadingSkeleton rows={5} height={90} />;
@@ -90,6 +98,8 @@ export default function OpticalObservations() {
           detail="not simulated, not inferred"
         />
       </div>
+
+      <IncidentReplayPanel query={replay} />
 
       <SectionCard
         title="Latest acquisition per region"

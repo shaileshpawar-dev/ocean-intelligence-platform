@@ -1123,3 +1123,57 @@ export interface VesselActivityResponse {
     identity_note: string;
   };
 }
+
+/* -------------------------------------------------------------------------
+   Historical incident replay
+
+   A documented real incident put through the same SAR pipeline. Validation
+   evidence, not a monitoring product — and negatives are served exactly like
+   positives, because a finding that only appears when it is favourable is
+   not a finding.
+   ------------------------------------------------------------------------- */
+
+export interface IncidentReplay {
+  incident: {
+    name: string;
+    imo: string;
+    flag: string;
+    sank_at: string;
+    latitude: number;
+    longitude: number;
+    position_text: string;
+    distance_text: string;
+    cargo_text: string;
+    citation: string;
+    region_code: string;
+  };
+  label: string;
+  screening: {
+    tiles_screened: number;
+    passes: {
+      day: string;
+      days_after: number;
+      tiles: number;
+      max_p_oil: number;
+      flagged: number;
+      wind_speed_ms: number | null;
+      wind_source: string | null;
+    }[];
+    max_p_oil: number;
+    flagged_tiles: number;
+    detected: boolean;
+    prepared_tile_mean: number | null;
+    training_tile_mean: number;
+    model: string;
+    window: string;
+  };
+  thumbnail: string | null;
+  verdict: string;
+  interpretation: string;
+}
+
+export interface IncidentReplayResponse {
+  items: IncidentReplay[];
+  available: boolean;
+  note: string;
+}

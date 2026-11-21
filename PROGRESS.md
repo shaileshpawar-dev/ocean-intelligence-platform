@@ -1969,3 +1969,61 @@ the correct answer and was `1.000` before.
 **Tests:** 4 new; 2 old assertions updated because they encoded the
 percentile-stretch behaviour (a flat tile is now valid — a fixed window
 cannot divide by zero). 824 passed.
+
+---
+
+# Overnight run (21–22 Nov)
+
+## Decisions made overnight
+
+- **No oil event created from the MSC ELSA 3 replay.** The detector flagged
+  nothing on any of the four passes. The instruction was to create an event
+  only for a genuine detection, so the result is stored as validation
+  evidence instead.
+- **Incident replay widened from 15 km / 14 days to 35 km / 21 days** after
+  the first run found only one Sentinel-1 pass. More passes is better
+  evidence; the wreck position and all figures are unchanged.
+- **FDI keeps no absolute floor.** Confirmed from the Biermann paper itself
+  that no published threshold exists (see MP-adjustments).
+
+## Blocked overnight
+
+- *(nothing yet)*
+
+## OV-A — Historical incident replay: MSC ELSA 3
+
+**Done. Verified against the official source, screened, and not detected.**
+
+Incident confirmed from the **Kerala State Disaster Management Authority
+SITREP-3** (1300 hrs, 25/05/2025): MSC ELSA 3, **IMO 9123221**, Liberia
+flag, sank **07:50 on 25 May 2025** at **09°18.75′N 076°08.16′E**, 13 nm
+south-west of Kochi, carrying **367 t heavy fuel oil and 84.4 t diesel**.
+The Coast Guard reported signs of an oil spill and applied dispersant. The
+position falls inside the platform's `malabar_coast_s` region.
+
+**Screening result — 31 tiles over 4 Sentinel-1 passes, nothing flagged:**
+
+| Pass | After | Tiles | Max p(oil) | Wind |
+|---|---|---|---|---|
+| 2025-05-28 | +3 d | 12 | 0.0033 | 9.3 m/s |
+| 2025-06-02 | +8 d | 2 | 0.0008 | 3.4 m/s |
+| 2025-06-09 | +15 d | 12 | 0.0623 | 5.4 m/s |
+| 2025-06-14 | +20 d | 5 | 0.0005 | 8.2 m/s |
+
+**Recorded as a negative, with why it is weak evidence.** The earliest pass
+was three days after the sinking at **9.3 m/s wind** — enough roughening to
+suppress slick contrast — dispersant had been applied, oil weathers within
+days, and the model is still outside its measured distribution (prepared
+tile brightness 134 vs training 147). It does **not** establish that no
+slick was present, and the page says so.
+
+Shown on **Real Observations** with the actual Sentinel-1 tile the detector
+saw, the per-pass table including wind, and the full citation.
+
+**Why this matters more than screening ordinary water:** a detector that
+always answered "no" would score identically on open sea. This is the test
+that could have distinguished them, and it is published whichever way it
+comes out — pinned by test, since a result that only appears when
+favourable is not a result.
+
+**Tests:** 7 new.

@@ -432,3 +432,47 @@ def vessel_activity(db: Session = Depends(get_db)) -> dict:
             ),
         },
     }
+
+
+#: Where the incident replay writes its result and thumbnail.
+REPLAY_DIR = CACHE_DIR.parent / "incident_replay"
+
+
+@router.get("/incident-replay", summary="Historical incident replay results")
+def incident_replay() -> dict:
+    """Documented real incidents replayed through the SAR detector.
+
+    Screening ordinary water and finding nothing is weak evidence, because a
+    detector that always answered "no" would behave identically. These are
+    incidents known to have happened, with a position and date from an
+    official source, put through the same pipeline.
+
+    Negative results are served exactly like positive ones. A finding that
+    only appears when it is favourable is not a finding.
+    """
+    items = []
+    for path in sorted(REPLAY_DIR.glob("*.json")):
+        try:
+            items.append(json.loads(path.read_text(encoding="utf-8")))
+        except (json.JSONDecodeError, OSError):
+            continue
+    return {
+        "items": items,
+        "available": bool(items),
+        "note": (
+            "A replay is validation evidence, not a monitoring product. A "
+            "negative means the detector did not flag the site on the "
+            "satellite passes that existed -- not that nothing was there."
+        ),
+    }
+
+
+@router.get(
+    "/incident-replay/{name}/thumbnail", summary="Replay scene thumbnail"
+)
+def replay_thumbnail(name: str) -> FileResponse:
+    """The prepared SAR tile over the incident position."""
+    candidate = (REPLAY_DIR / name).resolve()
+    if REPLAY_DIR.resolve() not in candidate.parents or not candidate.is_file():
+        raise HTTPException(status_code=404, detail=f"No replay thumbnail {name!r}")
+    return FileResponse(Path(candidate), media_type="image/png")

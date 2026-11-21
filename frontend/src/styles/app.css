@@ -3772,3 +3772,39 @@ a.badge-real {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* Incident replay: the scene beside the numbers. */
+.replay-body {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .replay-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+.replay-figure {
+  margin: 0;
+}
+
+.replay-figure img {
+  width: 100%;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.25));
+  display: block;
+}
+
+.replay-figure figcaption {
+  margin-top: 6px;
+  font-size: var(--fs-2xs);
+  color: var(--text-muted, #94a3b8);
+  line-height: 1.45;
+}
+
+.replay-detail > * + * {
+  margin-top: 12px;
+}

@@ -27,6 +27,7 @@ import type {
   Metrics,
   ModelVersion,
   MarineConditionsResponse,
+  IncidentReplayResponse,
   OpticalIndexResponse,
   VesselActivityResponse,
   Overview,
@@ -337,6 +338,10 @@ export const api = {
   marineConditions: () => get<MarineConditionsResponse>("/marine-conditions"),
 
   vesselActivity: () => get<VesselActivityResponse>("/vessel-activity"),
+
+  incidentReplay: () => get<IncidentReplayResponse>("/incident-replay"),
+  incidentReplayThumbnailUrl: (name: string) =>
+    `${API_ROOT}/incident-replay/${encodeURIComponent(name)}/thumbnail`,
 
   opticalIndices: (latestOnly = true, region?: string) =>
     get<OpticalIndexResponse>(
