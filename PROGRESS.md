@@ -8,7 +8,7 @@ Branch `feature/real-data`. Fallbacks: tag `demo-2026-11-22.1`,
 | Step | What | Status | Date |
 |---|---|---|---|
 | 0 | Credential smoke test | **done** — all 5 services pass | 21 Nov |
-| 1 | Refresh real India water data | not started | |
+| 1 | Refresh real India water data | **done** — feeds down (TLS), honest display | 21 Nov |
 | 2 | Indian-regions consistency (a–d) | not started | |
 | 3 | Gemini narrative layer | not started | |
 | 4 | Real Sentinel-2 water detections | not started | |
@@ -23,7 +23,9 @@ Branch `feature/real-data`. Fallbacks: tag `demo-2026-11-22.1`,
 | 13 | Forecasting on real data | not started | |
 | 14 | Final pass / freeze | not started | |
 
-**Blocked, needs you:** nothing.
+**Needs a decision from you:** all three Indian water feeds are unreachable
+behind an untrusted TLS chain. See the Step 1 entry — option B needs your
+say-so.
 
 **Note:** the plan refers to tags `demo-2026-11-22.1 / .2`. Only `.1` exists;
 there is no `.2`.
@@ -1181,3 +1183,79 @@ credential value is printed by the script, the tests, or this log.
 **Tests:** 689 passed, 25 skipped.
 
 **Next:** Step 1 — refresh the real India water data.
+
+---
+
+## Step 1 — Refresh real India water data
+
+**Done, 21 Nov — but no new data arrived: all three feeds are unreachable.**
+Per the plan ("if the feed is down, record that and keep the honest display"),
+the failure was recorded through the real pipeline and the display now says so.
+
+### What happened
+
+Every Indian water source fails TLS verification:
+
+```
+cpcb_nwdp    DOWN  CERTIFICATE_VERIFY_FAILED: self-signed certificate in certificate chain
+cwc_nwdp     DOWN  CERTIFICATE_VERIFY_FAILED: self-signed certificate in certificate chain
+cpcb_rtwqms  DOWN  CERTIFICATE_VERIFY_FAILED: self-signed certificate in certificate chain
+```
+
+### It is not this machine
+
+Three servers do not break identically by chance, so that was tested:
+
+| From this machine | Result |
+|---|---|
+| `urllib` → google.com | **OK** |
+| `urllib` → nwdp.nwic.gov.in | FAIL |
+| `urllib` + explicit certifi bundle → nwdp.nwic.gov.in | FAIL |
+| `httpx` (certifi) → nwdp.nwic.gov.in | FAIL |
+
+Ordinary HTTPS works fine here, and Gemini, CDSE and GFW all connected over
+TLS in Step 0. The Indian government endpoints genuinely present a chain that
+terminates in a root no public bundle trusts. Updating certifi will not fix
+it. (CPCB has prior form: `docs/data-sources.md` already records an expired
+certificate on a different CPCB endpoint.)
+
+### What was done instead
+
+Ran the real ingestion for all three providers so the **pipeline** recorded the
+outcome rather than anything being hand-edited. `is_available` flipped to
+false on each, with the TLS error stored against the source. The Data Sources
+page now reads **"Unavailable"** with the exact error and the last successful
+sync date (26 Sep). Counts are unchanged and still honest: **2,740 total —
+0 current, 26 recent, 2,714 historical-only**, newest observation
+26 Sep 2026.
+
+### Your decision
+
+- **A — leave it (current state).** The feeds are reported unavailable, the
+  India data stays at its 26 Sep state, and every page already says so. This
+  is what the plan prescribes and needs nothing from you.
+- **B — pin the certificate.** Fetch the chain once, pin its SHA-256
+  fingerprint, and verify against that single certificate. A man-in-the-middle
+  presenting any other certificate still fails, so it is far narrower than
+  disabling verification — but it does trust a certificate nobody else
+  vouches for, and the pin needs replacing whenever CPCB rotates it. **Say the
+  word and I will implement it.**
+- **C — disable TLS verification.** Not done, and not something to do
+  unprompted: it would accept any certificate from anyone on the path to a
+  government server.
+
+### Gotchas
+
+- **The freshness engine was not touched**, as instructed. The 0/26/2,714
+  split is the engine correctly reporting 54-day-old data.
+- `is_available` is written by the **ingestion run**, not probed per request,
+  so a stale `true` can outlive a dead feed. Running an ingestion is what
+  makes the page honest — worth knowing before a demo.
+- The `health` command reports `cpcb_rtwqms` as **OK** with "No health probe
+  implemented for this provider", which reads as healthy when it is not. The
+  other two correctly report DOWN. Worth a probe implementation later; not
+  fixed here to stay inside the step.
+
+**Tests:** 689 passed, 25 skipped.
+
+**Next:** Step 2 — Indian-regions consistency.
