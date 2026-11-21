@@ -94,9 +94,20 @@ def check_gemini() -> None:
         for m in models
         if "generateContent" in (m.get("supportedGenerationMethods") or [])
     ]
-    flash = [m for m in usable if "flash" in m and "thinking" not in m]
-    # Prefer a stable, non-preview flash build for a demo.
-    stable = [m for m in flash if not any(t in m for t in ("preview", "exp", "-lite"))]
+    # Text generation only. The catalogue mixes image, tts and live variants
+    # in with the text models, and an image model answers a text prompt with
+    # a quota error that looks exactly like the model being unavailable --
+    # which is how a 429 on gemini-2.5-flash-image came to be reported as
+    # "no model answered".
+    flash = [
+        m
+        for m in usable
+        if "flash" in m
+        and not any(t in m for t in ("thinking", "image", "tts", "live", "audio"))
+    ]
+    # Prefer a stable, non-preview build. Lite builds are kept: on a free
+    # tier they are frequently the only ones with capacity.
+    stable = [m for m in flash if not any(t in m for t in ("preview", "exp"))]
 
     # Listing a model is not the same as being allowed to call it. The
     # catalogue happily returns ids that answer 404 "no longer available to
@@ -105,7 +116,7 @@ def check_gemini() -> None:
     # actually called, cheapest prompt possible, and the first that answers
     # is the one recommended.
     tried: list[str] = []
-    for candidate in (stable or flash or usable)[:4]:
+    for candidate in (stable or flash or usable)[:8]:
         try:
             probe = httpx.post(
                 f"https://generativelanguage.googleapis.com/v1beta/models/"

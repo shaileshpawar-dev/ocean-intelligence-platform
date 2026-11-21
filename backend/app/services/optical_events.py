@@ -49,29 +49,37 @@ from app.vision.sentinel2_indices import FDI_LABEL, MIN_WATER_PIXELS
 
 logger = get_logger(__name__)
 
-#: NDCI at or above which a reading is treated as a bloom signal.
+#: Thresholds: the 99th percentile of this platform's own measured
+#: distribution, over **2,744 readings across 36 Indian regions spanning
+#: 21 Nov 2025 to 20 Nov 2026** (recomputed 21 Nov 2026).
 #:
-#: Anchored to literature rather than to this dataset. Mishra & Mishra (2012)
-#: calibrate NDCI against chlorophyll-a; values approaching 0.2 correspond to
-#: the productive end of their range. It also sits above this dataset's 95th
-#: percentile (0.164), so it is conservative twice over.
+#: They were first set from a 30-day sample, and one of them was wrong
+#: because of it. NDTI's 95th percentile over those 30 November days was
+#: -0.0082 -- every reading negative -- while over the full year it is
+#: +0.0281. The 30-day window was winter; the year includes the monsoon.
+#: A threshold fitted to the quiet season flagged **14% of all readings** as
+#: turbidity plumes, which is not an anomaly detector, it is a thermometer
+#: reading the season.
+#:
+#: All three now sit at p99, so "flagged" means the same thing for each:
+#: the top one percent of what this platform has measured in Indian coastal
+#: water. That is a checkable claim and a deliberately weak one.
+
+#: NDCI p99 = 0.1961. Kept at 0.20 because Mishra & Mishra (2012) put the
+#: productive end of their chlorophyll-a calibration there too -- the
+#: literature anchor and this dataset's own distribution agree, which is
+#: worth more than either alone.
 NDCI_BLOOM = 0.20
 
-#: FDI at or above which floating material is flagged.
-#:
-#: The 95th percentile of this platform's own stored FDI distribution
-#: (0.0391, over 253 readings from 35 Indian regions, 21 Nov 2026), rounded.
-#: Biermann et al. (2020) threshold against local background rather than a
-#: constant, and no constant would transfer between water types -- so this is
-#: explicitly "unusual for this coast as measured here", not an absolute.
-FDI_FLOATING = 0.040
+#: FDI p99 = 0.1028. Biermann et al. (2020) threshold against local
+#: background rather than a constant, and no constant transfers between
+#: water types, so this is explicitly "unusual for this coast as measured
+#: here".
+FDI_FLOATING = 0.10
 
-#: NDTI at or above which a turbidity plume is flagged.
-#:
-#: Also the 95th percentile of the stored distribution (-0.0082, same sample),
-#: rounded. Every NDTI reading in this dataset is negative, so an absolute
-#: positive threshold borrowed from a turbid-lake study would never fire.
-NDTI_PLUME = -0.010
+#: NDTI p99 = 0.1011. See the note above about the seasonal error this
+#: replaces.
+NDTI_PLUME = 0.10
 
 #: Below this many water pixels a reading describes a puddle, not a region.
 #: Imported rather than redefined so the two cannot drift apart.

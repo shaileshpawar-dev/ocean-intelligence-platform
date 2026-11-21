@@ -165,10 +165,11 @@ class Settings(BaseSettings):
     llm_provider: Literal["none", "gemini", "openai", "anthropic"] = "none"
     llm_model: str | None = None
     gemini_api_key: str | None = None
-    #: gemini-2.5-flash returns 404 "no longer available to new users", which
-    #: names gemini-3.8-flash as its replacement. Overridable per
+    #: gemini-2.5-flash returns 404 ("no longer available to new users").
+    #: Its named replacement and every other full flash build answer 429 or
+    #: 503 on this free-tier key; the lite build has capacity. Overridable per
     #: deployment because Google retires model ids on its own schedule.
-    gemini_model: str = "gemini-3.8-flash"
+    gemini_model: str = "gemini-flash-lite-latest"
     openai_api_key: str | None = None
     anthropic_api_key: str | None = None
 

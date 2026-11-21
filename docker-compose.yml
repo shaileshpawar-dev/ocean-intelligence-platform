@@ -67,7 +67,7 @@ services:
       # External data credentials. All default to empty -- the platform
       # reports a source as unavailable rather than substituting fake data.
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.8-flash}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-flash-lite-latest}
       LLM_PROVIDER: ${LLM_PROVIDER:-none}
       LLM_MODEL: ${LLM_MODEL:-}
       CDSE_USERNAME: ${CDSE_USERNAME:-}
@@ -105,7 +105,7 @@ services:
       # External data credentials. All default to empty -- the platform
       # reports a source as unavailable rather than substituting fake data.
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.8-flash}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-flash-lite-latest}
       LLM_PROVIDER: ${LLM_PROVIDER:-none}
       LLM_MODEL: ${LLM_MODEL:-}
       CDSE_USERNAME: ${CDSE_USERNAME:-}

@@ -104,7 +104,7 @@ class GeminiLLM(_SDKProvider):
 
     name = "gemini"
     env_key = "GEMINI_API_KEY"
-    default_model = "gemini-3.8-flash"
+    default_model = "gemini-flash-lite-latest"
     base_url = "https://generativelanguage.googleapis.com/v1beta"
 
     def _load(self) -> Any:

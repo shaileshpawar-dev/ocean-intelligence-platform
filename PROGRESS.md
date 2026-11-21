@@ -31,12 +31,12 @@ entries at the end of this file.
 | # | Step | State |
 |---|---|---|
 | 1 | Real events from real detections | **done** |
-| 2 | Real history for forecasts | not started |
+| 2 | Real history for forecasts | **done** |
 | 3 | Swap simulated data for real; demo mode off | not started |
 | 4 | Ocean Map on real layers | not started |
 | 5 | Fix Sentinel-1 saturation | not started |
-| 6 | Data Sources page | not started |
-| 7 | Gemini retry | not started |
+| 6 | Data Sources page | 6a done (pinned); 6b–d pending |
+| 7 | Gemini retry | model found; narratives pending |
 | 8 | Texts and claims | not started |
 | 9 | Freeze | not started |
 | 10 | Final status report | not started |
@@ -1781,3 +1781,43 @@ nothing — a person updates the pin, not the code.
 "certificate expired".
 
 **Tests:** 10 new.
+
+## MP-2 — Real history for forecasts
+
+**Done, 21 Nov. A full year of measured Sentinel-2 data behind every
+forecast.**
+
+Backfilled **3,006 readings, 21 Nov 2025 → 20 Nov 2026, 36 of 40 regions**
+(2,744 above the water floor). Per-day intervals rather than the P5D the plan
+suggested — Sentinel-2 revisits every few days so the volume is the same, and
+P1D keeps each reading's **exact acquisition date** instead of averaging it
+away. A full year costs one API call and about nine seconds per region.
+
+`zone_history` now has **738 daily buckets across all 40 regions**, derived
+from real events. The Forecasts page gains an index selector: the same Holt
+model and the same `beats_naive` backtest can be pointed at a **measured**
+NDCI / NDTI / FDI series instead of detection activity. 40 regions
+forecastable on activity, 36 on each index, **361-day median history**.
+
+**0 of 148 forecasts beat the naive baseline.** Consistent with the earlier
+finding and now on a year of real measurements rather than 55 synthetic days.
+
+### The threshold error a bigger sample exposed
+
+The Step 1 thresholds were percentiles of a **30-day** sample. NDTI's p95
+over those 30 November days was **−0.0082** — every reading negative. Over
+the full year it is **+0.0281**: the 30-day window was winter, the year
+includes the monsoon. That threshold flagged **397 events, 14% of all
+readings**, which is not an anomaly detector, it is a thermometer reading
+the season.
+
+All three thresholds are now the **p99 of the 2,744-reading, 12-month
+sample**, so "flagged" means the same thing for each: the top 1% of what this
+platform has measured. Events went **523 → 84** (26 bloom / 30 floating /
+28 turbidity), roughly 1% each as intended.
+
+NDCI's p99 is 0.1961 and the literature anchor (Mishra & Mishra 2012) is
+0.20. Those agreeing independently is worth more than either alone, so it
+stayed at 0.20.
+
+**Tests:** 10 new (index series and forecast), 800 passed total.
