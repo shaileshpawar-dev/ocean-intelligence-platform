@@ -17,6 +17,11 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models import Region
 from app.models.optical import OpticalIndexObservation
+from app.vision.marine_conditions import ATTRIBUTION as MARINE_ATTRIBUTION
+from app.vision.marine_conditions import EVIDENCE_LEVEL as MARINE_EVIDENCE_LEVEL
+from app.vision.marine_conditions import LOW_WIND_MS
+from app.vision.marine_conditions import PROVIDER as MARINE_PROVIDER
+from app.vision.marine_conditions import MarineConditionsClient
 from app.vision.sentinel2_indices import (
     CACHE_DIR,
     COPERNICUS_ATTRIBUTION,
@@ -227,3 +232,69 @@ def thumbnail(region_code: str, observed_on: str) -> FileResponse:
             ),
         )
     return FileResponse(Path(candidate), media_type="image/png")
+
+
+@router.get("/marine-conditions", summary="Current wind, waves and SST by region")
+def marine_conditions(db: Session = Depends(get_db)) -> dict:
+    """Open-Meteo conditions for every monitored region, from the cache.
+
+    Served from whatever the last fetch stored, with the time of that fetch
+    attached. No live call: a weather service having a bad afternoon must not
+    slow a page, and a demo must not depend on one.
+
+    An empty cache is reported as empty. There is no synthetic weather.
+    """
+    cached = MarineConditionsClient.load()
+    if not cached:
+        return {
+            "items": [],
+            "fetched_at": None,
+            "available": False,
+            "detail": (
+                "No marine conditions have been fetched. Run "
+                "scripts/fetch_marine_conditions.py. Nothing is substituted."
+            ),
+            "provenance": {
+                "provider": MARINE_PROVIDER,
+                "attribution": MARINE_ATTRIBUTION,
+                "evidence_level": MARINE_EVIDENCE_LEVEL,
+            },
+        }
+
+    names = {r.code: r.name for r in db.scalars(select(Region)).all()}
+    items = []
+    for item in cached.get("items", []):
+        enriched = dict(item)
+        enriched["region_name"] = names.get(item["cell_code"], item["cell_code"])
+        items.append(enriched)
+    items.sort(key=lambda d: d["region_name"])
+
+    with_wind = [i for i in items if i.get("wind_speed_ms") is not None]
+    ambiguous = [i for i in items if i.get("sar_ambiguous")]
+
+    return {
+        "items": items,
+        "fetched_at": cached.get("fetched_at"),
+        "available": bool(with_wind),
+        "detail": cached.get("error"),
+        "totals": {
+            "regions": len(items),
+            "with_wind": len(with_wind),
+            "low_wind_regions": len(ambiguous),
+            "low_wind_threshold_ms": LOW_WIND_MS,
+        },
+        "provenance": {
+            "provider": MARINE_PROVIDER,
+            "attribution": MARINE_ATTRIBUTION,
+            "evidence_level": MARINE_EVIDENCE_LEVEL,
+            "contains_simulated_data": False,
+            "note": (
+                "Numerical weather prediction output from Open-Meteo, not a "
+                "satellite observation: an analysis of conditions constrained "
+                "by measurements but produced by a model, hence INFERRED. "
+                "Below "
+                f"{LOW_WIND_MS} m/s a flat sea surface looks like oil in SAR, "
+                "so dark formations in those regions are ambiguous."
+            ),
+        },
+    }

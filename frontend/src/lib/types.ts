@@ -1002,3 +1002,50 @@ export interface OpticalIndexResponse {
   };
   indices: Record<"ndci" | "ndti" | "fdi", OpticalIndexNote>;
 }
+
+/* -------------------------------------------------------------------------
+   Open-Meteo sea conditions
+
+   Model output, not observation: INFERRED. `sar_ambiguous` is true when wind
+   is below the threshold at which a flat sea looks like oil in SAR, and null
+   when wind is unknown — which is not the same as "fine".
+   ------------------------------------------------------------------------- */
+
+export interface MarineCondition {
+  cell_code: string;
+  region_name: string;
+  latitude: number;
+  longitude: number;
+  observed_at: string | null;
+  wind_speed_ms: number | null;
+  wind_direction_deg: number | null;
+  wind_gust_ms: number | null;
+  wave_height_m: number | null;
+  wave_period_s: number | null;
+  sea_surface_temp_c: number | null;
+  sar_ambiguous: boolean | null;
+  low_wind_threshold_ms: number;
+  evidence_level: string;
+  provider: string;
+  attribution: string;
+}
+
+export interface MarineConditionsResponse {
+  items: MarineCondition[];
+  fetched_at: string | null;
+  available: boolean;
+  detail: string | null;
+  totals?: {
+    regions: number;
+    with_wind: number;
+    low_wind_regions: number;
+    low_wind_threshold_ms: number;
+  };
+  provenance: {
+    provider: string;
+    attribution: string;
+    evidence_level: string;
+    contains_simulated_data?: boolean;
+    note?: string;
+  };
+}

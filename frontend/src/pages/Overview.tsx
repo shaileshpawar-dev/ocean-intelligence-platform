@@ -20,6 +20,7 @@ import {
   YAxis,
 } from "recharts";
 import { api } from "@/lib/api";
+import MarineConditionsPanel from "@/components/MarineConditionsPanel";
 import {
   ErrorState,
   EvidenceBadge,
@@ -55,10 +56,11 @@ export default function Overview() {
       { queryKey: ["alerts", "HIGH"], queryFn: () => api.alerts("HIGH") },
       { queryKey: ["trends", 30], queryFn: () => api.trends(30) },
       { queryKey: ["models"], queryFn: api.models },
+      { queryKey: ["marine-conditions"], queryFn: api.marineConditions },
     ],
   });
-
-  const [overview, health, metrics, drift, alerts, trends, models] = results;
+  const [overview, health, metrics, drift, alerts, trends, models, conditions] =
+    results;
 
   if (results.every((result) => result.isLoading)) {
     return <LoadingSkeleton rows={5} height={96} />;
@@ -123,12 +125,13 @@ export default function Overview() {
           <strong>306 benchmark candidates</strong>
           <span className="muted-note">
             Measured Sentinel-1 patches from PANGAEA 980773 (CC BY 4.0),
-            collocated with ERA5 wind — the one place in this module where
-            nothing is simulated.
+            collocated with ERA5 wind. Nothing here is simulated.
           </span>
         </div>
         <ClipboardCheck size={22} aria-hidden />
       </Link>
+
+      <MarineConditionsPanel query={conditions} />
 
       {overview.data?.contains_simulated_data && (
         <SimulatedBanner

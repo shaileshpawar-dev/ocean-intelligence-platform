@@ -26,6 +26,7 @@ import type {
   ListResponse,
   Metrics,
   ModelVersion,
+  MarineConditionsResponse,
   OpticalIndexResponse,
   Overview,
   PollutionEvent,
@@ -322,6 +323,8 @@ export const api = {
   /* -- Real Sentinel-2 observations -------------------------------------
      Measured indices from Copernicus scenes. Served from stored rows; the
      fetch is a job, so a page load never waits on a satellite API. */
+
+  marineConditions: () => get<MarineConditionsResponse>("/marine-conditions"),
 
   opticalIndices: (latestOnly = true, region?: string) =>
     get<OpticalIndexResponse>(

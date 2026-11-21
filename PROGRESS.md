@@ -1464,3 +1464,35 @@ rather than the number. 4 of 35 rows are in that state.
 value.
 
 **Tests:** 13 new (grid, water floor, FDI wording, parser), 720 passed total.
+
+## FT-5 — Open-Meteo sea conditions
+
+**Done, 21 Nov.** Real wind, waves and sea-surface temperature for all 40
+regions on Ocean Overview, badged **Real · Open-Meteo** and **INFERRED**.
+No key, no registration, two requests for all forty (Open-Meteo accepts
+comma-separated coordinates), cached to disk so the demo makes no live call.
+
+**The wind screener already used real wind.** `ERA5Service` routes through
+`OpenMeteoERA5Client` against the ERA5 archive; a live probe returned
+**4.04 m/s, quality_status `reanalysis_available`** for a real point and
+time. Nothing to replace — recorded rather than claimed as new work.
+
+**The number worth showing: 18 of 40 regions are below 3 m/s right now.**
+That is the panel's lead, because it turns an abstract caveat into a live
+one — below that threshold the sea goes flat, a flat sea in C-band SAR looks
+like oil, and any dark formation reported in those regions today is ambiguous
+on the physics before any model is involved.
+
+**Labelled INFERRED, not OBSERVED.** Open-Meteo serves numerical weather
+prediction output: an analysis constrained by measurements but produced by a
+model. Calling it an observation because it happens to be accurate would
+empty the word everywhere else it matters.
+
+**Gotcha:** Open-Meteo returns an *object* for one location and an *array*
+for several, so handling either shape alone breaks the other case. Missing
+values stay `None` and the low-wind flag is tri-state — unknown wind is not
+calm wind, and rendering it as 0.0 m/s would invert the conclusion a reader
+draws about whether a detection means anything.
+
+**Tests:** 12 new, 732 passed total. Overview verified in-browser, no console
+errors.
