@@ -203,7 +203,11 @@ def _ai_summary(report: Report) -> dict | None:
     if not report.ai_narrative:
         return None
     return {
-        "label": AI_LABEL,
+        # The model is named in the label itself, not only in the metadata
+        # line: a reader should be able to tell which model wrote a
+        # paragraph without hunting for it, and a cached narrative may
+        # outlive the model that produced it.
+        "label": f"{AI_LABEL} · {report.ai_model}" if report.ai_model else AI_LABEL,
         "text": report.ai_narrative,
         "model": report.ai_model,
         "generated_at": (
@@ -211,10 +215,11 @@ def _ai_summary(report: Report) -> dict | None:
         ),
         "numbers_checked": (report.ai_check or {}).get("checked"),
         "note": (
-            "Written by a language model from the computed values in this "
-            "report. Every figure in it was checked against those values "
-            "before it was stored; the figures themselves come from the "
-            "deterministic engines, not from the model."
+            f"Written by {report.ai_model or 'a language model'} from the "
+            "computed values in this report, once, and cached. Opening this "
+            "page calls no model. Every figure was checked against the "
+            "evidence before it was stored; the figures themselves come from "
+            "the deterministic engines, not from the model."
         ),
     }
 

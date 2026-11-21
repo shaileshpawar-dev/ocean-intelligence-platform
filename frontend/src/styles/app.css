@@ -3719,3 +3719,56 @@ a.badge-real {
 .signature-legend-item strong {
   font-size: var(--fs-xs);
 }
+
+/* "stat." beside a signature: this detection is a statistical anomaly
+ * against its own region's history, not a measurement against a limit. The
+ * full sentence is in the tooltip and on the detail page. */
+.anomaly-marker {
+  font-size: var(--fs-3xs, 0.62rem);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 4px;
+  border-radius: var(--r-sm);
+  color: var(--text-muted, #94a3b8);
+  background: rgba(148, 163, 184, 0.16);
+  text-decoration: none;
+  cursor: help;
+}
+
+/* A provider's status sentence, and the raw error behind a toggle.
+ *
+ * The note is amber rather than red for a paused sync: the server answered,
+ * it simply declined, and colouring that as an error sends someone hunting
+ * for a fault that is not there. */
+.provider-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 8px 0 0;
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  color: #b45309;
+}
+
+.provider-technical {
+  margin-top: 6px;
+  font-size: var(--fs-2xs);
+}
+
+.provider-technical summary {
+  cursor: pointer;
+  color: var(--text-muted, #94a3b8);
+  user-select: none;
+}
+
+.provider-technical code {
+  display: block;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text-muted, #94a3b8);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

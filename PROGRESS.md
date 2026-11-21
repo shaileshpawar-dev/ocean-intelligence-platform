@@ -1821,3 +1821,47 @@ NDCI's p99 is 0.1961 and the literature anchor (Mishra & Mishra 2012) is
 stayed at 0.20.
 
 **Tests:** 10 new (index series and forecast), 800 passed total.
+
+## MP-adjustments — regional anomalies, source status, cached narratives
+
+**Done, 21 Nov.** Three corrections requested after the Step 1–2 report.
+
+**1. Anomalies are now per region.** Each region is judged against **its own**
+12-month 99th percentile, not one platform-wide figure. The data demanded it:
+NDTI's p99 runs **0.142 in quiet cells to 0.313 off the Krishna-Godavari
+delta**. A global cut-off marks the river mouths anomalous every day — a
+description of where rivers are, not a finding — while missing a real
+excursion in clear water. A region needs **40+ readings** or it raises
+nothing; there is deliberately **no fallback** to another region's water.
+
+Every event leads with: *"Statistical anomaly: top 1% of this region's last
+12 months (Sentinel-2 NDCI)"*, shown on the badge tooltip, a `stat.` marker
+in the list, and as the first caveat on the detail page. NDCI events **also**
+report whether they clear `ALGAL_BLOOM_NDCI_THRESHOLD` (0.08) — "unusual
+here" and "high in absolute terms" are different questions and both are
+answered. Method documented in `docs/anomaly-method.md`.
+
+**New counts: 123 events — 41 algal bloom, 41 floating material, 41 turbidity
+plume**, across 34 regions with baselines (16 readings skipped for want of
+one).
+
+**Gotcha, and a property worth knowing:** a p99 always flags ~1% of the very
+readings it was computed from. That is inherent to percentile thresholding,
+not a bug — the tests had to be rewritten to measure the *delta* a new
+reading causes. A flat test baseline also puts p99 *on* every value, so `>=`
+fires on all of them; the fixture now has realistic spread.
+
+**2. Data Sources statuses are computed, not configured.** Four states
+derived from the real fetch result: Live / Stale / **Sync paused** /
+Unavailable. The NWDP feeds now read amber *"Blocked by upstream firewall:
+automated access refused (HTTP 403). Showing last successful sync (26 Sep
+2026)"* with **582,192** and **4,017,920** records held. Raw errors moved
+behind a **Technical details** toggle. A refusal is not an outage, and
+calling it one sends someone hunting a network fault that does not exist.
+
+**3. Gemini narratives generated once and cached.** All **9 reports** have
+one, every one passing the number check. The label now names the model —
+*"AI-generated summary · gemini-flash-lite-latest"*. Page loads call nothing;
+generation is an explicit POST, and a second call returns `cached`.
+
+**Tests:** 815 passed.

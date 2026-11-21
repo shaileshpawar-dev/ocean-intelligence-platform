@@ -291,7 +291,7 @@ export default function Events() {
                     }}
                   >
                     <td>
-                      <SignatureBadge signature={event.signature} />
+                      <SignatureBadge signature={event.signature} caveats={event.caveats} />
                       <span className="cell-sub">{event.region_name}</span>
                     </td>
                     <td>

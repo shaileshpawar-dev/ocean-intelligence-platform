@@ -107,16 +107,25 @@ export function signatureMeta(signature: string) {
 export function SignatureBadge({
   signature,
   showHint = false,
+  caveats,
 }: {
   signature: string;
   showHint?: boolean;
+  /** The event's caveats. When the first one is the anomaly sentence
+   *  ("Statistical anomaly: top 1% of this region's last 12 months…") it is
+   *  shown instead of the generic hint, because on a list row that sentence
+   *  is the one thing stopping a reader taking the badge for an incident. */
+  caveats?: string[];
 }) {
   const meta = signatureMeta(signature);
   const { Icon } = meta;
+  const anomaly = caveats?.find((c) => c.startsWith("Statistical anomaly:"));
+  const tooltip = anomaly ? `${anomaly} ${meta.hint}` : meta.hint;
   return (
-    <span className="signature-badge" style={{ color: meta.colour }} title={meta.hint}>
+    <span className="signature-badge" style={{ color: meta.colour }} title={tooltip}>
       <Icon size={13} aria-hidden />
       <span>{meta.label}</span>
+      {anomaly && <abbr className="anomaly-marker" title={anomaly}>stat.</abbr>}
       {showHint && meta.hint && <em className="signature-hint">{meta.hint}</em>}
     </span>
   );

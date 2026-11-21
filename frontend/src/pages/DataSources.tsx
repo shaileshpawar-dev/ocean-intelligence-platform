@@ -90,10 +90,11 @@ export default function DataSources() {
                 <p className="muted-note">{source.organisation}</p>
               </div>
               <span
-                className={`wstatus wstatus-${source.is_available ? "ok" : "bad"} wstatus-sm`}
+                className={`wstatus wstatus-${source.status?.tone ?? (source.is_available ? "ok" : "bad")} wstatus-sm`}
+                title={source.status?.detail}
               >
                 <Radio size={11} aria-hidden />
-                {source.is_available ? "Available" : "Unavailable"}
+                {source.status?.label ?? (source.is_available ? "Live" : "Unavailable")}
               </span>
             </div>
             <dl className="source-facts">
@@ -105,11 +106,27 @@ export default function DataSources() {
                 <dt>Last successful sync</dt>
                 <dd>{formatDay(source.last_success_at)}</dd>
               </div>
+              <div>
+                <dt>Records held</dt>
+                <dd>
+                  {(source.status?.records_held ?? 0).toLocaleString()}
+                </dd>
+              </div>
             </dl>
-            {source.last_error && (
-              <p className="provider-error">
-                <AlertTriangle size={12} /> {source.last_error}
+
+            {/* The sentence a reader needs; the stack trace they do not.
+                A raw HTTP error on the card reads as breakage, when the
+                actual situation may be a server politely declining. */}
+            {source.status && source.status.state !== "live" && (
+              <p className="provider-note">
+                <AlertTriangle size={12} aria-hidden /> {source.status.detail}
               </p>
+            )}
+            {source.status?.technical_detail && (
+              <details className="provider-technical">
+                <summary>Technical details</summary>
+                <code>{source.status.technical_detail}</code>
+              </details>
             )}
           </div>
         ))}

@@ -43,7 +43,7 @@ from app.models.water import (
     WaterQualityObservation,
 )
 from app.models.water_geo import SourceClassification
-from app.water.freshness import MIN_NO_RECENT_DAYS, Cadence
+from app.water.freshness import CADENCE_DAYS, MIN_NO_RECENT_DAYS, Cadence
 from app.water.matching import PLACE_ALIASES, haversine_km, normalise_name
 from app.water.parameters import BY_KEY
 from app.water.standards import ReferenceSelection, compare, select_reference
@@ -1239,6 +1239,83 @@ def latest_by_source(db: Session, body: WaterBody) -> list[dict]:
     return out
 
 
+#: How long after its expected cadence a reachable source is still "Live".
+#: Past this it is Stale -- reachable, but the data it holds is old.
+STALE_AFTER_MULTIPLE = 3.0
+
+
+def source_status(
+    source: DataSource, *, records_held: int, now: datetime | None = None
+) -> dict[str, Any]:
+    """Classify one provider from its real fetch results.
+
+    Four states, each computed rather than configured:
+
+    ``live``          reachable, and its newest data is within cadence.
+    ``stale``         reachable, but the data it holds has aged out.
+    ``sync_paused``   the server answered and refused. Nothing is wrong on
+                      this side and retrying harder will not help.
+    ``unavailable``   it could not be reached at all.
+
+    The distinction between the last two is the one worth drawing. A 403 is
+    not an outage: the host is up, the handshake completed, and it declined.
+    Reporting that as "Unavailable" invites someone to go looking for a
+    network fault that is not there.
+    """
+    moment = now or datetime.now(UTC)
+    error = source.last_error or ""
+    last_success = _as_utc(source.last_success_at) if source.last_success_at else None
+
+    if source.is_available:
+        period = CADENCE_DAYS.get(source.expected_cadence)
+        aged_out = bool(
+            period
+            and last_success
+            and (moment - last_success).days > period * STALE_AFTER_MULTIPLE
+        )
+        state = "stale" if aged_out else "live"
+        label = "Stale" if aged_out else "Live"
+        detail = (
+            "Reachable, but the most recent successful sync is older than "
+            "this source's expected cadence."
+            if aged_out
+            else "Reachable, and syncing within its expected cadence."
+        )
+    elif "403" in error or "forbidden" in error.lower():
+        state = "sync_paused"
+        label = "Sync paused"
+        detail = (
+            "Blocked by upstream firewall: automated access refused "
+            "(HTTP 403). Showing last successful sync "
+            f"({_day(last_success)})."
+        )
+    else:
+        state = "unavailable"
+        label = "Unavailable"
+        detail = (
+            "The source could not be reached. Showing last successful sync "
+            f"({_day(last_success)})."
+        )
+
+    return {
+        "state": state,
+        "label": label,
+        "tone": {"live": "ok", "stale": "warn", "sync_paused": "warn"}.get(
+            state, "bad"
+        ),
+        "detail": detail,
+        "records_held": records_held,
+        # The raw error belongs behind a toggle, not on the card: it is for
+        # whoever is debugging, and it reads as breakage to everyone else.
+        "technical_detail": error or None,
+    }
+
+
+def _day(moment: datetime | None) -> str:
+    """A date for a sentence, or an honest absence."""
+    return moment.strftime("%d %b %Y") if moment else "never"
+
+
 def sources_for_body(db: Session, body: WaterBody) -> list[dict]:
     """Which sources contributed observations to this water body.
 
@@ -2215,6 +2292,16 @@ def overview(db: Session) -> dict:
 
     distribution = status_distribution(db)
     sources = db.scalars(select(DataSource)).all()
+    # One query for every source's record count, rather than one per card.
+    records_by_source = {
+        source_id: count
+        for source_id, count in db.execute(
+            select(
+                WaterQualityObservation.source_id,
+                func.count(WaterQualityObservation.id),
+            ).group_by(WaterQualityObservation.source_id)
+        ).all()
+    }
     last_run = db.scalar(
         select(IngestionRun).order_by(IngestionRun.started_at.desc()).limit(1)
     )
@@ -2232,6 +2319,8 @@ def overview(db: Session) -> dict:
         # The four-way split, so "26 of 2,740" is a number the page can show
         # rather than something a reader has to work out.
         "coverage": coverage_counts(db),
+        # Records actually held per source. "Sync paused" is far easier to
+        # read next to the number of measurements already in hand.
         "sources": [
             {
                 "key": s.key,
@@ -2243,6 +2332,9 @@ def overview(db: Session) -> dict:
                     _as_utc(s.last_success_at).isoformat() if s.last_success_at else None
                 ),
                 "last_error": s.last_error,
+                "status": source_status(
+                    s, records_held=records_by_source.get(s.id, 0)
+                ),
             }
             for s in sources
         ],

@@ -653,6 +653,9 @@ export interface WaterOverview {
     expected_cadence: string;
     last_success_at: string | null;
     last_error: string | null;
+    /** Computed from the provider's last real fetch, never configured.
+     *  See water_service.source_status. */
+    status?: DataSourceStatus;
   }[];
   last_ingestion: {
     run_id: string;
@@ -815,4 +818,20 @@ export interface WaterCoverage {
     date_max: string | null;
     note: string;
   }[];
+}
+
+/** A provider's current state, derived from its last real fetch result.
+ *
+ *  "sync_paused" is distinct from "unavailable" on purpose: a server that
+ *  answers and refuses is not an outage, and reporting it as one sends
+ *  somebody looking for a network fault that does not exist. */
+export interface DataSourceStatus {
+  state: "live" | "stale" | "sync_paused" | "unavailable";
+  label: string;
+  tone: "ok" | "warn" | "bad";
+  /** One sentence for the card. */
+  detail: string;
+  records_held: number;
+  /** The raw error, for the Technical details toggle only. */
+  technical_detail: string | null;
 }
