@@ -143,11 +143,31 @@ class Settings(BaseSettings):
     )
     cdse_username: str | None = None
     cdse_password: str | None = None
+    #: Sentinel Hub on CDSE. The OAuth client-credentials pair is what the
+    #: Process and Statistical APIs accept; the username/password pair above
+    #: drives the STAC catalogue. Verified 21 Nov 2026: the password grant is
+    #: rejected for Sentinel Hub, the client credentials are not.
+    cdse_client_id: str | None = None
+    cdse_client_secret: str | None = None
+    cdse_process_url: str = "https://sh.dataspace.copernicus.eu/api/v1/process"
+    cdse_statistics_url: str = "https://sh.dataspace.copernicus.eu/api/v1/statistics"
+
+    # -- Copernicus Marine (CMEMS) -----------------------------------------
+    #: A separate account from CDSE, registered at marine.copernicus.eu.
+    cmems_username: str | None = None
+    cmems_password: str | None = None
+
+    # -- Global Fishing Watch ----------------------------------------------
+    gfw_api_token: str | None = None
+    gfw_api_url: str = "https://gateway.api.globalfishingwatch.org/v3"
 
     # -- LLM ---------------------------------------------------------------
     llm_provider: Literal["none", "gemini", "openai", "anthropic"] = "none"
     llm_model: str | None = None
     gemini_api_key: str | None = None
+    #: Resolved from the live model list on 21 Nov 2026; overridable per
+    #: deployment because Google retires model ids on its own schedule.
+    gemini_model: str = "gemini-2.5-flash"
     openai_api_key: str | None = None
     anthropic_api_key: str | None = None
 

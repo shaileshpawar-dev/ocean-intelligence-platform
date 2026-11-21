@@ -64,6 +64,17 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-oip}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-oip}
       ENVIRONMENT: ${ENVIRONMENT:-staging}
       WATER_CACHE_DIR: /app/data/raw
+      # External data credentials. All default to empty -- the platform
+      # reports a source as unavailable rather than substituting fake data.
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      CDSE_USERNAME: ${CDSE_USERNAME:-}
+      CDSE_PASSWORD: ${CDSE_PASSWORD:-}
+      CDSE_CLIENT_ID: ${CDSE_CLIENT_ID:-}
+      CDSE_CLIENT_SECRET: ${CDSE_CLIENT_SECRET:-}
+      CMEMS_USERNAME: ${CMEMS_USERNAME:-}
+      CMEMS_PASSWORD: ${CMEMS_PASSWORD:-}
+      GFW_API_TOKEN: ${GFW_API_TOKEN:-}
     command: ["python", "-m", "app.water.cli", "health"]
     volumes:
       - oipdata:/app/data
@@ -89,6 +100,17 @@ services:
       GEE_SERVICE_ACCOUNT: ${GEE_SERVICE_ACCOUNT:-}
       # Mount the key read-only and point at the container path.
       GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
+      # External data credentials. All default to empty -- the platform
+      # reports a source as unavailable rather than substituting fake data.
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      CDSE_USERNAME: ${CDSE_USERNAME:-}
+      CDSE_PASSWORD: ${CDSE_PASSWORD:-}
+      CDSE_CLIENT_ID: ${CDSE_CLIENT_ID:-}
+      CDSE_CLIENT_SECRET: ${CDSE_CLIENT_SECRET:-}
+      CMEMS_USERNAME: ${CMEMS_USERNAME:-}
+      CMEMS_PASSWORD: ${CMEMS_PASSWORD:-}
+      GFW_API_TOKEN: ${GFW_API_TOKEN:-}
     ports:
       - "8000:8000"
     volumes:

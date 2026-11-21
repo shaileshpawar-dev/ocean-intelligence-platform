@@ -1,5 +1,34 @@
 # Progress log
 
+## Master plan checklist — final demo 25 Nov, code freeze end of 24 Nov
+
+Branch `feature/real-data`. Fallbacks: tag `demo-2026-11-22.1`,
+`scripts/reset_demo.sh`, `backups/oip-after-window4a-demostate.dump`.
+
+| Step | What | Status | Date |
+|---|---|---|---|
+| 0 | Credential smoke test | **done** (CMEMS blocked) | 21 Nov |
+| 1 | Refresh real India water data | not started | |
+| 2 | Indian-regions consistency (a–d) | not started | |
+| 3 | Gemini narrative layer | not started | |
+| 4 | Real Sentinel-2 water detections | not started | |
+| 5 | Real Sentinel-1 oil-spill detection | not started | |
+| 6 | Real ocean conditions / coastline / currents | not started | |
+| 7 | Real vessel activity (GFW) | not started | |
+| 8 | Real marine protected areas (WDPA) | not started | |
+| 9 | Real legal/regulatory RAG corpus | not started | |
+| 10 | Trained marine-debris classifier (MARIDA) | not started | |
+| 11 | Experiments page | not started | |
+| 12 | Optical YOLO evaluation | not started | |
+| 13 | Forecasting on real data | not started | |
+| 14 | Final pass / freeze | not started | |
+
+**Blocked, needs you:** Step 6c (Copernicus Marine) — see the Step 0 entry.
+
+**Note:** the plan refers to tags `demo-2026-11-22.1 / .2`. Only `.1` exists;
+there is no `.2`.
+
+
 Work towards the demo, following `docs/SECTION_AUDIT.md`. Newest entry last.
 
 Database backup taken before any of this work: `backups/oip-20261120-115423.dump`
@@ -1090,3 +1119,59 @@ needs re-centring on India. Not fixed here.
 
 **Restore point before this work:** `backups/oip-after-window4a-demostate.dump`
 (the state the PPT and DEMO_SCRIPT.md describe).
+
+---
+
+## Step 0 — Credential smoke test (master plan)
+
+**Done, 21 Nov.** Four of five external services verified end to end. No
+credential value is printed by the script, the tests, or this log.
+
+| Service | Result | Detail |
+|---|---|---|
+| **Gemini** | **PASS** | 49 `generateContent` models visible. **Use `gemini-2.5-flash`** |
+| **CDSE token** | **PASS** | via the **client_credentials** grant |
+| **CDSE Process API** | **PASS** | 32×32 S2 L2A PNG (2,016 bytes) over the Gulf of Kutch |
+| **Global Fishing Watch** | **PASS** | HTTP 200 authenticated — but **0 datasets listed** |
+| **Copernicus Marine** | **FAIL** | "Invalid credentials" with both the CMEMS *and* CDSE pairs |
+
+### What this unblocks and blocks
+
+- Steps 3 (Gemini), 4 and 5 (Sentinel-2/-1) are **unblocked**.
+- Step 7 (GFW) authenticates, but the datasets listing came back empty, so the
+  token's scope is unproven. Treated as provisional until a real data endpoint
+  is exercised in Step 7.
+- **Step 6c (Copernicus Marine) is blocked.** CMEMS is a separate account from
+  CDSE, registered at marine.copernicus.eu — the CDSE credentials are not
+  interchangeable, and both pairs were rejected. Steps 6a (Open-Meteo, no key)
+  and 6b (Natural Earth coastline) are unaffected and will proceed.
+
+### Gotchas
+
+- **Sentinel Hub needs the OAuth client pair, not the username/password.** The
+  password grant yields a token for the STAC catalogue, but the Process API
+  wants `client_credentials`. `CDSEAuthManager` in
+  `app/vision/copernicus_client.py` currently only does the password grant —
+  Step 4 will have to add the client-credentials path rather than reuse it.
+- **GFW `/v3/datasets` rejects a bare request** with HTTP 422
+  ("limit must not be less than 1"); it needs `limit` *and* `offset`. That 422
+  is a parameter error, not an auth failure — easy to misread as a bad token.
+- **`docker compose config` dumps resolved secrets.** Do not run it to check
+  whether credentials are wired; grep the compose file by variable name
+  instead. (An attempt to verify this way was correctly refused.)
+- The compose `backend` and `jobs` services were passing **none** of the new
+  variables. Both now receive all nine, each defaulting to empty so a missing
+  credential leaves a feature unavailable rather than silently fake.
+
+### Changed
+
+- `scripts/credential_smoke_test.py` (new) — per-service PASS/FAIL, scrubs any
+  secret-shaped string from output before printing.
+- `docker-compose.yml` — credentials passed to `backend` and `jobs`.
+- `backend/app/core/config.py` — `cdse_client_id/secret`, Sentinel Hub Process
+  and Statistics URLs, `cmems_*`, `gfw_api_token`/`gfw_api_url`, `gemini_model`
+  (default `gemini-2.5-flash`). All load from `.env`.
+
+**Tests:** 689 passed, 25 skipped.
+
+**Next:** Step 1 — refresh the real India water data.
