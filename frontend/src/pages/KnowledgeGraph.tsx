@@ -355,8 +355,9 @@ export default function KnowledgeGraph() {
 
               <p className="muted-note">
                 Pollution events and the observations behind them are{" "}
-                <strong>SIMULATED</strong>. SAR candidates are measured
-                Sentinel-1 data.
+                <strong>measured</strong> — Sentinel-2 acquisitions on the
+                dates shown. SAR candidates are the PANGAEA Sentinel-1
+                benchmark.
               </p>
 
               {data.unresolved_citations > 0 && (

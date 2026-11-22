@@ -1,3 +1,33 @@
+# ALL DONE — 22 November 2026, tag `demo-final-v2`
+
+1. **Demo mode is off and the database holds no simulated rows.** The 666
+   seeded events and 2,400 synthetic observations were deleted after backup.
+2. **108 real pollution detections** from 3,006 measured Sentinel-2 readings
+   spanning a full year across 36 of 40 Indian EEZ regions.
+3. **Events need two criteria**: top 1% of *that region's* own 12 months,
+   **and** an absolute floor from literature. Counts went 41/41/41 → 41/35/32
+   — the first set was describing the method, not the sea.
+4. **FDI has no absolute floor and says so.** Verified from Biermann et al.
+   (2020) directly: the paper publishes no threshold. Never called plastic.
+5. **Sentinel-1 saturation fixed** from 100/100 tiles at confidence 1.000 to
+   22/100. Cause was tile preparation, not the model — the 306 benchmark
+   patches reproduce their stored scores to within 1%.
+6. **Tested against a real spill — and it did not find it.** MSC ELSA 3,
+   4 passes, 31 tiles, nothing flagged. Published with the reasons it is
+   weak evidence, because a detector that always said "no" would look the same.
+7. **Nine data sources on the page**, each status derived from what it last
+   actually produced. The NWDP feeds read "Sync paused" — the server answers
+   and a firewall refuses; that is not an outage.
+8. **845 tests passing**, 24 pages with zero console errors, clean restart
+   verified, `backups/oip-demo-final-v2.dump` frozen.
+9. **Deck rebuilt** (23 slides, no secrets) and **final status report**
+   written, both in `~/Downloads`.
+10. **The honest gaps**: the SAR model still needs retraining on calibrated
+    backscatter (tiles run 34 units dark), forecasts beat naive in 0 of 40
+    regions, and nothing refreshes without someone running a fetch job.
+
+---
+
 # Progress log
 
 ## Master plan checklist — final demo 25 Nov, code freeze end of 24 Nov
