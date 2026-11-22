@@ -3808,3 +3808,14 @@ a.badge-real {
 .replay-detail > * + * {
   margin-top: 12px;
 }
+
+/* What a severity word means here. Shown as text beside the badge on a
+ * detail page, not only as a tooltip: "CRITICAL" next to a statistical
+ * anomaly is the most misreadable thing on these pages, and a tooltip is
+ * invisible on a touch screen and in a screenshot. */
+.risk-meaning {
+  display: block;
+  margin-top: 6px;
+  max-width: 54ch;
+  line-height: 1.45;
+}

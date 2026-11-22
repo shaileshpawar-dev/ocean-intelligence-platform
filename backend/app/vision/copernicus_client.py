@@ -20,8 +20,23 @@ from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-CACHE_DIR = REPO_ROOT / "data" / "cache" / "cdse_stac"
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
+def _cache_dir() -> Path:
+    """Where STAC responses are cached, honouring the configured cache dir.
+
+    ``REPO_ROOT`` is ``/`` inside the container, so the old constant pointed
+    at an unwritable ``/data`` and this module could not even be imported
+    there. Third occurrence of the same trap -- see
+    ``sar_scene_processor._storage_root`` and ``cog_extractor._marine_root``.
+    """
+    configured = Path(settings.water_cache_dir)
+    base = configured if configured.is_absolute() else REPO_ROOT / configured
+    return base / "cdse_stac"
+
+
+CACHE_DIR = _cache_dir()
+# Created on first use, not at import. A directory that cannot be made is a
+# problem for whoever caches a response, not a reason for the module to be
+# unimportable -- which is what took the whole optical panel down.
 
 
 def point_in_polygon(x: float, y: float, poly_coords: list[list[float]]) -> bool:
@@ -122,6 +137,7 @@ class CopernicusSTACClient:
 
     def _get_cache_path(self, lon: float, lat: float, t_min_str: str, t_max_str: str) -> Path:
         key = f"stac_{lon:.4f}_{lat:.4f}_{t_min_str}_{t_max_str}.json".replace(":", "-")
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
         return CACHE_DIR / key
 
     def search_scenes(
@@ -203,7 +219,11 @@ class CopernicusSTACClient:
         lon: float,
         sar_timestamp: datetime,
         primary_window_days: float = 3.0,
-        secondary_window_days: float = 10.0,
+        # Five days is a little over one Sentinel-2 revisit. Beyond that a
+        # scene is not describing the same water the radar saw: a slick
+        # moves, disperses and weathers within days, so a "match" ten days
+        # out illustrates the location rather than the event.
+        secondary_window_days: float = 5.0,
     ) -> list[dict[str, Any]]:
         """Find, align, and grade all Sentinel-2 Level-2A scenes matching a SAR candidate."""
         if sar_timestamp.tzinfo is None:

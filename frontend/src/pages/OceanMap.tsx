@@ -43,6 +43,7 @@ import {
   SimulatedBanner,
   titleise,
   Unavailable,
+  ProvenanceNote,
 } from "@/components/ui";
 
 const CLEAN = "#94a3b8";
@@ -68,7 +69,7 @@ export default function OceanMap() {
   const [selectedCandidate, setSelectedCandidate] = useState<CandidateMapPoint | null>(null);
 
   // Full-scene SAR detection state (Phase 14.2)
-  const [showFullScenes, setShowFullScenes] = useState(true);
+  const [showScreenedTiles, setShowScreenedTiles] = useState(true);
   // Real data layers, all on by default: this is now the main content of
   // the map rather than an overlay on a demonstration.
   const [showVessels, setShowVessels] = useState(true);
@@ -90,15 +91,16 @@ export default function OceanMap() {
     queryKey: ["incident-replay"],
     queryFn: () => api.incidentReplay(),
   });
+  // Real screened Sentinel-1 tiles, replacing the synthetic full-scene
+  // overlay. Footprints and scores from acquisitions that happened.
+  const s1 = useQuery({
+    queryKey: ["sentinel1-screening"],
+    queryFn: () => api.sentinel1Screening(),
+  });
 
   const { data: candidateMapPoints } = useQuery({
     queryKey: ["sar-candidate-map-points"],
     queryFn: () => api.sarCandidateMapPoints(),
-  });
-
-  const { data: sarScenesData } = useQuery({
-    queryKey: ["sar-scenes"],
-    queryFn: () => api.sarScenes({ limit: 200 }),
   });
 
   const { data: footprintsData } = useQuery({
@@ -143,6 +145,9 @@ export default function OceanMap() {
           vessels.data?.totals
             ? `${vessels.data.totals.total_vessel_hours.toLocaleString()} vessel-hours`
             : null,
+          s1.data?.totals
+            ? `${s1.data.totals.tiles} Sentinel-1 tiles screened`
+            : null,
           conditions.data?.items.some((c) => c.surface_current)
             ? `${conditions.data.items.filter((c) => c.surface_current).length} current fields`
             : null,
@@ -154,7 +159,14 @@ export default function OceanMap() {
       <MarineScopeNote />
 
       {data?.provenance.contains_simulated_data && <SimulatedBanner />}
-      <SimulatedBanner detail="The full-scene SAR overlay and its footprint probabilities remain SYNTHETIC demonstration outputs — that layer alone. Detection markers come from measured Sentinel-2 acquisitions, and candidate points are the PANGAEA research benchmark." />
+      <ProvenanceNote>
+        <strong>Every layer on this map is real.</strong> Detection markers
+        come from measured Sentinel-2 acquisitions; the Sentinel-1 rectangles
+        are tiles actually fetched and screened, scored by{" "}
+        <code>sar-oil-slick-v2.2</code>; vessel activity, currents and
+        chlorophyll come from Global Fishing Watch and Copernicus Marine. The
+        benchmark layer, off by default, is the PANGAEA research set.
+      </ProvenanceNote>
 
       <div className="map-shell">
         <div className="map-frame">
@@ -178,52 +190,66 @@ export default function OceanMap() {
               maxZoom={19}
             />
 
-            {/* Full-Scene Sentinel-1 SAR acquisition frames */}
-            {showFullScenes &&
-              sarScenesData?.scenes.map((scene) => {
-                const [minLon, minLat, maxLon, maxLat] = scene.bbox;
-                const isSelected = scene.scene_id === selectedSceneId;
-                return (
-                  <Rectangle
-                    key={scene.scene_id}
-                    bounds={[
-                      [minLat, minLon],
-                      [maxLat, maxLon],
-                    ]}
-                    pathOptions={{
-                      color: isSelected ? "#06b6d4" : "#0284c7",
-                      weight: isSelected ? 2.5 : 1.2,
-                      dashArray: isSelected ? undefined : "4, 4",
-                      fillColor: "#0284c7",
-                      fillOpacity: isSelected ? 0.08 : 0.03,
-                    }}
-                    eventHandlers={{
-                      click: () => {
-                        setSelectedSceneId(scene.scene_id);
-                        setSelected(null);
-                        setSelectedCandidate(null);
-                        setSelectedFootprint(null);
-                      },
-                    }}
-                  >
-                    <Tooltip sticky>
-                      <strong>Synthetic SAR Scene (Demo)</strong>
-                      <br />
-                      <span className="mono text-xs">{scene.scene_id}</span>
-                      <br />
-                      <span>{scene.platform} · {scene.polarization}</span>
-                      <br />
-                      <span>Candidate hits: {scene.candidate_count}</span>
-                      {scene.candidate_tiles_detected !== null && (
-                        <span> · Synthetic tiles: {scene.candidate_tiles_detected}</span>
-                      )}
-                    </Tooltip>
-                  </Rectangle>
-                );
-              })}
+            {/* Real screened Sentinel-1 tiles. Each rectangle is a tile
+                that was fetched from Copernicus, prepared with the fixed
+                decibel window and put through the v2.2 classifier. This
+                replaced a synthetic overlay that drew plausible probability
+                fields over nothing. */}
+            {showScreenedTiles &&
+              s1.data?.tiles
+                .filter(
+                  (tile) =>
+                    !selectedSceneId || tile.scene_id === selectedSceneId,
+                )
+                .map((tile, index) => {
+                  const [minLon, minLat, maxLon, maxLat] = tile.bbox;
+                  return (
+                    <Rectangle
+                      key={`s1-${tile.scene_id}-${index}`}
+                      bounds={[
+                        [minLat, minLon],
+                        [maxLat, maxLon],
+                      ]}
+                      pathOptions={{
+                        color: tile.flagged ? "#B91C1C" : "#0284c7",
+                        weight: tile.flagged ? 2 : 1,
+                        fillColor: tile.flagged ? "#B91C1C" : "#0284c7",
+                        fillOpacity: tile.flagged ? 0.25 : 0.06,
+                      }}
+                      eventHandlers={{
+                        click: () => {
+                          setSelectedSceneId(tile.scene_id);
+                          setSelected(null);
+                          setSelectedCandidate(null);
+                          setSelectedFootprint(null);
+                        },
+                      }}
+                    >
+                      <Tooltip sticky>
+                        <strong>Screened Sentinel-1 tile</strong>
+                        <br />
+                        <span className="mono text-xs">{tile.scene_id}</span>
+                        <br />
+                        <span>
+                          {tile.region} · acquired {tile.acquired_on}
+                        </span>
+                        <br />
+                        <span>
+                          {tile.flagged
+                            ? "Flagged"
+                            : "No anomaly"}{" "}
+                          · confidence {tile.confidence.toFixed(3)}
+                        </span>
+                        <br />
+                        <em>Contains modified Copernicus Sentinel data</em>
+                      </Tooltip>
+                    </Rectangle>
+                  );
+                })}
+
 
             {/* Overlapping candidate footprints for selected SAR scene */}
-            {showFullScenes &&
+            {showScreenedTiles &&
               footprintsData?.features.map((feature) => {
                 const coords = feature.geometry.coordinates[0];
                 const latLngs = coords.map(([lon, lat]) => [lat, lon] as [number, number]);
@@ -537,15 +563,15 @@ export default function OceanMap() {
             <label className="map-toggle">
               <input
                 type="checkbox"
-                checked={showFullScenes}
-                onChange={(event) => setShowFullScenes(event.target.checked)}
+                checked={showScreenedTiles}
+                onChange={(event) => setShowScreenedTiles(event.target.checked)}
               />
-              Full-Scene SAR (Synthetic Demo)
+              Screened Sentinel-1 tiles (real)
             </label>
 
-            {showFullScenes && sarScenesData?.scenes && sarScenesData.scenes.length > 0 && (
+            {showScreenedTiles && s1.data?.scenes && s1.data.scenes.length > 0 && (
               <label className="map-select-label">
-                Active Synthetic Scene
+                Scene (real acquisition)
                 <select
                   className="map-select"
                   value={selectedSceneId || ""}
@@ -554,10 +580,11 @@ export default function OceanMap() {
                     setSelectedFootprint(null);
                   }}
                 >
-                  <option value="">(Select scene to view footprints)</option>
-                  {sarScenesData.scenes.map((s) => (
-                    <option key={s.scene_id} value={s.scene_id}>
-                      {s.scene_id.substring(0, 30)}... ({s.candidate_count} hits)
+                  <option value="">All screened acquisitions</option>
+                  {s1.data.scenes.map((scene) => (
+                    <option key={scene.scene_id} value={scene.scene_id}>
+                      {scene.acquired_on} · {scene.region} ({scene.tiles} tiles,{" "}
+                      {scene.flagged} flagged)
                     </option>
                   ))}
                 </select>
@@ -593,7 +620,7 @@ export default function OceanMap() {
               </div>
             )}
 
-            {showFullScenes && (
+            {showScreenedTiles && (
               <div className="candidate-legend-block">
                 <p className="candidate-legend-title">Full-Scene Inference</p>
                 <div className="candidate-legend-items">

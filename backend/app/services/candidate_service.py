@@ -616,6 +616,16 @@ def get_candidate_optical_evidence(db: Session, candidate_id: str) -> list[SARCa
     return list(db.scalars(stmt).all())
 
 
+class NoOpticalSceneError(Exception):
+    """No usable Sentinel-2 scene exists for a candidate.
+
+    A distinct exception so the API can answer with an explanation rather
+    than a generic failure. The absence is a real finding about satellite
+    coverage, not a fault in this platform, and the panel says so instead
+    of rendering anything.
+    """
+
+
 def process_candidate_optical_evidence(
     db: Session,
     candidate_id: str,
@@ -639,7 +649,10 @@ def process_candidate_optical_evidence(
     )
 
     if not scenes:
-        raise ValueError(f"No Sentinel-2 Level-2A scenes discovered within +/- 10 days of candidate {candidate_id}.")
+        raise NoOpticalSceneError(
+            "No cloud-free Sentinel-2 scene within ±5 days of this "
+            "candidate's acquisition."
+        )
 
     # Pick specified scene or best match
     target_scene = None
@@ -654,12 +667,22 @@ def process_candidate_optical_evidence(
         target_scene = scenes[0]  # sorted with best match first
 
     extractor = COGExtractor(chip_size=chip_size)
-    result = extractor.extract_and_process(
-        candidate_id=cand.candidate_id,
-        lat=cand.latitude,
-        lon=cand.longitude,
-        scene_info=target_scene,
-    )
+    try:
+        result = extractor.extract_and_process(
+            candidate_id=cand.candidate_id,
+            lat=cand.latitude,
+            lon=cand.longitude,
+            scene_info=target_scene,
+        )
+    except COGExtractor.NoUsableScene as exc:
+        # The catalogue listed a scene but Copernicus could not deliver
+        # usable pixels for this exact position. Reported as the absence it
+        # is, never filled in -- an invented chip and a real one render
+        # identically, which is the whole problem.
+        raise NoOpticalSceneError(
+            "No cloud-free Sentinel-2 scene within ±5 days of this "
+            f"candidate's acquisition. ({exc})"
+        ) from exc
 
     metrics = result["metrics"]
     s2_acq_dt = datetime.fromisoformat(target_scene["acquisition_time"].replace("Z", "+00:00"))

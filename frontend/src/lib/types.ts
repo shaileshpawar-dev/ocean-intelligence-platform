@@ -1191,3 +1191,66 @@ export interface IncidentReplayResponse {
   available: boolean;
   note: string;
 }
+
+/** Aggregate vessel activity around one SAR candidate.
+ *
+ *  Deliberately nameless. The panel this replaced marked a fictional vessel
+ *  a SOURCE_SUSPECT at up to 0.97 confidence; these candidates are benchmark
+ *  patches where no release was ever established, so an attribution would be
+ *  an accusation about something that did not happen. */
+export interface CandidateVesselActivity {
+  candidate_id: string;
+  label: string;
+  radius_km: number;
+  window_days: number;
+  acquisition: string;
+  evidence_level: string;
+  attribution: string;
+  attribution_url: string;
+  identity_note: string;
+  available: boolean;
+  detail: string;
+  total_hours?: number;
+  vessel_count?: number;
+  grid_cells?: number;
+  window_from?: string;
+  window_to?: string;
+  top_flags?: { flag: string; hours: number }[];
+}
+
+/** Real Sentinel-1 tiles this platform has screened.
+ *
+ *  Replaces a synthetic full-scene overlay. `flagged` is true only when the
+ *  classifier chose a signature other than no_anomaly — it answers every
+ *  tile, so "a detection came back" is not "it found oil". */
+export interface Sentinel1Tile {
+  scene_id: string;
+  region: string | null;
+  acquired_on: string | null;
+  bbox: number[];
+  confidence: number;
+  classes: string[];
+  flagged: boolean;
+}
+
+export interface Sentinel1Scene {
+  scene_id: string;
+  acquired_on: string | null;
+  region: string | null;
+  tiles: number;
+  flagged: number;
+}
+
+export interface Sentinel1ScreeningResponse {
+  scenes: Sentinel1Scene[];
+  tiles: Sentinel1Tile[];
+  totals: { scenes: number; tiles: number; flagged: number };
+  provenance: {
+    is_real: boolean;
+    source: string;
+    evidence_level: string;
+    attribution: string;
+    contains_simulated_data: boolean;
+    caveat: string;
+  };
+}

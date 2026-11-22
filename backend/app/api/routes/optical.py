@@ -529,3 +529,87 @@ def replay_thumbnail(name: str) -> FileResponse:
     if REPLAY_DIR.resolve() not in candidate.parents or not candidate.is_file():
         raise HTTPException(status_code=404, detail=f"No replay thumbnail {name!r}")
     return FileResponse(Path(candidate), media_type="image/png")
+
+
+@router.get("/sentinel1-screening", summary="Real screened Sentinel-1 tiles")
+def sentinel1_screening(db: Session = Depends(get_db)) -> dict:
+    """Every Sentinel-1 tile this platform has actually screened.
+
+    Footprints and scores from real acquisitions, grouped by scene. This
+    replaces a synthetic full-scene overlay that drew plausible probability
+    fields over nothing — the tiles here were fetched from Copernicus,
+    prepared with the fixed decibel window, and put through the v2.2
+    classifier.
+
+    The scores are shown with their limits attached: the model is still
+    being applied outside the distribution its accuracy was measured on, so
+    a low score is not a clean bill of health.
+    """
+    from app.models.ml import PredictionLog
+
+    rows = list(
+        db.scalars(
+            select(PredictionLog)
+            .where(PredictionLog.endpoint.like("%screen_sentinel1%"))
+            .order_by(PredictionLog.created_at.desc())
+        ).all()
+    )
+
+    scenes: dict[str, dict] = {}
+    tiles: list[dict] = []
+    for row in rows:
+        stats = row.input_stats or {}
+        bbox = stats.get("bbox")
+        scene_id = stats.get("scene_id")
+        if not bbox or not scene_id:
+            continue
+        classes = row.predicted_classes or []
+        tile = {
+            "scene_id": scene_id,
+            "region": stats.get("region"),
+            "acquired_on": stats.get("acquired_on"),
+            "bbox": bbox,
+            "confidence": round(row.mean_confidence or 0.0, 4),
+            "classes": classes,
+            # The classifier answers every tile; "it answered" is not "it
+            # found oil". Only a signature other than no_anomaly is a flag.
+            "flagged": any(c != "no_anomaly" for c in classes),
+        }
+        tiles.append(tile)
+        scene = scenes.setdefault(
+            scene_id,
+            {
+                "scene_id": scene_id,
+                "acquired_on": stats.get("acquired_on"),
+                "region": stats.get("region"),
+                "tiles": 0,
+                "flagged": 0,
+            },
+        )
+        scene["tiles"] += 1
+        scene["flagged"] += int(tile["flagged"])
+
+    return {
+        "scenes": sorted(
+            scenes.values(), key=lambda s: s["acquired_on"] or "", reverse=True
+        ),
+        "tiles": tiles,
+        "totals": {
+            "scenes": len(scenes),
+            "tiles": len(tiles),
+            "flagged": sum(t["flagged"] for t in tiles),
+        },
+        "provenance": {
+            "is_real": True,
+            "source": "Copernicus Sentinel-1 GRD, screened by sar-oil-slick-v2.2",
+            "evidence_level": "DETECTED",
+            "attribution": "Contains modified Copernicus Sentinel data",
+            "contains_simulated_data": False,
+            "caveat": (
+                "Prepared tiles still average below the brightness of the "
+                "patches this model was trained on, so its measured accuracy "
+                "does not transfer. A low score here is a screening result, "
+                "not a clean bill of health."
+            ),
+        },
+    }

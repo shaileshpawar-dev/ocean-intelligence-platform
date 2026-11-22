@@ -292,6 +292,11 @@ def process_candidate_optical_evidence(
             chip_size=payload.chip_size,
         )
         return _format_optical_record(evidence, candidate_id)
+    except candidate_service.NoOpticalSceneError as e:
+        # 404, not 500: Copernicus has no scene here, which is a fact about
+        # satellite coverage rather than a failure of this service. The
+        # panel renders the message instead of a chip.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
@@ -446,3 +451,105 @@ def evaluate_candidate_impact(
 ) -> CandidateImpactAssessmentOut:
     """Force spatial proximity and vulnerability index re-calculation."""
     return environmental_impact_service.evaluate_candidate_environmental_impact(db, candidate_id)
+
+
+@router.get(
+    "/{candidate_id}/vessel-activity",
+    summary="Aggregate vessel activity near a candidate (Global Fishing Watch)",
+)
+def candidate_vessel_activity(
+    candidate_id: str, db: Session = Depends(get_db)
+) -> dict:
+    """How busy this water was around the candidate's acquisition.
+
+    **Aggregate only, and deliberately so.** Hours and vessel counts by flag
+    state, from Global Fishing Watch. No name, no MMSI, no "suspect", no
+    source attribution of any kind.
+
+    These candidates are research benchmark patches: the detections were
+    never established as real releases, so naming a ship against one would
+    be an accusation about an event that did not happen. "How busy was this
+    water" is the question the data can answer honestly, and it is useful
+    to a reviewer without implicating anybody.
+
+    A zero is a finding: GFW answered and saw no apparent effort there.
+    """
+    from datetime import UTC
+
+    from app.vision.gfw_client import (
+        ATTRIBUTION,
+        ATTRIBUTION_URL,
+        CANDIDATE_RADIUS_KM,
+        CANDIDATE_WINDOW_DAYS,
+        EVIDENCE_LEVEL,
+        candidate_activity,
+        get_gfw_client,
+    )
+
+    candidate = candidate_service.get_candidate(db, candidate_id)
+    if candidate is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No candidate {candidate_id!r}",
+        )
+
+    moment = candidate.acquisition_timestamp
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+
+    activity = candidate_activity(
+        get_gfw_client(),
+        candidate_id,
+        candidate.latitude,
+        candidate.longitude,
+        moment,
+    )
+
+    base = {
+        "candidate_id": candidate_id,
+        "label": "Vessel activity nearby",
+        "radius_km": CANDIDATE_RADIUS_KM,
+        "window_days": CANDIDATE_WINDOW_DAYS,
+        "acquisition": moment.isoformat(),
+        "evidence_level": EVIDENCE_LEVEL,
+        "attribution": ATTRIBUTION,
+        "attribution_url": ATTRIBUTION_URL,
+        "identity_note": (
+            "Aggregate only. No vessel is named, and nothing here attributes "
+            "a detection to a ship: these are benchmark patches, not "
+            "established releases."
+        ),
+    }
+
+    if activity is None:
+        return {
+            **base,
+            "available": False,
+            "detail": (
+                "Global Fishing Watch could not be reached for this window. "
+                "Nothing is substituted."
+            ),
+        }
+
+    return {
+        **base,
+        "available": True,
+        "total_hours": round(activity.total_hours, 1),
+        "vessel_count": activity.vessel_count,
+        "grid_cells": activity.grid_cells,
+        "window_from": activity.window_from,
+        "window_to": activity.window_to,
+        "top_flags": [
+            {"flag": flag, "hours": round(hours, 1)}
+            for flag, hours in activity.top_flags
+        ],
+        "detail": (
+            "No apparent fishing effort recorded in this window."
+            if activity.total_hours == 0
+            else (
+                f"{activity.vessel_count} vessel(s) over "
+                f"{activity.total_hours:.0f} hours within "
+                f"{CANDIDATE_RADIUS_KM:.0f} km."
+            )
+        ),
+    }

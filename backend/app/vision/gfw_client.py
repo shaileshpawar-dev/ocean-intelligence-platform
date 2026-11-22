@@ -258,3 +258,54 @@ def get_gfw_client() -> GFWClient:
     if _client is None:
         _client = GFWClient()
     return _client
+
+
+#: How far around a candidate to summarise vessel activity, and over how long.
+#:
+#: Thirty kilometres and a week either side of the acquisition. Wide enough
+#: that a slick's likely source would fall inside it, narrow enough that the
+#: answer still describes *this* water rather than the whole region. These
+#: are context, not an investigation: the window is generous on purpose,
+#: because a tighter one would invite reading proximity as causation.
+CANDIDATE_RADIUS_KM = 30.0
+CANDIDATE_WINDOW_DAYS = 7
+
+
+def candidate_activity(
+    client: GFWClient,
+    candidate_id: str,
+    lat: float,
+    lon: float,
+    when: datetime,
+    *,
+    radius_km: float = CANDIDATE_RADIUS_KM,
+    window_days: int = CANDIDATE_WINDOW_DAYS,
+    use_cache: bool = True,
+) -> RegionActivity | None:
+    """Aggregate vessel activity around one candidate, in one time window.
+
+    Returns a :class:`RegionActivity` whose ``cell_code`` is the candidate
+    id, or ``None`` when GFW could not be reached.
+
+    **No vessel is identified.** Hours and counts by flag state, nothing
+    else. This answers "how busy was this water at the time", which is
+    context a reviewer can use, and refuses the question it must not answer
+    -- which ship did it -- because these candidates are benchmark patches
+    and the answer would be an accusation about an event that was never
+    established.
+    """
+    import math
+
+    half = radius_km / 111.32
+    half_lon = half / max(math.cos(math.radians(lat)), 0.1)
+    bbox = (lon - half_lon, lat - half, lon + half_lon, lat + half)
+
+    centre = when.date()
+    end = centre + timedelta(days=window_days)
+    return client.fetch_region(
+        f"cand_{candidate_id}",
+        bbox,
+        window_days=window_days * 2,
+        use_cache=use_cache,
+        today=end,
+    )

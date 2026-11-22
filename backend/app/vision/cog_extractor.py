@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import json
 import math
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+from PIL import Image
 
 from app.core.config import REPO_ROOT, settings
 from app.core.logging import get_logger
@@ -60,94 +62,167 @@ class COGExtractor:
         target_dir.mkdir(parents=True, exist_ok=True)
         return target_dir
 
-    def _generate_calibrated_ocean_bands(
+    #: The chip's half-width in degrees. At 128 px this is roughly 10 m per
+    #: pixel at these latitudes, matching Sentinel-2's native resolution for
+    #: the visible and NIR bands.
+    CHIP_HALF_DEG = 0.05
+
+    #: How far either side of the SAR acquisition a Sentinel-2 scene may be
+    #: taken from. Five days is a little over one revisit, so a candidate
+    #: either has a near-contemporaneous optical view or it has none.
+    MAX_TEMPORAL_OFFSET_DAYS = 5
+
+    #: Scenes cloudier than this are not worth retrieving. The scene
+    #: classification layer removes cloud pixel by pixel afterwards, but a
+    #: scene that is mostly cloud leaves too little water to say anything.
+    MAX_SCENE_CLOUD_PCT = 60
+
+    BANDS = ("B02", "B03", "B04", "B05", "B08", "B11")
+
+    class NoUsableScene(Exception):
+        """No cloud-free Sentinel-2 scene exists close enough in time.
+
+        Raised rather than returning anything. The panel this feeds used to
+        synthesise plausible ocean reflectance when a real scene was
+        unavailable, which meant an absent observation and a present one
+        rendered identically. The caller reports the absence.
+        """
+
+    def _fetch_real_bands(
         self,
         lat: float,
         lon: float,
         scene_info: dict[str, Any],
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """Generate high-fidelity, physically calibrated BOA surface reflectance arrays for candidate.
+    ) -> tuple[np.ndarray, ...]:
+        """Retrieve real Sentinel-2 L2A surface reflectance for one chip.
 
-        Simulates realistic coastal/marine optical signatures:
-        - Deep ocean water has peak reflectance in Blue (B02 ~ 0.035), lower in Green (B03 ~ 0.022),
-          very low in Red (B04 ~ 0.008), near-zero in NIR (B08 ~ 0.003) and SWIR (B11 ~ 0.001).
-        - Introduces spatially correlated wave texture, subtle biogenic chlorophyll variance,
-          and cloud/cirrus patterns matching the scene's exact reported cloud cover metadata.
+        Six reflectance bands plus the scene classification layer, in a
+        single Process API request returning a TAR of one-band GeoTIFFs.
+        One band per output because Pillow cannot open a multi-band float
+        TIFF -- a six-band response arrives intact and unreadable.
+
+        Raises:
+            NoUsableScene: Copernicus returned nothing usable for this
+                location and window.
         """
-        n = self.chip_size
-        rng = np.random.default_rng(seed=int(abs(lat * 1000 + lon * 1000 + hash(scene_info.get("scene_id", ""))) % 2**32))
+        import io
+        import tarfile
 
-        # Base ocean reflectance (BOA 0.0 to 1.0)
-        # Spatial wave texture
-        x = np.linspace(-3, 3, n)
-        y = np.linspace(-3, 3, n)
-        xx, yy = np.meshgrid(x, y)
-        wave_pattern = 0.002 * np.sin(xx * 8.0 + yy * 4.0) + 0.001 * np.cos(xx * 15.0 - yy * 10.0)
+        import httpx
 
-        b02 = np.full((n, n), 0.038, dtype=np.float32) + wave_pattern + rng.normal(0, 0.001, (n, n)).astype(np.float32)
-        b03 = np.full((n, n), 0.024, dtype=np.float32) + wave_pattern * 0.8 + rng.normal(0, 0.0008, (n, n)).astype(np.float32)
-        b04 = np.full((n, n), 0.010, dtype=np.float32) + wave_pattern * 0.5 + rng.normal(0, 0.0005, (n, n)).astype(np.float32)
-        b05 = np.full((n, n), 0.009, dtype=np.float32) + rng.normal(0, 0.0005, (n, n)).astype(np.float32)
-        b08 = np.full((n, n), 0.004, dtype=np.float32) + rng.normal(0, 0.0003, (n, n)).astype(np.float32)
-        b11 = np.full((n, n), 0.002, dtype=np.float32) + rng.normal(0, 0.0002, (n, n)).astype(np.float32)
-        scl = np.full((n, n), SCL_WATER, dtype=np.uint8)
+        from app.vision.sentinel2_indices import get_sentinel2_client
 
-        # Candidate slick location (subtle reflectance anomaly at center)
-        dist_center = np.sqrt(xx**2 + yy**2)
-        slick_mask = dist_center < 0.8
-        # Oil/biogenic film dampens surface micro-roughness, subtly altering albedo
-        b02[slick_mask] -= 0.003
-        b03[slick_mask] -= 0.002
-        b04[slick_mask] += 0.001 # slightly warmer hue
-        b05[slick_mask] += 0.0005
+        token = get_sentinel2_client()._get_token()
+        if not token:
+            raise self.NoUsableScene("No Copernicus token available.")
 
-        # Incorporate cloud contamination consistent with scene-level metadata
-        cloud_pct = float(scene_info.get("cloud_cover_pct", 0.0))
-        if cloud_pct > 1.0:
-            # Generate patchy cumulus / cirrus clouds
-            num_clouds = max(1, int(cloud_pct / 8.0))
-            for _ in range(num_clouds):
-                cx = rng.uniform(-2.5, 2.5)
-                cy = rng.uniform(-2.5, 2.5)
-                c_rad = rng.uniform(0.4, 1.2) * (cloud_pct / 30.0)
-                c_dist = np.sqrt((xx - cx)**2 + (yy - cy)**2)
-                
-                # Cloud body
-                c_mask = c_dist < c_rad
-                if np.any(c_mask):
-                    cloud_intensity = np.clip(1.0 - (c_dist[c_mask] / c_rad), 0.0, 1.0)
-                    b02[c_mask] += cloud_intensity * 0.40
-                    b03[c_mask] += cloud_intensity * 0.38
-                    b04[c_mask] += cloud_intensity * 0.36
-                    b05[c_mask] += cloud_intensity * 0.35
-                    b08[c_mask] += cloud_intensity * 0.35
-                    b11[c_mask] += cloud_intensity * 0.25 # SWIR absorption
-                    
-                    # Mark SCL
-                    dense_mask = c_dist < (c_rad * 0.6)
-                    scl[c_mask] = SCL_CLOUD_MEDIUM_PROB
-                    scl[dense_mask] = SCL_CLOUD_HIGH_PROB
+        acquired = scene_info.get("acquisition_time")
+        if not acquired:
+            raise self.NoUsableScene("Scene carries no acquisition time.")
+        moment = datetime.fromisoformat(str(acquired).replace("Z", "+00:00"))
+        day = moment.date().isoformat()
 
-                    # Cloud shadow (offset northwest / southeast)
-                    sx = cx + 0.3
-                    sy = cy - 0.3
-                    s_dist = np.sqrt((xx - sx)**2 + (yy - sy)**2)
-                    shadow_mask = (s_dist < (c_rad * 0.8)) & (~c_mask)
-                    if np.any(shadow_mask):
-                        b02[shadow_mask] *= 0.6
-                        b03[shadow_mask] *= 0.5
-                        b04[shadow_mask] *= 0.5
-                        scl[shadow_mask] = SCL_CLOUD_SHADOWS
+        half = self.CHIP_HALF_DEG
+        bbox = [lon - half, lat - half, lon + half, lat + half]
 
-        # Ensure valid bounds
-        b02 = np.clip(b02, 0.0, 1.0)
-        b03 = np.clip(b03, 0.0, 1.0)
-        b04 = np.clip(b04, 0.0, 1.0)
-        b05 = np.clip(b05, 0.0, 1.0)
-        b08 = np.clip(b08, 0.0, 1.0)
-        b11 = np.clip(b11, 0.0, 1.0)
+        outputs = ",\n      ".join(
+            '{id:"%s",bands:1,sampleType:"FLOAT32"}' % band for band in self.BANDS
+        )
+        returns = ", ".join("%s:[s.%s]" % (band, band) for band in self.BANDS)
+        band_list = ",".join('"%s"' % band for band in self.BANDS)
+        evalscript = """//VERSION=3
+function setup() {
+  return {
+    input: [{ bands: [%s, "SCL"] }],
+    output: [
+      %s,
+      { id: "scl", bands: 1, sampleType: "UINT8" }
+    ]
+  };
+}
+function evaluatePixel(s) { return { %s, scl: [s.SCL] }; }
+""" % (band_list, outputs, returns)
 
-        return b02, b03, b04, b05, b08, b11, scl
+        responses = [
+            {"identifier": band, "format": {"type": "image/tiff"}}
+            for band in self.BANDS
+        ] + [{"identifier": "scl", "format": {"type": "image/tiff"}}]
+
+        body = {
+            "input": {
+                "bounds": {
+                    "bbox": bbox,
+                    "properties": {
+                        "crs": "http://www.opengis.net/def/crs/EPSG/0/4326"
+                    },
+                },
+                "data": [
+                    {
+                        "type": "sentinel-2-l2a",
+                        "dataFilter": {
+                            "timeRange": {
+                                "from": f"{day}T00:00:00Z",
+                                "to": f"{day}T23:59:59Z",
+                            },
+                            "maxCloudCoverage": self.MAX_SCENE_CLOUD_PCT,
+                        },
+                    }
+                ],
+            },
+            "output": {
+                "width": self.chip_size,
+                "height": self.chip_size,
+                "responses": responses,
+            },
+            "evalscript": evalscript,
+        }
+
+        try:
+            response = httpx.post(
+                settings.cdse_process_url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    # Without this the API returns only the first output and
+                    # the other six bands are silently dropped.
+                    "Accept": "application/tar",
+                },
+                json=body,
+                timeout=180.0,
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise self.NoUsableScene(f"{type(exc).__name__} fetching chip") from exc
+
+        if response.status_code != 200 or not response.content:
+            raise self.NoUsableScene(
+                f"Copernicus returned HTTP {response.status_code} for this chip."
+            )
+
+        try:
+            archive = tarfile.open(fileobj=io.BytesIO(response.content))
+            members = {
+                name.replace(".tif", ""): np.array(
+                    Image.open(io.BytesIO(archive.extractfile(name).read()))
+                )
+                for name in archive.getnames()
+            }
+        except Exception as exc:  # noqa: BLE001
+            raise self.NoUsableScene("Chip response could not be read.") from exc
+
+        missing = [b for b in (*self.BANDS, "scl") if b not in members]
+        if missing:
+            raise self.NoUsableScene(f"Chip response lacked {', '.join(missing)}.")
+
+        bands = [members[b].astype(np.float32) for b in self.BANDS]
+        scl = members["scl"].astype(np.uint8)
+
+        # An all-zero chip is outside the scene footprint rather than very
+        # dark water, and would read as a perfectly calm, perfectly black sea.
+        if all(float(np.nanmax(b)) <= 0.0 for b in bands):
+            raise self.NoUsableScene(
+                "The scene footprint does not cover this position."
+            )
+
+        return (*bands, scl)
 
     def extract_and_process(
         self,
@@ -170,8 +245,9 @@ class COGExtractor:
         ndci_path = target_dir / "ndci_map.png"
         summary_path = target_dir / "summary.json"
 
-        # 1. Retrieve or generate calibrated multi-spectral bands
-        b02, b03, b04, b05, b08, b11, scl = self._generate_calibrated_ocean_bands(lat, lon, scene_info)
+        # 1. Real Sentinel-2 L2A surface reflectance. Raises NoUsableScene
+        #    rather than substituting anything if none is available.
+        b02, b03, b04, b05, b08, b11, scl = self._fetch_real_bands(lat, lon, scene_info)
 
         # 2. Compute quality metrics and spectral indices
         metrics, ndci_water, ndti_water = compute_optical_quality_and_indices(

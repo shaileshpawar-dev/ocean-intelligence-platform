@@ -39,6 +39,7 @@ import {
   StatusBadge,
   formatDateTime,
   titleise,
+  ProvenanceNote,
 } from "@/components/ui";
 
 const SCREENING_OPTIONS = [
@@ -130,18 +131,14 @@ function CandidateDetailDrawer({
     enabled: !!candidateId,
   });
 
-  const { data: vesselAssocs, isLoading: vesselsLoading } = useQuery({
-    queryKey: ["candidate-vessels", candidateId],
-    queryFn: () => api.candidateVessels(candidateId),
-    enabled: !!candidateId,
+  // Real aggregate activity, replacing the fictional suspect correlation.
+  const vesselActivity = useQuery({
+    queryKey: ["candidate-vessel-activity", candidateId],
+    queryFn: () => api.candidateVesselActivity(candidateId!),
+    enabled: Boolean(candidateId),
   });
 
-  const correlateMutation = useMutation({
-    mutationFn: () => api.correlateCandidateVessels(candidateId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["candidate-vessels", candidateId] });
-    },
-  });
+
 
   const { data: driftData, isLoading: driftLoading } = useQuery({
     queryKey: ["candidate-drift", candidateId],
@@ -424,7 +421,15 @@ function CandidateDetailDrawer({
                 const opt = data.optical_evidence[0];
                 return (
                   <div className="optical-evidence-card">
-                    <SimulatedBanner detail="SYNTHETIC optical products: reflectance bands and rendered indices are generated arrays, not measured Sentinel-2 surface reflectance. Scene metadata is real Copernicus STAC metadata." />
+                    <ProvenanceNote>
+                      <strong>Measured Sentinel-2 surface reflectance.</strong>{" "}
+                      Six bands plus the scene classification layer, retrieved
+                      from Copernicus for this position on the scene date
+                      shown. NDCI and NDTI are computed on those pixels. A
+                      candidate with no cloud-free scene within &plusmn;5 days
+                      shows nothing rather than a substitute.{" "}
+                      <em>Contains modified Copernicus Sentinel data</em>
+                    </ProvenanceNote>
                     {/* Scene Metadata Bar */}
                     <div className="optical-meta-bar">
                       <div className="flex items-center gap-2">
@@ -581,7 +586,7 @@ function CandidateDetailDrawer({
 
             {fusionData && (
               <div className="fusion-assessment-box">
-                <SimulatedBanner detail="Rule-based concordance over simulated optical inputs. The rule score is not a calibrated probability and does not establish that oil is present." />
+                <SimulatedBanner detail="Rule-based concordance over the measured optical indices above. The rule score is not a calibrated probability and does not establish that oil is present." />
                 <div className="fusion-summary-card">
                   <div className="fusion-summary-text">
                     <p className="text-xs font-semibold mb-1">Physical Evidence Synthesis</p>
@@ -635,80 +640,86 @@ function CandidateDetailDrawer({
                 </div>
               </div>
             )}
-
-            {/* AIS Vessel Tracking & Association (Phase 15) */}
+            {/* Vessel activity nearby — real, aggregate, and nameless.
+                This panel used to correlate fictional vessels and mark one a
+                SOURCE_SUSPECT at up to 0.97 confidence. These candidates are
+                benchmark patches: no release was ever established, so an
+                attribution was an accusation about something that did not
+                happen. Global Fishing Watch answers the question that can be
+                answered honestly — how busy was this water. */}
             <h3 className="detail-section vessel-section-head">
               <span className="flex items-center gap-1.5">
                 <Ship size={16} className="text-blue-400" />
-                AIS Vessel Intelligence (Demonstration)
+                Vessel activity nearby
               </span>
-              <button
-                type="button"
-                className="btn btn-xs btn-secondary"
-                disabled={correlateMutation.isPending}
-                onClick={() => correlateMutation.mutate()}
-              >
-                <RefreshCw size={11} className={correlateMutation.isPending ? "animate-spin" : ""} />
-                {correlateMutation.isPending ? "Correlating..." : "Re-run Demo Correlation"}
-              </button>
+              {vesselActivity.data?.available && (
+                <span className="badge-real">
+                  <Ship size={11} /> Powered by Global Fishing Watch
+                </span>
+              )}
             </h3>
 
-            <SimulatedBanner detail="FICTIONAL VESSELS, deliberately. These candidates are research benchmark patches — nobody spilled anything — so naming a real ship as a source would be an accusation about an event that did not happen. Real vessel activity, aggregated and without identities, is on Ocean Overview from Global Fishing Watch." />
+            {vesselActivity.isLoading && (
+              <p className="text-xs text-muted">
+                Querying Global Fishing Watch for this window...
+              </p>
+            )}
 
-            {vesselsLoading && <p className="text-xs text-muted">Correlating proximate AIS vessel tracks...</p>}
-
-            {vesselAssocs && vesselAssocs.length > 0 ? (
-              <div className="vessel-assoc-list">
-                {vesselAssocs.map((v) => (
-                  <div
-                    key={v.id}
-                    className={`vessel-assoc-card ${v.is_primary_suspect ? "card-primary-suspect" : ""}`}
-                  >
-                    <div className="vessel-card-head">
-                      <div className="vessel-name-link">
-                        <span>{v.vessel_name}</span>
-                        <span className="text-2xs text-muted font-normal">({v.vessel_type} · {v.flag_country})</span>
-                      </div>
-                      {v.is_primary_suspect && (
-                        <span className="suspect-chip">Nearest Demo Vessel</span>
-                      )}
-                    </div>
-                    <div className="vessel-card-metrics">
-                      <span>CPA: <strong>{v.spatial_distance_km.toFixed(1)} km</strong></span>
-                      <span>Δt: <strong>{Math.abs(v.temporal_offset_minutes).toFixed(0)} min</strong></span>
-                      <span>Heuristic Score: <strong>{(v.association_score * 100).toFixed(0)}%</strong></span>
-                      <span>Type: <strong className="mono">{v.association_type === "SOURCE_SUSPECT" ? "Demo nearest track" : v.association_type === "CO_OCCURRING" ? "Demo regional track" : v.association_type}</strong></span>
-                    </div>
-                    {v.notes && <p className="text-2xs text-muted mt-1">{v.notes}</p>}
-                    <div className="mt-2 flex justify-end">
-                      <button
-                        type="button"
-                        className="btn btn-xs btn-secondary"
-                        onClick={() => {
-                          setNotes(
-                            (prev) =>
-                              (prev ? prev + "\n" : "") +
-                              `[AIS Demo Association]: ${v.vessel_name} (${v.vessel_type}, MMSI ${v.mmsi}) CPA ${v.spatial_distance_km} km at offset ${v.temporal_offset_minutes} min. Heuristic association score: ${(v.association_score * 100).toFixed(0)}% (not vessel attribution).`
-                          );
-                        }}
-                      >
-                        <Sparkles size={11} /> Attach Track to Review
-                      </button>
-                    </div>
+            {vesselActivity.data && (
+              <div className="vessel-activity-panel">
+                <div className="metric-grid compact">
+                  <div className="mini-metric">
+                    <span className="mini-metric-label">Vessel-hours</span>
+                    <strong>
+                      {vesselActivity.data.available
+                        ? (vesselActivity.data.total_hours ?? 0).toLocaleString()
+                        : "—"}
+                    </strong>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="optical-empty-card mb-4">
-                <div className="empty-content">
-                  <Ship size={18} className="text-blue-400 mb-1" />
-                  <p className="text-xs font-medium">No synthetic vessel tracks within the 50 km demonstration window.</p>
-                  <p className="text-2xs text-muted">
-                    No seeded demonstration transponder positions were correlated for this overpass.
-                  </p>
+                  <div className="mini-metric">
+                    <span className="mini-metric-label">Vessels seen</span>
+                    <strong>
+                      {vesselActivity.data.available
+                        ? (vesselActivity.data.vessel_count ?? 0).toLocaleString()
+                        : "—"}
+                    </strong>
+                  </div>
+                  <div className="mini-metric">
+                    <span className="mini-metric-label">Window</span>
+                    <strong>
+                      &plusmn;{vesselActivity.data.window_days}d /{" "}
+                      {vesselActivity.data.radius_km}km
+                    </strong>
+                  </div>
                 </div>
+
+                {vesselActivity.data.top_flags &&
+                  vesselActivity.data.top_flags.length > 0 && (
+                    <p className="text-2xs">
+                      {vesselActivity.data.top_flags.map((f) => (
+                        <span key={f.flag} className="tag tone-neutral">
+                          {f.flag} {Math.round(f.hours).toLocaleString()}h
+                        </span>
+                      ))}
+                    </p>
+                  )}
+
+                <p className="text-xs">{vesselActivity.data.detail}</p>
+
+                <p className="provenance-note" role="note">
+                  <span>
+                    <strong>No vessel is identified.</strong>{" "}
+                    {vesselActivity.data.identity_note}{" "}
+                    <em>
+                      {vesselActivity.data.attribution} &middot;{" "}
+                      {vesselActivity.data.evidence_level}
+                    </em>
+                  </span>
+                </p>
               </div>
             )}
+
+
 
             {/* Lagrangian Oil Drift Simulation (Phase 16) */}
             <h3 className="detail-section drift-section-head">

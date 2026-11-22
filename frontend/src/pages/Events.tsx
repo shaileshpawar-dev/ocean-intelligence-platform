@@ -20,6 +20,7 @@ import {
   LoadingSkeleton,
   MarineScopeNote,
   PageHeader,
+  RISK_MEANING,
   RiskBadge,
   SectionCard,
   SignatureBadge,
@@ -58,6 +59,7 @@ function EventDetailPanel({ eventId, onClose }: { eventId: string; onClose: () =
           <>
             <div className="detail-hero">
               <RiskBadge severity={data.severity} score={data.risk_score} />
+              <span className="muted-note risk-meaning">{RISK_MEANING}</span>
               <EvidenceBadge level={data.evidence_level} />
             </div>
 
@@ -206,7 +208,7 @@ export default function Events() {
     <>
       <PageHeader
         title="Pollution Events"
-        subtitle="Detections made by the platform, ranked by risk. Each is a claim with stated uncertainty, not a confirmed incident."
+        subtitle="Detections made by the platform, ranked by risk. Risk score = potential impact if confirmed (exposure, proximity, sea state). Not a confirmed incident."
       />
 
       <MarineScopeNote />

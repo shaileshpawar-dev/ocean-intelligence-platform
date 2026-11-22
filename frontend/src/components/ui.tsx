@@ -260,6 +260,20 @@ export function severityColor(severity: Severity | null | undefined): string {
   return severity ? SEVERITY_COLOR[severity].fg : "var(--neutral)";
 }
 
+/** What a severity word on this platform actually means.
+ *
+ *  "CRITICAL" beside a statistical anomaly is the single most misreadable
+ *  thing on these pages. The score is not a measure of how certain the
+ *  detection is, nor of how bad the water is — it is *potential impact if
+ *  the detection were confirmed*: how close to a coast, how close to a
+ *  protected area, how large an area, under what sea state. A CRITICAL
+ *  anomaly in the Gulf of Mannar is CRITICAL because a marine national park
+ *  is nearby, not because anything has been established about the water.
+ */
+export const RISK_MEANING =
+  "Risk score = potential impact if confirmed (exposure, proximity, sea state). " +
+  "Not a confirmed incident.";
+
 export function RiskBadge({
   severity,
   score,
@@ -270,7 +284,11 @@ export function RiskBadge({
   if (!severity) return <Unavailable />;
   const { fg, bg } = SEVERITY_COLOR[severity];
   return (
-    <span className="risk-badge" style={{ color: fg, background: bg, borderColor: fg }}>
+    <span
+      className="risk-badge"
+      style={{ color: fg, background: bg, borderColor: fg }}
+      title={RISK_MEANING}
+    >
       {severity}
       {score !== null && score !== undefined && (
         <strong>{score.toFixed(1)}</strong>

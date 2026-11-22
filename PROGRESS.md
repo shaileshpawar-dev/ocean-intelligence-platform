@@ -2187,3 +2187,47 @@ Deck rebuilt: 21 slides, 0 geometry issues, no stale figures.
 | Reports / agent runs | 6 / 6 |
 | Knowledge graph | 611 nodes / 253 edges, 0 unresolved |
 | Simulated rows | **0** |
+
+---
+
+# Final polish (22 Nov)
+
+## FP-1 to FP-4 — the last synthetic panels made real
+
+**1. Candidate Review optical panel now uses real Sentinel-2 pixels.**
+Six reflectance bands plus the scene classification layer, retrieved from
+Copernicus for each candidate's position on the matched scene date, in one
+Process API request returning a TAR of single-band GeoTIFFs. NDCI and NDTI
+computed on those pixels. **23 of 25 sampled candidates got a real scene;
+2 correctly reported none.**
+
+The synthetic generator is **removed, not disabled** — an unused generator
+is one call away from being used again, and a test asserts nothing in the
+module can produce reflectance. Where no cloud-free scene exists within
+**±5 days** the panel says so and renders nothing; the window was ±10 days
+and is now ±5, because beyond about one revisit a scene describes different
+water.
+
+**2. Vessel suspects replaced with real GFW aggregate activity.** Hours and
+vessel counts by flag state within 30 km and ±7 days, labelled *"Vessel
+activity nearby (Powered by Global Fishing Watch)"*. No name, no MMSI, no
+"suspect", no attribution of any kind. Zero is served as a finding.
+
+**3. Ocean Map's synthetic SAR overlay replaced with the real screened
+tiles** — 100 tiles across 9 real acquisitions, red where flagged (none
+are), with the scene selector listing real acquisition dates. The map's
+"Simulated data" banner is gone: **every layer on it is now real.**
+
+**4. Severity now carries its meaning.** `RISK_MEANING` is defined once and
+shown as a tooltip on every badge and as visible text on detail pages:
+*"Risk score = potential impact if confirmed (exposure, proximity, sea
+state). Not a confirmed incident."* A tooltip alone is invisible on a touch
+screen and in a screenshot.
+
+**Gotcha — the `REPO_ROOT` trap a third time.** `copernicus_client.py`
+anchored its STAC cache on `REPO_ROOT`, which is `/` in-image, so the module
+could not even be imported in the container and the whole optical panel
+returned 500. Also had to `chown` the caches: files copied in with
+`docker cp` land root-owned, and the app runs as `oip`.
+
+**Tests:** 12 new, 857 passed.

@@ -27,6 +27,8 @@ import type {
   Metrics,
   ModelVersion,
   MarineConditionsResponse,
+  CandidateVesselActivity,
+  Sentinel1ScreeningResponse,
   IncidentReplayResponse,
   OpticalIndexResponse,
   VesselActivityResponse,
@@ -340,6 +342,15 @@ export const api = {
   vesselActivity: () => get<VesselActivityResponse>("/vessel-activity"),
 
   incidentReplay: () => get<IncidentReplayResponse>("/incident-replay"),
+
+  sentinel1Screening: () =>
+    get<Sentinel1ScreeningResponse>("/sentinel1-screening"),
+
+  /** Aggregate vessel activity near a candidate. No identities, by design. */
+  candidateVesselActivity: (candidateId: string) =>
+    get<CandidateVesselActivity>(
+      `/sar-candidates/${encodeURIComponent(candidateId)}/vessel-activity`,
+    ),
   incidentReplayThumbnailUrl: (name: string) =>
     `${API_ROOT}/incident-replay/${encodeURIComponent(name)}/thumbnail`,
 
