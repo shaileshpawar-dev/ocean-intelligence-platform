@@ -128,3 +128,44 @@ class TestSeverityCarriesItsMeaning:
         badge = ui[ui.index("export function RiskBadge") :][:900]
 
         assert "title={RISK_MEANING}" in badge
+
+
+class TestTheDocumentedRebuildCommandExists:
+    """The report tells a reader to run a script. It has to be there.
+
+    A documented command that does not exist is worse than an undocumented
+    one: the reader trusts it, runs it, and concludes the whole report is
+    decorative.
+    """
+
+    @staticmethod
+    def _script() -> str:
+        from pathlib import Path
+
+        path = (
+            Path(__file__).resolve().parents[2]
+            / "scripts"
+            / "rebuild_candidate_optical.py"
+        )
+        assert path.exists(), f"{path.name} is documented in the report"
+        return path.read_text(encoding="utf-8")
+
+    def test_the_report_and_the_script_agree_on_the_flag(self):
+        """``--limit`` is the flag the report prints."""
+        from pathlib import Path
+
+        report = (
+            Path(__file__).resolve().parents[2]
+            / "docs"
+            / "FINAL_STATUS_REPORT.md"
+        ).read_text(encoding="utf-8")
+        assert "scripts/rebuild_candidate_optical.py --limit 25" in report
+        assert '"--limit"' in self._script()
+
+    def test_it_reports_a_missing_scene_rather_than_inventing_one(self):
+        """No synthetic fallback, and the absent case is counted, not hidden."""
+        source = self._script()
+
+        assert "NoOpticalSceneError" in source
+        assert "np.random" not in source
+        assert "absent" in source

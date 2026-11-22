@@ -1,6 +1,6 @@
 # OceanAI — Final status report
 
-**22 November 2026 · tag `demo-final-v2` · 845 tests passing**
+**22 November 2026 · tag `demo-final-v3` · 857 tests passing**
 
 Every figure below was read from the running application or the database on
 22 November 2026, after a clean restart. Nothing is quoted from memory.
@@ -104,11 +104,11 @@ that returns HTTP 403 to automated clients. The server answers; it declines.
 | Reference Standards | **Real** | Published CPCB/BIS standards |
 | Data Sources | **Real** | All nine providers, status derived from actual fetches |
 | Real Observations | **Real** | 3,006 Sentinel-2 readings + incident replay |
-| Candidate Review | **Benchmark** | 306 real PANGAEA patches; optical panels still synthetic, vessel suspects fictional |
+| Candidate Review | **Real** | 306 real PANGAEA patches; optical panel now measured Sentinel-2 pixels; vessel panel now GFW aggregate activity |
 | Ocean Overview | **Real** | Detections, sea state, vessel activity |
 | Live Monitoring | **Real** | Real detections and the real active detector |
 | Pollution Events | **Real** | 108 events from measured indices |
-| Ocean Map | **Real (partial)** | All layers real except one labelled synthetic SAR overlay |
+| Ocean Map | **Real** | Every layer real — the synthetic SAR overlay is replaced by the 100 tiles actually screened |
 | Forecasts | **Real** | A year of measured history; honest about losing to naive |
 | Risk Analysis | **Real** | Deterministic scoring over real detections |
 | Knowledge Graph | **Real** | Foreign keys only, 0 unresolved citations |
@@ -146,13 +146,15 @@ that returns HTTP 403 to automated clients. The server answers; it declines.
 
 ### Deliberate limits
 
-**No real vessel is named against any detection.** The platform holds a table
-that marks a vessel `SOURCE_SUSPECT` at up to 0.97 confidence, and its
-detections are benchmark patches and statistical anomalies — nobody spilled
-anything. A real MMSI in that row names an identifiable ship as the source of
-an event that did not happen, on a page built to be screenshotted, and the
-caveat underneath does not survive a crop. Global Fishing Watch answers the
-question it *can* answer honestly: how busy is this water.
+**No real vessel is named against any detection.** The platform used to hold
+a panel marking a vessel `SOURCE_SUSPECT` at up to 0.97 confidence; the
+detections are benchmark patches and statistical anomalies, not confirmed
+spills. A real MMSI in that row would name an identifiable ship as the source
+of an event that was never established, on a page built to be screenshotted,
+and the caveat underneath does not survive a crop. **That panel is now
+replaced** by Global Fishing Watch aggregate activity — hours and vessel
+counts by flag state within 30 km and ±7 days, labelled "Vessel activity
+nearby", with no identity and no attribution of any kind.
 
 **FDI is never called plastic.** Biermann et al. (2020) — the paper defining
 the index — publishes no threshold; the word does not appear in it. They
@@ -167,10 +169,7 @@ own twelve months, plus an absolute floor. Not a regulatory limit anywhere.
 
 | Where | Occurrence | Reason |
 |---|---|---|
-| Ocean Map — full-scene SAR overlay | "Synthetic Demo" on the layer, legend and banner | **Genuinely synthetic.** That one layer is a demonstration output. |
-| Candidate Review — optical products | "SYNTHETIC optical products" banner | **Genuinely synthetic** reflectance arrays. Scene metadata is real Copernicus STAC. |
-| Candidate Review — vessel suspects | "FICTIONAL VESSELS, deliberately" | See above. |
-| Candidate Review — drift panel | "PARTICLE MODEL over real forcing" | Currents and wind are real; spill origin and volume are chosen. |
+| Candidate Review — drift panel | "PARTICLE MODEL over real forcing" | Currents and wind are real; the spill origin and volume are chosen, because no real release is being modelled. |
 | `Overview`, `Reports`, `SystemHealth` | `contains_simulated_data` / `demo_mode` banners | **Conditional and currently inert.** Left in place so they fire again if simulated data ever returns. |
 | `LiveMonitoring` source comment | "returned the mock" | Code comment explaining a fixed bug. |
 | `PollutionSignature.PLASTIC_DEBRIS_SIGNATURE` | Deprecated enum value | Retained because stored rows may reference it; nothing new is written with it. |
@@ -266,6 +265,35 @@ finding that only appears when favourable is not a finding.
 
 ---
 
+### The last synthetic panels
+
+Three panels showed generated data until 22 November and now do not.
+
+**Candidate Review optical** — six Sentinel-2 bands plus the scene
+classification layer, retrieved from Copernicus for each candidate's own
+position and date in a single Process API request. NDCI and NDTI computed on
+those pixels. **23 of 25 sampled candidates had a usable scene; 2 did not and
+say so.** The window narrowed from ±10 to **±5 days**: beyond about one
+revisit a scene describes different water, because a slick moves and weathers
+within days. The synthetic generator is **deleted, not disabled** — an unused
+generator is one call away from being used again — and a test asserts the
+module can no longer produce reflectance.
+
+**Candidate Review vessels** — Global Fishing Watch aggregate activity within
+30 km and ±7 days, by flag state. No identity, no attribution. The window is
+generous on purpose: a tighter one invites reading proximity as causation.
+
+**Ocean Map SAR overlay** — replaced by the **100 tiles actually screened**
+across 9 real acquisitions, red where flagged (none are). Every layer on the
+map is now real, and its simulated-data banner is gone.
+
+**Severity now carries its meaning** wherever it appears, as text and not
+only as a tooltip: *"Risk score = potential impact if confirmed (exposure,
+proximity, sea state). Not a confirmed incident."* CRITICAL beside a
+statistical anomaly otherwise reads as a confirmed emergency.
+
+---
+
 ## 9. How to run, reset and verify
 
 ```powershell
@@ -278,7 +306,7 @@ Open `http://localhost:8000/app/india`.
 scripts/reset_demo.sh
 ```
 
-Restores `backups/oip-demo-final-v2.dump` and prints the counts below.
+Restores `backups/oip-demo-final-v3.dump` and prints the counts below.
 
 Refresh the external caches (optional, not needed for a demo):
 
@@ -311,6 +339,12 @@ python scripts/rebuild_real_events.py --rebuild-events
 | Reports / agent runs | 6 / 6 |
 | Knowledge graph | 611 nodes / 253 edges, 0 unresolved |
 | **Simulated rows** | **0** |
+
+Rebuild the Candidate Review optical panels from real Sentinel-2 (optional):
+
+```powershell
+python scripts/rebuild_candidate_optical.py --limit 25
+```
 
 ---
 
@@ -345,12 +379,12 @@ python scripts/rebuild_real_events.py --rebuild-events
 ## 12. Test suite and tag
 
 ```
-845 passed, 25 skipped, 0 failed
+857 passed, 25 skipped, 0 failed
 ```
 
 Frontend type-check clean. 24 pages, 0 console errors, clean restart
 verified.
 
-**Tag:** `demo-final-v2`
+**Tag:** `demo-final-v3`
 **Branch:** `feature/real-data`
-**Database:** `backups/oip-demo-final-v2.dump`
+**Database:** `backups/oip-demo-final-v3.dump`
