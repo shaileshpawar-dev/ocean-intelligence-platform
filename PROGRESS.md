@@ -1,4 +1,26 @@
-# ALL DONE — 22 November 2026, tag `demo-final-v2`
+# ALL DONE — 22 November 2026, `main` at tag `demo-final-v3`
+
+**Merged.** `feature/real-data` (102 commits) is in `main`, pushed, tagged
+`demo-final-v3`. `main` builds, its tests pass, all 23 routes load with zero
+console errors after a clean restart, and `scripts/reset_demo.sh` restores
+`backups/oip-demo-final-v3.dump` — verified by running it.
+
+**The last four panels became real on 22 November.** Candidate Review's
+optical chips are six Sentinel-2 bands fetched per candidate within ±5 days,
+with no synthetic fallback and an honest blank for the 2 of 25 that have no
+cloud-free scene. The suspect-vessel panel is gone, replaced by aggregate
+Global Fishing Watch activity that names nobody. The Ocean Map shows the 100
+tiles actually screened. Severity now carries its own definition wherever it
+appears. The SAR patch image — 404ing on every candidate since the move into
+Docker — is served again for 305 of 306.
+
+**868 tests passing**, 25 skipped. Deliverables in `~/Downloads`:
+`OIP-Demo.pptx` (23 slides) and `OIP-Final-Status-Report.md`.
+
+---
+
+## What was true at v2, and still is
+
 
 1. **Demo mode is off and the database holds no simulated rows.** The 666
    seeded events and 2,400 synthetic observations were deleted after backup.
