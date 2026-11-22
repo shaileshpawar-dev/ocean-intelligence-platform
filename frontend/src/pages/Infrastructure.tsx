@@ -23,7 +23,7 @@ export default function Infrastructure() {
     ["Frontend", "React 18 + TypeScript, built with Vite, served as static assets by FastAPI"],
     ["API", "FastAPI with Pydantic schemas and SQLAlchemy 2.0"],
     ["Database", "SQLite by default; PostgreSQL via DATABASE_URL"],
-    ["Detection", "Sentinel-1 SAR dark-formation screening + optional YOLOv8 optical detector"],
+    ["Detection", "Sentinel-1 SAR dark-formation screening + optional YOLOv8 optical water pollution detector"],
     ["Retrieval", "BM25 over a local corpus — no vector database required"],
     ["LLM", "Optional. Gemini / OpenAI / Anthropic, selected by LLM_PROVIDER"],
   ];

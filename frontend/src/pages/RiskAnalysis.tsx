@@ -20,8 +20,9 @@ import {
   PageHeader,
   RiskBadge,
   SectionCard,
-  Unavailable,
+  SignatureBadge,
   titleise,
+  Unavailable,
 } from "@/components/ui";
 
 const FACTOR_COLOURS = [
@@ -136,7 +137,7 @@ export default function RiskAnalysis() {
           >
             {events.data?.items.map((event) => (
               <option key={event.event_id} value={event.event_id}>
-                {titleise(event.signature)} · {event.region_name} ·{" "}
+                <SignatureBadge signature={event.signature} /> · {event.region_name} ·{" "}
                 {event.risk_score?.toFixed(1) ?? "—"}
               </option>
             ))}

@@ -6,7 +6,6 @@ import shutil
 import tempfile
 import time
 import uuid
-from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -17,7 +16,8 @@ from app.api.deps import demo_mode_notes
 from app.core.database import get_db
 from app.core.logging import get_logger, get_request_id
 from app.gee import get_satellite_provider
-from app.models import PredictionLog, Region
+from app.models import Region
+from app.monitoring.prediction_log import log_prediction
 from app.schemas.pollution import DetectResponse, IngestionSummaryOut
 from app.services.ingestion_service import run_ingestion
 from app.services.refinement_service import DEFAULT_MAX_CELLS, refine_flagged_cells
@@ -241,28 +241,18 @@ def _log_prediction(
     detections: list,
     error: str | None,
 ) -> None:
-    """Persist one inference record for latency stats and drift monitoring."""
-    confidences = [d.confidence for d in detections]
-    try:
-        db.add(
-            PredictionLog(
-                request_id=request_id,
-                created_at=datetime.now(UTC),
-                model_name=detector_name,
-                model_version=version,
-                endpoint="POST /api/v1/detect",
-                latency_ms=latency_ms,
-                detection_count=len(detections),
-                max_confidence=max(confidences) if confidences else None,
-                mean_confidence=(
-                    sum(confidences) / len(confidences) if confidences else None
-                ),
-                predicted_classes=[str(d.signature) for d in detections],
-                success=error is None,
-                error=error,
-            )
-        )
-        db.commit()
-    except Exception:
-        db.rollback()
-        logger.warning("prediction_log_failed", exc_info=True)
+    """Persist one inference record for latency stats and drift monitoring.
+
+    Thin wrapper over :func:`app.monitoring.prediction_log.log_prediction`,
+    which is the single writer of this table: batch replays record their
+    inferences the same way, so latency and drift see one consistent history.
+    """
+    log_prediction(
+        db,
+        request_id=request_id,
+        detector_name=detector_name,
+        version=version,
+        latency_ms=latency_ms,
+        detections=detections,
+        error=error,
+    )

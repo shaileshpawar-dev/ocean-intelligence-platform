@@ -123,3 +123,19 @@ class Report(Base, TimestampMixin):
 
     generated_by: Mapped[str] = mapped_column(String(128))
     contains_simulated_data: Mapped[bool] = mapped_column(default=False)
+
+    # -- AI-written summary (optional, cached) -----------------------------
+    # Held separately from ``summary``, which is template-rendered from
+    # computed values and is what the report falls back to. Keeping them in
+    # different columns means a model's prose can never be mistaken for the
+    # platform's own, in the database or on the page.
+    ai_narrative: Mapped[str | None] = mapped_column(Text)
+    ai_model: Mapped[str | None] = mapped_column(String(128))
+    #: Hash of (model, evidence). A stored narrative is reused only while the
+    #: report it describes is unchanged, so the demo makes no live call.
+    ai_fingerprint: Mapped[str | None] = mapped_column(String(64))
+    ai_generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: Outcome of the number check that let this text be stored. Nothing is
+    #: written here unless it passed, so this is a record of what was
+    #: verified, not a warning to the reader.
+    ai_check: Mapped[dict | None] = mapped_column(JSON)

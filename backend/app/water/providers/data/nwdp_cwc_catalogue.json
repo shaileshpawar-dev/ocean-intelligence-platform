@@ -1,0 +1,2071 @@
+{
+ "generated_from": "https://nwdp.nwic.gov.in/api/3/action/package_show",
+ "packages": {
+  "physical": "surface-water-quality-manual-physical-parameters-central-water-commission-cwc",
+  "chemical": "surface-water-quality-manual-chemical-parameters-andhra-pradesh-central-water-commission-cwc",
+  "biological": "surface-water-quality-manual-biological-parameters-cwc"
+ },
+ "states": {
+  "AP": "Andhra Pradesh",
+  "AR": "Arunachal Pradesh",
+  "AS": "Assam",
+  "BR": "Bihar",
+  "CG": "Chhattisgarh",
+  "CH": "Chandigarh",
+  "DD": "Daman and Diu",
+  "DL": "Delhi",
+  "DN": "Dadra and Nagar Haveli",
+  "GA": "Goa",
+  "GJ": "Gujarat",
+  "HP": "Himachal Pradesh",
+  "HR": "Haryana",
+  "JH": "Jharkhand",
+  "JK": "Jammu and Kashmir",
+  "KA": "Karnataka",
+  "KL": "Kerala",
+  "LD": "Lakshadweep",
+  "MH": "Maharashtra",
+  "ML": "Meghalaya",
+  "MN": "Manipur",
+  "MP": "Madhya Pradesh",
+  "MZ": "Mizoram",
+  "NL": "Nagaland",
+  "OD": "Odisha",
+  "PB": "Punjab",
+  "PY": "Puducherry",
+  "RJ": "Rajasthan",
+  "SK": "Sikkim",
+  "TN": "Tamil Nadu",
+  "TR": "Tripura",
+  "TS": "Telangana",
+  "UK": "Uttarakhand",
+  "UP": "Uttar Pradesh",
+  "WB": "West Bengal"
+ },
+ "resources": [
+  {
+   "family": "physical",
+   "state_code": "AP",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "a8b02547-0b97-4775-a0ce-3bc7f2c86fd6",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "AP",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "3f8f798f-b3e0-4caa-a34e-6ba2ea4d7eb2",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "AR",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "ecd924d7-f122-40ca-880a-f32b4a72b352",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "AR",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "b4d4c64a-78c3-4087-8599-a4c6c45716a8",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "AS",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "4c184173-9b0d-4a67-9561-5adfcb5ccdac",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "AS",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "2441ac8b-2c72-442a-9fca-69787af7ac66",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "BR",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "5d67a15e-a35b-4707-b214-eee526512006",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "BR",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "edc8f86a-8e71-4b9e-9045-f4d20861b6b5",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "CG",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "2dc9cc18-f64b-4824-b364-df92cfaf6545",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "CG",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "050514c4-e030-489e-9e95-397efabbe012",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "DL",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "c82a6600-00bb-4347-bc29-aa5d6665435b",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "DL",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "772471a1-e7ef-4aeb-a648-2d70cfdae9ce",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "GJ",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "e572f928-e053-4299-b148-cfffa8b20b18",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "GJ",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "f710cac5-a698-417f-8cd6-a9caad85ed76",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "HP",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "6b1111bf-ad5e-4904-8085-5967a24a89ec",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "HP",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "1099ce68-f6de-4abd-b4b8-f0c2707139b6",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "HR",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "4b01fc24-c804-467e-8ae2-6d03d0e5a27d",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "HR",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "68ea5ff6-a2cd-48b5-826c-aaeb32c0c757",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "JH",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "f84e5c20-0e0e-4216-8b46-3f83445112d0",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "JH",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "be80c4e9-e098-4ae9-b633-f30c615602d0",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "JK",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "a5d85c58-b05b-4071-9786-eb858a21c735",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "JK",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "d00eda9b-4d3d-4832-aadd-ea34513aad21",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "KA",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "9c30a535-6543-4de9-a060-3d7669dce6f4",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "KL",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "20068a7c-1eb1-41a3-8aa7-1060ceb30c82",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "KL",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "6c9da048-2821-451d-b9db-6d5633190612",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "MH",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "3795a4b5-9b9c-45ce-9ea2-265d7923a283",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "MH",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "b94bade4-1813-4233-8e92-6a027689ef56",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "ML",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "6001a4aa-9a1b-4d80-92be-36f07ce5f73b",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "ML",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "39a51a7f-709d-4497-8d15-be087181b4b6",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "MN",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "560bdbed-24f5-43ab-a428-e06441a5eab4",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "MN",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "b66d7463-a852-4154-9c96-15e7fdc0719f",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "MP",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "0917c0a8-49bf-4cff-8dcd-fa42fcc2ff9c",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "MP",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "63f54ac5-6ec5-4edd-aa93-1fb95bd65564",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "MZ",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "89928079-c0de-4409-87b3-4261babb3fe5",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "MZ",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "62352685-71bd-493d-87de-3f8c24a13611",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "OD",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "ae3464a7-04f9-400e-97f6-3d31a8df5b7a",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "OD",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "97f54699-ac02-45b8-b96f-5efa883faff7",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "PB",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "09b337b1-ee6f-464f-835c-ac860c5b4e81",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "PY",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "270b111d-44df-49ab-a6db-448ad1d8f53d",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "PY",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "7c7fbc87-82a5-4164-9022-65f5549db422",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "RJ",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "33d93f7b-6d90-4c80-9284-ed0a9b61c6e2",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "RJ",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "52b2bc72-df4e-436d-bd49-13f322f2b896",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "SK",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "556a6eb5-9f9b-438e-ac87-eb69fea7f0c2",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "SK",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "d74fb470-f270-4dc7-ae1c-e488376382c8",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "TN",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "68eb06b6-7c06-4b3c-8812-8bdf21d9d6b7",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "TN",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "39cdb156-7ac2-4e7d-b45c-1482463072e5",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "TR",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "b4f12f0d-ed57-431d-9dd2-bdba8f14786a",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "TR",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "677db870-4043-428b-949c-de463eb72967",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "TS",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "493e3747-589b-41c8-aa53-830691ad2afa",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "TS",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "3ba54e31-f7c5-4149-b6ab-05f3fd7e9917",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "UK",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "da1402b3-7e54-4ef7-8a61-45d1f6ec2896",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "UK",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "63e520f0-fa45-4a9f-be7b-0857da8ec616",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "UP",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "3ff65f47-56cd-4d15-8b68-317aa2df5bff",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "UP",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "daa41af1-4372-4d54-a867-c6cffe86aa71",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "WB",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "84ed6a24-b94c-443e-94b2-7782fff7159b",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "WB",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "5379c951-97a0-4c2b-b6cb-95b3ed980792",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "KA",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "ff1ca632-16bf-4733-b63c-29144c235637",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "AP",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "8397506f-6247-4dfa-8982-da8576c51d1a",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "AR",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "26b1f561-859c-403d-a9f9-0e91f5251ab8",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "AS",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "3073bb4a-a520-4e50-b32d-9afa3456e38d",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "BR",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "f3ee0aa8-cfe4-4f16-a1f4-84bfa98711ca",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "CG",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "d423e6be-0f55-4114-bc15-3906cdf89176",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "DL",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "724477bf-f707-49fa-a4b8-ddc9d68d7ab1",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "GJ",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "243b1ef2-a5c9-4ebc-b2e2-3b08d34bc065",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "HP",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "dd8dba58-c14e-4b0e-a80a-4da205abf962",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "HR",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "5e756c82-e3f7-40b8-b072-cdc72f931df6",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "JH",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "28195700-6834-48ff-8a85-79a9cf53212a",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "JK",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "98a58ad7-5559-4501-ba3d-ac8a54c7f4f1",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "KA",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "e69d851d-e463-441b-a78b-537dd0769652",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "KL",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "b9dfe07d-c471-4871-ad86-53b050071160",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "MH",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "9df3854a-f32e-4323-9da6-2349112754ff",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "ML",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "a3d19e85-8005-4a2e-96c4-2633bf3252f4",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "MN",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "f3e9eaa2-4c28-4120-ac32-aabc5f8dd8da",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "MP",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "0b862be3-74c9-40fc-b1fb-9275a50f389b",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "MZ",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "7e970778-65b9-4892-9421-f1f434eb3d25",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "OD",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "1b36992a-4f32-4727-b122-ccf5c95adb7a",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "PB",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "6f2e6ad1-eb8e-47d7-9136-d674f5661d9a",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "PY",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "c8654c9a-5365-4386-85ce-2b8883d8767c",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "RJ",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "493a3870-cc0f-4d73-9f6a-9bc065000aee",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "SK",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "8069a71f-c0af-46c0-a8f3-f5e5e59e18e4",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "TN",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "0f3e0188-4fe7-43c0-83ae-278c3a73a661",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "TR",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "cec2dc78-3ccb-4aa0-ab8b-4e2685ce69a2",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "TS",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "2143da1e-e067-425d-91a8-0705b0053e98",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "UK",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "268af7b7-6d07-44b4-bf75-aa23dd749b87",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "UP",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "022201f0-f288-44f8-a86c-b0b451a4accf",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "WB",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "b4b7b0b3-bdac-488c-bf25-48a10d06d9d5",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "AP",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "d6389840-2b65-48a8-b29f-0ae3c2045d40",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "JK",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "11b1d81c-f988-4efe-8165-edcd3dc2e2fa",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "JK",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "c5af6035-b680-4021-876a-d54e6e8a1ff0",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "KA",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "009c5903-e5b4-4b43-81d9-38bbae562ece",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "KA",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "732d5241-c6e9-43cf-a335-cf126e1a6b08",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "KL",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "1ed12bcc-e1b1-4a04-8d8d-126b5fae38b3",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "KL",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "fa150c6f-6e54-4946-9fb5-d81a910f32ee",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "MH",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "c938e2ac-ad97-4343-97af-8bf512f52aa4",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "MH",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "158e9979-01f2-4744-a9d4-86f53003fe0e",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "ML",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "f3bc1ca4-5054-4bc7-bfc7-3f9c77604019",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "ML",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "bbc5a695-121b-47b4-8b35-6bd342326485",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "MN",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "629bbd18-1d1e-4ca3-a98a-ab86c2a4ede3",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "MN",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "2f716681-bc30-416f-9e1d-63b401cb786c",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "MP",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "681f5570-3359-4bc8-9725-9df725271f80",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "MP",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "c725bdb1-0510-4802-b42c-51f72ccc150e",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "MZ",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "22777700-3f0d-4350-b96b-a6ca4abe358d",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "MZ",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "223911bd-2acd-44fb-806b-6fab2365e2af",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "OD",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "ec155e48-d426-4dae-b554-c5c3a1590d68",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "OD",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "00f76454-ac50-46a3-8f66-dbe4a0866acd",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "PB",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "24241fba-1f38-4df9-baac-55c96a38e923",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "PY",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "f7efaebb-995d-4a9f-ad02-bcdc2edd6fd9",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "PY",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "0452783d-2a14-40a3-9cae-0bb8138b6d6f",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "RJ",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "19aaa0a2-40fb-424b-b977-35c067bcf5c8",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "RJ",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "eb7c7542-514a-492d-84c0-9d6554eaa57f",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "SK",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "76e690d4-489a-4416-869c-71ac37731f14",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "SK",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "7dd71f41-ebef-456d-885f-7ef93165fed6",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "TN",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "dcb05b97-1ad1-47db-9555-c39938e31309",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "TN",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "0d2370a6-3915-49f2-aa73-bc8bc3613499",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "TR",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "eb374ac3-cb30-4907-82d6-c5c1df6ca0be",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "TR",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "d27c5a25-1ed8-4bab-ac3c-d1f6e6a6b12e",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "TS",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "1fcbf57d-71b6-45f2-8c00-054f014a18b3",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "TS",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "e6f02164-a28b-4740-aae4-a2ed340bca6f",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "UK",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "a8230faa-975a-4790-bc7d-b871d26070e2",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "UK",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "6897a98a-6fc7-481a-9287-a732725d0dd5",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "UP",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "6d862ee8-c4c3-441e-a174-a0c7b309f155",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "UP",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "d2a17b9d-617f-4890-ba3c-1ed32fd978f3",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "WB",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "523ae478-40f5-4d01-ab68-78c5764e7002",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "WB",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "88aeb70d-8e4d-4a94-8833-dca88fb6cbf1",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "AP",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "b984b7a9-958b-4d46-8f6d-02ccbc8afdcf",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "AS",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "5077d8e5-824b-478b-858f-b25d5f602bee",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "BR",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "d4cf5d27-b1ec-450b-8abd-635d91a27099",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "BR",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "f9148407-43da-47fb-8efd-ec1556dadca5",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "CG",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "7ae9a788-b849-452b-8296-8ae75db88c55",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "CG",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "a107a5a5-dc00-4ba1-a39a-4f7773095896",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "DL",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "fab07da3-71ef-475e-a0c3-d5346d95d91f",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "GJ",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "ae8a262f-1a2b-430f-b1e9-14445cffbb00",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "GJ",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "28165382-1a70-4aba-a730-d624870ca178",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "HP",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "4e871d13-6b5c-4692-bc78-45bec708bebe",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "HP",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "c15fa7f3-d965-4661-8ae7-0dee12c3fb21",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "HR",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "b9b662af-3220-473d-87b4-754706f447a6",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "HR",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "2974d20d-c4da-4f14-af20-4a0cf4cbc375",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "JH",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "071fb5d4-51ee-40d0-a1c0-ad22350dde51",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "JH",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "1f30f91f-9ea8-4d42-98f8-360e763ed682",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "AR",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "72927f7d-df04-47d2-867b-e20a905dcb58",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "AR",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "701f6d47-00eb-46a4-a715-79e3fe1aeaf4",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "AS",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "52d1c66b-00d8-4fb7-88b5-8a5db9bf8630",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "DL",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "1ddc30d2-e29f-4669-b50e-b9855a005ac9",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "AP",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "72b1c9a7-7066-4842-b0a7-eb910a33c87f",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "AR",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "f166c99e-2200-44d8-8e93-8c702af52383",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "AS",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "7bac91d0-e2a8-4d53-87dd-dc37afde3237",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "BR",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "ca67d01c-e224-4933-817b-c8ae309181a7",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "CG",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "7a417485-63e9-436e-924f-ec2b2a261c24",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "DL",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "63a6306a-2bd4-4282-8bd8-a1cf4ad17fe9",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "GJ",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "2f6ac2fe-9200-4c32-86b7-55f5de145985",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "HP",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "4e2eef0f-5f68-4915-ab38-45723bb9639d",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "HR",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "da332cda-abb5-4bf3-b628-091913940f06",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "JH",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "9f49a5e6-6886-453b-811f-b0d236fffae1",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "JK",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "5803ca94-e8ad-4dd1-9e6a-00e9a024c7ed",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "KA",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "f9a2aed6-48e2-4090-945c-1056201be355",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "KL",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "5df1adc8-455a-49fe-9b7f-be92f82a8690",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "MH",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "27e844c8-ed77-48a2-b6ae-c47d8b5e86d7",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "ML",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "6d771c72-6c56-4298-bc59-381b8e212e32",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "MN",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "d5066f10-1536-4e67-baaf-b79b4d4c5aab",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "MP",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "4466a63a-29e6-41ab-a17e-9527060e1e38",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "MZ",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "1f9645a0-d534-453a-85cb-8a4168b6f019",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "OD",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "82dd9704-0a0a-42db-a911-1697cc770bcd",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "PB",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "384014a9-7bf9-4e5c-a847-c5ef3b6e2c7b",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "PY",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "b46706fe-e67e-4037-9c55-a72293b33991",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "RJ",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "e4a8218a-d84a-4a5d-a80f-241c27e43d6b",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "SK",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "73f91c3c-1ac9-47b4-ac2c-8145df3394e9",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "TN",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "e0e68a01-8c76-4e62-9995-d59644f47c7a",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "TR",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "1bf8fc78-9e6d-412e-a8cb-7e04cc289124",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "TS",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "852b96d9-c8c6-435f-9a5d-57f9b830450b",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "UK",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "d738c840-052f-4f21-be4b-86ae863b4c4f",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "UP",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "784b553c-74bd-465f-bf7d-03f43ba4b7a4",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "AP",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "2539e18d-8aaf-4b4e-a459-b3a4a2a4a05d",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "AR",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "885075c9-8b93-4f7d-a79b-230c09bb841b",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "AR",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "74978365-082d-4f6e-b321-1a90d14e1ebb",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "AS",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "c560e328-fb2b-473f-b405-125ae3661a74",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "AS",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "075ca977-d30c-4818-9bf7-3711ea23ad24",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "BR",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "dd1c5148-cd65-4df7-a0fc-9c1cbc54d3d2",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "BR",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "6dbbc99d-0687-4e61-b3f0-6a1683c36d6e",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "CG",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "0ed52480-b6a8-4b41-a082-073cd1b03b36",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "CG",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "0db9e7c1-e5c2-4d59-aa32-d05978ff1d62",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "DL",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "7af91d42-25da-46e0-bcad-c2f4aa8be84b",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "DL",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "f99b3c71-7244-474c-a434-d207b9744006",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "GJ",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "fde79793-bd35-4976-9269-e1a60974ef6f",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "GJ",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "ee01ad7c-f4c8-4eb0-9f18-46228ab99fc6",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "HP",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "b737feb9-8068-4d0e-9960-b68438891b9a",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "HP",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "f2f94788-03d4-4e29-9f42-ff25b43eba3f",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "HR",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "2d5c9a53-819d-4194-91d7-c77838f5e30b",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "HR",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "e60da693-e5b2-4fa5-96d5-7ea4f10e5af1",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "JH",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "d4e705f6-50a0-4b49-8f96-a6548ae9274c",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "JH",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "ebe368b5-7986-443e-99e3-976aace6f331",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "JK",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "505064e2-545c-4aaa-921c-2f9e3d1d70b9",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "JK",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "f5203601-afc9-43c6-85d9-84b8a02cb4fe",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "KA",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "e7f3c310-f767-4715-ad63-0ff89b6f0977",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "KA",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "5e1e4a01-fd9d-4532-a930-242abf7b86ec",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "KL",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "2e0ad495-de5a-4b1e-b39d-63e394c0c6e8",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "KL",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "a87fc653-1170-4bda-9690-730fe773658d",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "MH",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "a1540668-f69a-4021-ae07-d8881f6f3c0a",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "MH",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "e0eeb5f6-f930-4966-9ed8-db105beb4a78",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "ML",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "7e9fc3c9-5215-4c07-9a53-f266e4ed2435",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "ML",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "af283604-f579-4429-b9db-70bd10281350",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "MN",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "e6845614-aa9c-4308-92c4-4359be9da26f",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "MN",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "56434a02-2fff-4617-94dd-b960d0224cb6",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "MP",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "788e17be-bb26-4773-816b-8e241811c519",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "MP",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "c8154413-ae1e-4d72-9c38-3715ad451f10",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "OD",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "ea692ffd-c77b-4368-bb78-451c821763aa",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "OD",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "3f3ec068-008f-46d6-9c23-eeb34dd4b096",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "PY",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "339cefc0-2f9c-42ed-934a-5356650ae092",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "PY",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "95962029-f301-4693-8f26-c2fbd0582ddb",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "RJ",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "9dba0893-fdc7-42c5-aed0-8b579d3df47b",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "SK",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "6d83126d-1678-4eb3-a5ba-d528a626243c",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "SK",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "f521d853-48da-4319-8d32-d5582fa6cabb",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "TN",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "b729f83d-044c-43ab-a593-4d82d98b5365",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "TN",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "6a1e2838-95f2-4878-a1fd-325c618c5b40",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "TR",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "0b04c29f-4f51-4632-ba60-02c0ef243e56",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "TR",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "14587007-03a9-4120-b5fb-b3c21a81b92d",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "TS",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "d1a24b77-0219-492b-bbf8-cc6e52f2d5fa",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "UK",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "7ac00e63-2821-4533-878d-4ab0b034847c",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "UK",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "3fa50365-f2d7-4ba0-b5f7-269d583a63c0",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "UP",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "6b5ef374-e2fc-42da-9166-a41c618df460",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "UP",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "b861dc6d-e06b-4d0b-ac9f-367d3b36d672",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "WB",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "0ccbcf28-4539-4d1b-b0d0-97ad938524a4",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "WB",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "17f55796-cd8e-43f5-8228-149158e110ab",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "JH",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "71a49f68-0342-42aa-a0e8-f1ebd94a18a2",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "RJ",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "db0ca89f-44db-487e-8e71-1c750c0971c5",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "TS",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "2c6d984f-4816-4883-89f0-6ff7cba6ff6c",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "AP",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "906f33f8-0be3-4c0b-a020-b22110f0cce7",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "AP",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "86c8ca29-a5aa-4187-a095-925e8295f1dc",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "AR",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "861c1d29-a9a7-4db7-b94f-747dc8d5f162",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "AS",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "438ddf73-1918-4c5d-ac8a-4bb243030721",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "BR",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "9b2936ba-44c8-43fc-aeb6-3ee6d327c630",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "CG",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "4c20fc98-e937-4635-aa56-6784483cd946",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "DL",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "3020e711-23d3-4910-a015-9334c154be23",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "GJ",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "5102cd85-ca5a-4913-b75a-374ca75a5cf1",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "HP",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "5278cf7e-105a-4d91-bc12-8fd3e1a62406",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "HR",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "dd63a9c8-442d-4104-80a5-22334b2c40ec",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "JH",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "121f20ae-a121-4c32-9783-531da9d13fe3",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "JK",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "49e80b6d-af62-47f0-a7a9-4dcf2b1534a4",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "KA",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "2e2bd5c3-f694-462b-95bd-e063fbc44471",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "KL",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "8b2f8edf-3870-484b-ab0f-43635c60b9d2",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "MH",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "54a2faa9-3728-413b-8cec-a2fc3a7aed37",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "ML",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "31264f10-c836-4b53-90ac-447dba2f8659",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "MN",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "79e775a0-fdc7-4365-bcd9-7c458890aa30",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "MP",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "6624bbb1-b793-47f5-b1d8-93da41243348",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "OD",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "851cd02f-f89e-4540-9741-bec9617a65f3",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "PY",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "8f02f11f-c266-4050-bce1-a6befac324b8",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "RJ",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "ce644703-226a-4a5f-a48f-6f4bee9987ad",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "SK",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "009ace65-b8e1-4954-a152-23cafeab3824",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "TN",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "be0220a2-6b6a-4977-b9ae-6e0713583dc7",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "TR",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "8a34c36f-bbff-4107-9a68-335819a40954",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "TS",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "a97624aa-0e9b-4914-8d51-4b840a9e9f88",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "UK",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "e3a42fce-4e70-4d62-b1a0-91952aa97554",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "UP",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "0b55aae1-9849-473a-8264-9813dedb7a4b",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "WB",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "421a789c-d5b9-4562-8f30-ee18fafa7444",
+   "datastore_active": true
+  }
+ ]
+}

@@ -2006,3 +2006,1816 @@
     justify-content: center;
   }
 }
+
+
+/* ==========================================================================
+   SAR Candidate Review Dashboard (Phase 13.2)
+   ========================================================================== */
+.candidate-drawer {
+  width: min(480px, 96vw);
+}
+
+.candidate-kpis {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  margin-bottom: var(--sp-4);
+}
+
+.kpi-group {
+  margin-bottom: var(--sp-5);
+}
+
+.kpi-group-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+  padding: 0 var(--sp-1);
+}
+
+.kpi-group-title {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.kpi-group-caption {
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.candidate-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.search-box {
+  position: relative;
+  flex: 1 1 260px;
+  display: flex;
+  align-items: center;
+}
+
+.search-box .search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.search-box .search-input {
+  width: 100%;
+  padding: 8px 30px 8px 34px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  outline: none;
+  transition: border-color var(--dur) var(--ease);
+}
+
+.search-box .search-input:focus {
+  border-color: var(--brand-500);
+}
+
+.search-box .search-clear {
+  position: absolute;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+}
+
+.filter-select-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.filter-select {
+  padding: 7px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  outline: none;
+  cursor: pointer;
+}
+
+.filter-select:focus {
+  border-color: var(--brand-500);
+}
+
+.sar-image-container {
+  background: #020617;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--sp-3);
+  margin-bottom: var(--sp-4);
+  text-align: center;
+}
+
+.sar-image-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--fs-2xs);
+  color: var(--text-muted);
+  margin-bottom: var(--sp-2);
+}
+
+.sar-image-tag {
+  background: rgba(14, 165, 233, 0.15);
+  color: #38bdf8;
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sar-patch-img {
+  width: 100%;
+  max-width: 256px;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--r-md);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  image-rendering: pixelated;
+  margin: 0 auto;
+  display: block;
+}
+
+.sar-image-caption {
+  font-size: var(--fs-2xs);
+  color: var(--text-muted);
+  margin-top: var(--sp-2);
+}
+
+.candidate-hero-banner {
+  display: flex;
+  justify-content: space-between;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-4);
+  margin-bottom: var(--sp-4);
+}
+
+.hero-label {
+  display: block;
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.decision-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--r-full);
+  border: 1px solid transparent;
+}
+
+.chip-pending {
+  color: var(--text-muted);
+  background: var(--bg-subtle);
+  border-color: var(--border);
+}
+
+.chip-slick {
+  color: #f97316;
+  background: rgba(249, 115, 22, 0.12);
+  border-color: rgba(249, 115, 22, 0.35);
+}
+
+.chip-rejected {
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+.chip-inconclusive {
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.35);
+}
+
+.chip-evidence {
+  color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.12);
+  border-color: rgba(139, 92, 246, 0.35);
+}
+
+.coastal-badge {
+  font-size: var(--fs-2xs);
+  color: #0284c7;
+  background: rgba(2, 132, 199, 0.1);
+  border: 1px solid rgba(2, 132, 199, 0.25);
+  border-radius: var(--r-sm);
+  padding: 1px 4px;
+  margin-left: 6px;
+  font-weight: 550;
+}
+
+.location-cell {
+  display: flex;
+  align-items: center;
+}
+
+.wind-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.interpretation-card {
+  display: flex;
+  gap: var(--sp-3);
+  background: var(--surface-subtle, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--brand-500);
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-4);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.interpretation-icon {
+  color: var(--brand-500);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.warning-callout {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: var(--r-md);
+  padding: var(--sp-3);
+  margin-top: var(--sp-2);
+}
+
+.warning-callout-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: #f59e0b;
+  font-size: var(--fs-xs);
+  margin-bottom: var(--sp-1);
+}
+
+.warning-callout ul {
+  margin: 0;
+  padding-left: var(--sp-4);
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+}
+
+.local-mode-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: var(--r-md);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  line-height: 1.45;
+  margin-bottom: var(--sp-2);
+}
+
+.local-mode-notice svg {
+  flex-shrink: 0;
+  color: #38bdf8;
+  margin-top: 2px;
+}
+
+.field-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.review-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--sp-4);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-label {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.form-select,
+.form-input,
+.form-textarea {
+  width: 100%;
+  padding: 7px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  outline: none;
+  transition: border-color var(--dur) var(--ease);
+}
+
+.form-select:focus,
+.form-input:focus,
+.form-textarea:focus {
+  border-color: var(--brand-500);
+}
+
+.review-success-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: var(--r-md);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+
+.audit-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.audit-item {
+  background: var(--surface-subtle, rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  padding: var(--sp-3);
+}
+
+.audit-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--sp-1);
+}
+
+.audit-time {
+  font-size: var(--fs-2xs);
+  color: var(--text-muted);
+}
+
+.audit-meta {
+  display: flex;
+  gap: var(--sp-4);
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  margin-bottom: var(--sp-2);
+}
+
+.audit-notes {
+  font-size: var(--fs-xs);
+  color: var(--text);
+  font-style: italic;
+  margin: 0;
+  border-left: 2px solid var(--brand-400);
+  padding-left: var(--sp-2);
+}
+
+.pagination-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--sp-3) 0 0;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: var(--sp-3);
+}
+
+.pagination-btns {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.env-pill {
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  padding: 3px 8px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.header-tags {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+}
+
+
+/* SAR Map Layer additions */
+.candidate-legend-block {
+  margin-top: var(--sp-2);
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.candidate-legend-title {
+  font-size: var(--fs-2xs);
+  font-weight: 650;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.candidate-legend-items {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: var(--fs-2xs);
+  color: var(--text-secondary);
+}
+
+.candidate-legend-items span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.candidate-legend-items i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: var(--r-full);
+}
+
+.sar-map-preview {
+  background: #020617;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--sp-2);
+  margin-bottom: var(--sp-3);
+  text-align: center;
+}
+
+.sar-map-thumb {
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--r-sm);
+  display: block;
+  margin: 0 auto;
+}
+
+/* -- Sentinel-2 Optical Evidence (Phase 14.1) ------------------------------ */
+.optical-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.optical-evidence-card {
+  background: #020617;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+
+.optical-meta-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--fs-2xs);
+  color: var(--text-muted);
+  margin-bottom: var(--sp-2);
+}
+
+.badge-platform {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.temporal-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--r-full);
+  font-size: var(--fs-2xs);
+  font-weight: 500;
+}
+
+.badge-near {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.badge-far {
+  background: rgba(234, 179, 8, 0.15);
+  color: #eab308;
+  border: 1px solid rgba(234, 179, 8, 0.3);
+}
+
+.optical-tabs-row {
+  display: flex;
+  gap: 4px;
+  margin: var(--sp-2) 0;
+  background: var(--bg-subtle);
+  padding: 3px;
+  border-radius: var(--r-md);
+}
+
+.opt-tab {
+  flex: 1;
+  padding: 4px 6px;
+  font-size: var(--fs-2xs);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.opt-tab:hover {
+  color: var(--text);
+}
+
+.opt-tab.active {
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.optical-img-frame {
+  text-align: center;
+  background: #000;
+  border-radius: var(--r-md);
+  padding: var(--sp-2);
+  margin: var(--sp-2) 0;
+  border: 1px solid var(--border-subtle);
+}
+
+.optical-preview-img {
+  width: 100%;
+  max-width: 320px;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--r-sm);
+  display: block;
+  margin: 0 auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.optical-img-caption {
+  font-size: var(--fs-2xs);
+  color: var(--text-muted);
+  margin-top: var(--sp-2);
+}
+
+.optical-quality-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--sp-2);
+  margin: var(--sp-3) 0;
+}
+
+.opt-metric {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-subtle);
+  padding: var(--sp-2);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border-subtle);
+}
+
+.opt-metric .lbl {
+  font-size: var(--fs-2xs);
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.opt-metric .val {
+  font-size: var(--fs-xs);
+}
+
+.badge-opt-flag {
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  text-align: center;
+  display: inline-block;
+}
+
+.badge-opt-flag.optical_valid_clear {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.badge-opt-flag.optical_cloud_obscured {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.badge-opt-flag.optical_high_algal_context {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.badge-opt-flag.optical_partially_clouded {
+  background: rgba(234, 179, 8, 0.15);
+  color: #eab308;
+}
+
+.badge-opt-flag.optical_low_water_fraction {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+}
+
+.spectral-row {
+  display: flex;
+  justify-content: space-between;
+  background: var(--bg-subtle);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  margin-bottom: var(--sp-3);
+  font-size: var(--fs-2xs);
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.spec-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.spec-lbl {
+  color: var(--text-muted);
+}
+
+.spec-val {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.guardrail-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: var(--r-md);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-2xs);
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.guardrail-icon {
+  color: #f59e0b;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.optical-empty-card {
+  background: var(--bg-subtle);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--sp-4);
+  text-align: center;
+  margin-bottom: var(--sp-4);
+}
+
+.empty-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.optical-scene-picker-box {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+
+.picker-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--sp-2);
+}
+
+.btn-close-mini {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.scene-cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.scene-select-card {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.scene-select-card.card-best {
+  border-color: rgba(56, 189, 248, 0.5);
+  background: rgba(56, 189, 248, 0.05);
+}
+
+.scene-card-top {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+}
+
+.scene-delta {
+  color: #38bdf8;
+}
+
+.scene-cloud {
+  color: var(--text-muted);
+}
+
+.scene-card-bot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.btn-2xs {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Multi-Sensor Evidence Fusion (Phase 14.3) */
+.fusion-concordance-chip {
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: var(--r-full);
+  letter-spacing: 0.03em;
+}
+
+.fusion-concordance-chip.multi_sensor_concordance {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.fusion-concordance-chip.biogenic_lookalike {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.fusion-concordance-chip.calm_water_ambiguity {
+  background: rgba(236, 72, 153, 0.15);
+  color: #ec4899;
+  border: 1px solid rgba(236, 72, 153, 0.4);
+}
+
+.fusion-concordance-chip.sar_wind_supported_optical_pending {
+  background: rgba(6, 182, 212, 0.15);
+  color: #06b6d4;
+  border: 1px solid rgba(6, 182, 212, 0.4);
+}
+
+.fusion-assessment-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+
+.fusion-summary-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  padding: var(--sp-3);
+}
+
+.fusion-action-pill {
+  background: rgba(56, 189, 248, 0.08);
+  border-left: 3px solid #0284c7;
+  padding: 6px 10px;
+  font-size: var(--fs-xs);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  color: var(--text-secondary);
+}
+
+.fusion-evidence-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.fusion-item-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2) var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.fusion-item-card.consistency-supporting {
+  border-left: 3px solid #10b981;
+}
+
+.fusion-item-card.consistency-conflicting {
+  border-left: 3px solid #ef4444;
+}
+
+.fusion-item-card.consistency-inconclusive {
+  border-left: 3px solid #f59e0b;
+}
+
+.fusion-item-card.consistency-unavailable {
+  border-left: 3px solid var(--text-muted);
+}
+
+.fusion-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.consistency-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: capitalize;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.consistency-badge.badge-supporting {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.consistency-badge.badge-conflicting {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.consistency-badge.badge-inconclusive {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.consistency-badge.badge-unavailable {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+}
+
+.fusion-item-meta {
+  color: var(--text-muted);
+}
+
+/* AIS Vessel Association (Phase 15) */
+.vessel-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.vessel-assoc-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+
+.vessel-assoc-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  padding: var(--sp-2) var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vessel-assoc-card.card-primary-suspect {
+  border-color: rgba(239, 68, 68, 0.5);
+  background: rgba(239, 68, 68, 0.04);
+}
+
+.vessel-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.vessel-name-link {
+  font-weight: 650;
+  font-size: var(--fs-xs);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.suspect-chip {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.vessel-card-metrics {
+  display: flex;
+  gap: var(--sp-3);
+  font-size: var(--fs-2xs);
+  color: var(--text-muted);
+}
+
+.vessel-card-metrics strong {
+  color: var(--text-primary);
+}
+
+/* Lagrangian Oil Drift Simulation (Phase 16) */
+.drift-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.drift-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  padding: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+
+.drift-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-2);
+  font-size: var(--fs-2xs);
+  padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.drift-metric-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.drift-metric-item .d-lbl {
+  color: var(--text-muted);
+}
+
+.drift-metric-item .d-val {
+  font-weight: 650;
+  color: var(--text-primary);
+}
+
+.mass-balance-bar-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.mass-balance-bar {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--bg-subtle);
+}
+
+.mass-seg-floating {
+  background: #f59e0b;
+}
+
+.mass-seg-evap {
+  background: #38bdf8;
+}
+
+.mass-seg-disp {
+  background: #a855f7;
+}
+
+.mass-seg-beached {
+  background: #ef4444;
+}
+
+.mass-balance-legend {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.mass-balance-legend span {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.mass-balance-legend i {
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  display: inline-block;
+}
+
+.beaching-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.03em;
+}
+
+.beaching-badge.critical {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.beaching-badge.high {
+  background: rgba(249, 115, 22, 0.15);
+  color: #f97316;
+  border: 1px solid rgba(249, 115, 22, 0.4);
+}
+
+.beaching-badge.moderate {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.beaching-badge.low {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+/* Environmental Impact & Receptors (Phase 17) */
+.impact-severity-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.03em;
+}
+
+.impact-severity-badge.severity-critical {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.impact-severity-badge.severity-high {
+  background: rgba(249, 115, 22, 0.15);
+  color: #f97316;
+  border: 1px solid rgba(249, 115, 22, 0.4);
+}
+
+.impact-severity-badge.severity-moderate {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.impact-severity-badge.severity-low {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.impact-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+
+.impact-summary-card {
+  padding: var(--sp-3);
+  border-radius: var(--r-md);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+}
+
+.impact-stat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  font-size: var(--fs-2xs);
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+.severity-text-critical {
+  color: #ef4444;
+}
+
+.severity-text-high {
+  color: #f97316;
+}
+
+.severity-text-moderate {
+  color: #f59e0b;
+}
+
+.severity-text-low {
+  color: #10b981;
+}
+
+.receptor-impact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.receptor-card {
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-left-width: 3px;
+}
+
+.receptor-card.severity-border-critical {
+  border-left-color: #ef4444;
+}
+
+.receptor-card.severity-border-high {
+  border-left-color: #f97316;
+}
+
+.receptor-card.severity-border-moderate {
+  border-left-color: #f59e0b;
+}
+
+.receptor-card.severity-border-low {
+  border-left-color: #10b981;
+}
+
+.receptor-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.impact-chip {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.impact-chip.chip-critical {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.impact-chip.chip-high {
+  background: rgba(249, 115, 22, 0.15);
+  color: #f97316;
+}
+
+.impact-chip.chip-moderate {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.impact-chip.chip-low {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.receptor-card-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+
+/* Candidate evaluation panel: a confusion matrix the reader can actually
+   read, beside the ROC curve it is one slice through. */
+.eval-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.eval-heading {
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted, #6b7785);
+  margin: 0 0 0.6rem;
+}
+
+.eval-matrix {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+
+.eval-matrix th {
+  font-size: 0.74rem;
+  font-weight: 600;
+  text-align: left;
+  color: var(--muted, #6b7785);
+  padding: 0.3rem 0.5rem;
+}
+
+.eval-matrix thead th {
+  text-align: center;
+}
+
+.eval-matrix td {
+  text-align: center;
+  padding: 0.7rem 0.5rem;
+  border-radius: 0.5rem;
+  background: var(--surface-muted, #f6f8fa);
+}
+
+/* The diagonal is not "good news" -- it is agreement with the label. Tinted
+   only enough to find it, never enough to read as a score. */
+.eval-matrix td.eval-good {
+  box-shadow: inset 0 0 0 1px rgba(26, 127, 90, 0.35);
+}
+
+.eval-matrix td.eval-bad {
+  box-shadow: inset 0 0 0 1px rgba(217, 119, 6, 0.35);
+}
+
+.eval-n {
+  display: block;
+  font-size: 1.45rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.eval-label {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--muted, #6b7785);
+}
+
+.eval-slider {
+  display: block;
+  margin-top: 1rem;
+  font-size: 0.82rem;
+}
+
+.eval-slider input {
+  width: 100%;
+  margin-top: 0.4rem;
+}
+
+@media (max-width: 860px) {
+  .eval-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* Provenance note: same weight as the simulated banner, different claim.
+   The measurement is real; something about its framing is not live. */
+.provenance-note {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 1rem;
+  border-radius: 0.6rem;
+  background: var(--surface-muted, #f6f8fa);
+  border: 1px solid var(--border, #e2e8f0);
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: var(--text, #1f2933);
+}
+
+.provenance-note svg {
+  flex: none;
+  margin-top: 0.12rem;
+  color: var(--muted, #6b7785);
+}
+
+
+/* The one card on this dashboard pointing at measured data. Given weight
+   because everything around it is a simulation. */
+.real-data-card {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.95rem 1.1rem;
+  margin-bottom: 1rem;
+  border-radius: 0.7rem;
+  text-decoration: none;
+  color: inherit;
+  background: var(--surface, #fff);
+  border: 1px solid var(--accent, #2563eb);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  transition: box-shadow 120ms ease, transform 120ms ease;
+}
+
+.real-data-card:hover {
+  box-shadow: 0 3px 10px rgba(37, 99, 235, 0.16);
+  transform: translateY(-1px);
+}
+
+.real-data-card > div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.real-data-card strong {
+  font-size: 1.05rem;
+}
+
+.real-data-card svg {
+  flex: none;
+  color: var(--accent, #2563eb);
+}
+
+.real-data-kicker {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--accent, #2563eb);
+}
+
+/* Knowledge graph: radial layout, so distance from the centre is hop count.
+   Deterministic by design — the picture must not rearrange between renders. */
+.kg-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.kg-svg {
+  width: 100%;
+  height: auto;
+  background: var(--surface-muted, #f6f8fa);
+  border-radius: 0.6rem;
+}
+
+.kg-ring {
+  fill: none;
+  stroke: var(--border, #e2e8f0);
+  stroke-dasharray: 3 5;
+}
+
+.kg-edge {
+  stroke: var(--border, #cbd5e1);
+  stroke-width: 1;
+  opacity: 0.65;
+}
+
+.kg-edge.is-lit {
+  stroke: var(--accent, #2563eb);
+  stroke-width: 1.8;
+  opacity: 1;
+}
+
+.kg-node {
+  cursor: pointer;
+  stroke: var(--surface, #fff);
+  stroke-width: 1.5;
+  transition: r 120ms ease;
+}
+
+.kg-node:hover,
+.kg-node:focus {
+  stroke: var(--accent, #2563eb);
+  stroke-width: 2.5;
+  outline: none;
+}
+
+.kg-node.is-centre {
+  stroke-width: 3;
+}
+
+.kg-centre-label {
+  text-anchor: middle;
+  font-size: 12px;
+  font-weight: 650;
+  fill: var(--text, #1f2933);
+}
+
+.kg-side {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.kg-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.kg-legend li {
+  display: grid;
+  grid-template-columns: 0.7rem 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+}
+
+.kg-dot {
+  display: inline-block;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  margin-right: 0.4rem;
+  vertical-align: baseline;
+}
+
+.kg-hover {
+  min-height: 9rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 0.5rem;
+  background: var(--surface-muted, #f6f8fa);
+  font-size: 0.82rem;
+}
+
+.kg-hover-label {
+  font-weight: 600;
+  margin: 0 0 0.4rem;
+  word-break: break-word;
+}
+
+.kg-counts {
+  margin-bottom: 0.5rem;
+}
+
+@media (max-width: 900px) {
+  .kg-wrap {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* A citation is a weaker link than a foreign key — resolved out of JSON with
+   nothing in the schema protecting it — so it is drawn dashed. */
+.kg-edge.is-cited {
+  stroke-dasharray: 4 3;
+  stroke: var(--muted, #94a3b8);
+}
+
+.kg-edge.is-cited.is-lit {
+  stroke: #9333ea;
+}
+
+.kg-legend-edges {
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--border, #e2e8f0);
+}
+
+.kg-legend-edges li {
+  align-items: start;
+}
+
+.kg-line {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0;
+  margin-top: 0.45rem;
+  border-top: 2px solid var(--border, #cbd5e1);
+}
+
+.kg-line.is-dashed {
+  border-top-style: dashed;
+  border-top-color: var(--muted, #94a3b8);
+}
+
+/* The AI-generated summary's badge.
+ *
+ * Deliberately quieter than the evidence badges beside it. OBSERVED and
+ * DETECTED describe where a measurement came from; this one says a paragraph
+ * was written by a model over measurements shown elsewhere on the page. It
+ * should read as a caveat, not as a sixth evidence level. */
+.badge-ai {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--r-full);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #94a3b8);
+  background: rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+}
+
+/* Real-data badge, scene thumbnail, and the row that has no values.
+ *
+ * The badge is the only green one in the marine section. Everywhere else in
+ * this module carries a SIMULATED banner, so "Real · Sentinel-2" has to be
+ * visibly different at a glance -- that contrast is the information. */
+.badge-real {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--r-full);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #34d399;
+  background: rgba(52, 211, 153, 0.13);
+  border: 1px solid rgba(52, 211, 153, 0.35);
+}
+
+.scene-thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.25));
+  display: block;
+  background: rgba(148, 163, 184, 0.08);
+}
+
+/* A reading whose cell was almost entirely land or cloud. Dimmed rather than
+ * hidden: the acquisition happened, and saying so is worth a row. */
+.row-caveated td {
+  opacity: 0.55;
+}
+
+/* Compact metric row inside a section card, and the fictional-vessel notice. */
+.metric-grid.compact {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.mini-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: rgba(148, 163, 184, 0.07);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.mini-metric-label {
+  font-size: var(--fs-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #94a3b8);
+}
+
+.mini-metric strong {
+  font-size: var(--fs-lg, 1.15rem);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The attribution badge is a link; it must not inherit link underlines. */
+a.badge-real {
+  text-decoration: none;
+}
+
+/* Detection signatures: colour, icon and legend.
+ *
+ * Colours are chosen to be distinguishable without relying on hue alone --
+ * every badge carries an icon and a word as well, because a reader with
+ * colour-vision deficiency should lose nothing. */
+:root {
+  --sig-oil: #B91C1C;
+  --sig-dark: #6B21A8;
+  --sig-algae: #15803D;
+  --sig-floating: #C2410C;
+  --sig-turbidity: #A16207;
+  --sig-anomaly: #0E7490;
+  --sig-none: #64748B;
+}
+
+.signature-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.signature-hint {
+  font-weight: 400;
+  font-style: normal;
+  color: var(--text-muted, #94a3b8);
+  margin-left: 6px;
+}
+
+.signature-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--border, rgba(148, 163, 184, 0.22));
+  background: rgba(148, 163, 184, 0.05);
+}
+
+.signature-legend-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: var(--fs-2xs);
+  max-width: 420px;
+  color: var(--text-muted, #94a3b8);
+  line-height: 1.45;
+}
+
+.signature-legend-item strong {
+  font-size: var(--fs-xs);
+}
+
+/* "stat." beside a signature: this detection is a statistical anomaly
+ * against its own region's history, not a measurement against a limit. The
+ * full sentence is in the tooltip and on the detail page. */
+.anomaly-marker {
+  font-size: var(--fs-3xs, 0.62rem);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 4px;
+  border-radius: var(--r-sm);
+  color: var(--text-muted, #94a3b8);
+  background: rgba(148, 163, 184, 0.16);
+  text-decoration: none;
+  cursor: help;
+}
+
+/* A provider's status sentence, and the raw error behind a toggle.
+ *
+ * The note is amber rather than red for a paused sync: the server answered,
+ * it simply declined, and colouring that as an error sends someone hunting
+ * for a fault that is not there. */
+.provider-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 8px 0 0;
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  color: #b45309;
+}
+
+.provider-technical {
+  margin-top: 6px;
+  font-size: var(--fs-2xs);
+}
+
+.provider-technical summary {
+  cursor: pointer;
+  color: var(--text-muted, #94a3b8);
+  user-select: none;
+}
+
+.provider-technical code {
+  display: block;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text-muted, #94a3b8);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Incident replay: the scene beside the numbers. */
+.replay-body {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .replay-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+.replay-figure {
+  margin: 0;
+}
+
+.replay-figure img {
+  width: 100%;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.25));
+  display: block;
+}
+
+.replay-figure figcaption {
+  margin-top: 6px;
+  font-size: var(--fs-2xs);
+  color: var(--text-muted, #94a3b8);
+  line-height: 1.45;
+}
+
+.replay-detail > * + * {
+  margin-top: 12px;
+}
+
+/* What a severity word means here. Shown as text beside the badge on a
+ * detail page, not only as a tooltip: "CRITICAL" next to a statistical
+ * anomaly is the most misreadable thing on these pages, and a tooltip is
+ * invisible on a touch screen and in a screenshot. */
+.risk-meaning {
+  display: block;
+  margin-top: 6px;
+  max-width: 54ch;
+  line-height: 1.45;
+}

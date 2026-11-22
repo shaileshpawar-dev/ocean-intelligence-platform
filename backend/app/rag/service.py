@@ -138,6 +138,13 @@ def ingest_document(db: Session, doc: SeedDocument) -> int:
     return len(chunks)
 
 
+def corpus_size(db: Session) -> tuple[int, int]:
+    """(documents, chunks) currently indexed. Two counts, no loading."""
+    documents = db.scalar(select(func.count(ResearchDocument.id))) or 0
+    chunks = db.scalar(select(func.count(ResearchChunk.id))) or 0
+    return int(documents), int(chunks)
+
+
 def ingest_seed_corpus(db: Session) -> dict:
     """Load the seed corpus. Idempotent; safe to call on every start-up."""
     documents = all_seed_documents()

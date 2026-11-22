@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -68,6 +70,9 @@ class ForecastOut(BaseModel):
     """A forecast plus the evidence that it is worth anything."""
 
     region_code: str
+    #: Which measured Sentinel-2 index was projected, when one was. None
+    #: means this is the detection-activity forecast.
+    index: str | None = None
     model_name: str
     forecast_kind: str = Field(
         description=(
@@ -128,6 +133,11 @@ class DetectorInfoOut(BaseModel):
     version: str
     method: str
     available: bool
+    #: The one detector whose output the platform presents. Asking
+    #: for "the first available detector" returned the mock.
+    is_active: bool = False
+    #: True for the demonstration stub: it runs, and measures nothing.
+    is_simulated: bool = False
     supported_signatures: list[str] = Field(
         description=(
             "Signatures this detector is permitted to emit. Emitting anything "
@@ -144,4 +154,50 @@ class DetectorInfoOut(BaseModel):
     )
     checkpoint: str | None = Field(
         default=None, description="Path to the loaded weights, when applicable."
+    )
+
+    # Everything below is reported by the evaluated SAR screeners and was
+    # previously dropped on the floor: the detector's describe() carried its
+    # own measured metrics, and this schema kept only seven fields, so the API
+    # said nothing about models that had in fact been evaluated. All optional,
+    # because the mock and rule-based detectors do not have any of it.
+    architecture: str | None = Field(
+        default=None, description="Network architecture, for learned detectors."
+    )
+    modality: str | None = Field(
+        default=None, description="Sensor and product the detector expects."
+    )
+    input_resolution: list[int] | None = Field(
+        default=None, description="Input size in pixels, as [height, width]."
+    )
+    evaluation_status: str | None = Field(
+        default=None,
+        description=(
+            "How far this detector has been validated. "
+            "'evaluated_on_labeled_test_data' means a held-out split was "
+            "scored; it does not mean validated in operation."
+        ),
+    )
+    dataset_provenance: str | None = Field(
+        default=None, description="Source and licence of the evaluation data."
+    )
+    is_default: bool | None = Field(
+        default=None, description="Whether this detector is the operational baseline."
+    )
+    role: str | None = Field(
+        default=None, description="What this detector is for, relative to the baseline."
+    )
+    test_metrics: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "Measured results on the detector's own held-out test split, as "
+            "recorded at evaluation time. Null means not evaluated, never zero."
+        ),
+    )
+    baseline_comparison: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "The same test split scored by earlier models and by the "
+            "rule-based baseline, so a reader can see what the model beat."
+        ),
     )

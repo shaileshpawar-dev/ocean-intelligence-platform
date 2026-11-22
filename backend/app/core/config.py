@@ -48,6 +48,39 @@ class Settings(BaseSettings):
     database_url: str = f"sqlite:///{(REPO_ROOT / 'data' / 'oip.db').as_posix()}"
     db_echo: bool = False
 
+    # -- Evidence objects --------------------------------------------------
+    water_evidence_bucket: str = ""
+    """S3 bucket for large evidence objects. Empty means the local directory
+    below is used, which is the development default and needs no cloud
+    account. The S3 path has never run against a real bucket."""
+
+    water_object_dir: str = "data/objects"
+    """Where the local object store keeps files when no bucket is set."""
+
+    sar_training_dir: str = "data/training/sar_oil_v2"
+    """The PANGAEA 980773 benchmark: patch images and the annotation table.
+
+    Read-only reference data, not something the app writes. Configurable for
+    the same reason as the two directories above -- the repo-root default
+    resolves to an unwritable ``/`` path inside the container, so the image
+    points this at the data volume where the patches are staged."""
+
+    # Connection pool. Ignored on SQLite, which has no server to pool against.
+    db_pool_size: int = 5
+    """Connections kept open per process. Five per task against an RDS
+    instance allowing ~100 leaves room for the ingestion jobs."""
+
+    db_max_overflow: int = 5
+    """Extra connections allowed under burst, closed again when idle."""
+
+    db_pool_timeout: int = 30
+    """Seconds to wait for a free connection before failing the request."""
+
+    db_pool_recycle: int = 900
+    """Recycle a connection after this many seconds. Below the idle timeout
+    of a managed instance, so the pool never hands out a socket the server
+    has already dropped."""
+
     # -- CORS --------------------------------------------------------------
     # Comma-separated list. Defaults to local dev origins, never "*".
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
@@ -58,12 +91,51 @@ class Settings(BaseSettings):
     gee_service_account: str | None = None
     google_application_credentials: str | None = None
 
+    # -- India water intelligence -----------------------------------------
+    # Comma-separated state codes (e.g. "MH,DL") to ingest from CPCB/NWDP at
+    # start-up when the water tables are empty. Empty disables it. Exists for
+    # ephemeral deployments: a container whose SQLite file is lost on restart
+    # rebuilds its water data from the real source instead of serving an empty
+    # map. It runs in a background thread so health checks pass immediately.
+    water_bootstrap_states: str = ""
+
+    # Where downloaded reference files (boundary GeoJSON) are cached. In the
+    # container the repo-root default resolves to an unwritable path, so the
+    # image points this at the data volume.
+    water_cache_dir: str = str(REPO_ROOT / "data" / "raw")
+
     # -- Vision ------------------------------------------------------------
     detector_backend: Literal["yolo", "mock"] = "mock"
-    yolo_model_path: str | None = None
+    yolo_model_path: str | None = (
+        str(REPO_ROOT / "data" / "models" / "optical" / "best.pt")
+        if (REPO_ROOT / "data" / "models" / "optical" / "best.pt").exists()
+        else None
+    )
+    yolo_v2_model_path: str | None = (
+        str(REPO_ROOT / "data" / "models" / "optical" / "v2" / "best.pt")
+        if (REPO_ROOT / "data" / "models" / "optical" / "v2" / "best.pt").exists()
+        else None
+    )
+    yolo_active_version: str = "v1"
     detection_confidence_threshold: float = 0.25
 
     # -- SAR dark-formation detection --------------------------------------
+    sar_model_version: Literal["v1", "v2", "v2.1", "v2.2"] = "v1"
+    sar_v2_model_path: str | None = (
+        str(REPO_ROOT / "data" / "models" / "sar" / "v2" / "best.pt")
+        if (REPO_ROOT / "data" / "models" / "sar" / "v2" / "best.pt").exists()
+        else None
+    )
+    sar_v2_expanded_model_path: str | None = (
+        str(REPO_ROOT / "data" / "models" / "sar" / "v2_expanded" / "best.pt")
+        if (REPO_ROOT / "data" / "models" / "sar" / "v2_expanded" / "best.pt").exists()
+        else None
+    )
+    sar_v2_2_model_path: str | None = (
+        str(REPO_ROOT / "data" / "models" / "sar" / "v2_2_scene_clean" / "best.pt")
+        if (REPO_ROOT / "data" / "models" / "sar" / "v2_2_scene_clean" / "best.pt").exists()
+        else None
+    )
     # Backscatter (dB) below which a cell is treated as a candidate dark
     # formation. -22 dB is a conservative open-ocean threshold; see
     # docs/ai-pipeline.md for the justification and its limitations.
@@ -72,10 +144,40 @@ class Settings(BaseSettings):
     # low-wind look-alikes. Applied only when wind data is available.
     sar_min_wind_speed_ms: float = 3.0
 
+    # -- Copernicus Data Space Ecosystem (CDSE) ----------------------------
+    cdse_stac_url: str = "https://stac.dataspace.copernicus.eu/v1"
+    cdse_token_url: str = (
+        "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
+    )
+    cdse_username: str | None = None
+    cdse_password: str | None = None
+    #: Sentinel Hub on CDSE. The OAuth client-credentials pair is what the
+    #: Process and Statistical APIs accept; the username/password pair above
+    #: drives the STAC catalogue. Verified 21 Nov 2026: the password grant is
+    #: rejected for Sentinel Hub, the client credentials are not.
+    cdse_client_id: str | None = None
+    cdse_client_secret: str | None = None
+    cdse_process_url: str = "https://sh.dataspace.copernicus.eu/api/v1/process"
+    cdse_statistics_url: str = "https://sh.dataspace.copernicus.eu/api/v1/statistics"
+
+    # -- Copernicus Marine (CMEMS) -----------------------------------------
+    #: A separate account from CDSE, registered at marine.copernicus.eu.
+    cmems_username: str | None = None
+    cmems_password: str | None = None
+
+    # -- Global Fishing Watch ----------------------------------------------
+    gfw_api_token: str | None = None
+    gfw_api_url: str = "https://gateway.api.globalfishingwatch.org/v3"
+
     # -- LLM ---------------------------------------------------------------
     llm_provider: Literal["none", "gemini", "openai", "anthropic"] = "none"
     llm_model: str | None = None
     gemini_api_key: str | None = None
+    #: gemini-2.5-flash returns 404 ("no longer available to new users").
+    #: Its named replacement and every other full flash build answer 429 or
+    #: 503 on this free-tier key; the lite build has capacity. Overridable per
+    #: deployment because Google retires model ids on its own schedule.
+    gemini_model: str = "gemini-flash-lite-latest"
     openai_api_key: str | None = None
     anthropic_api_key: str | None = None
 

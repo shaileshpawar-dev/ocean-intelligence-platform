@@ -1,0 +1,2567 @@
+{
+ "generated_from": "https://nwdp.nwic.gov.in/api/3/action/package_show",
+ "packages": {
+  "physical": "surface-water-quality-manual-physical-parameters-cpcb",
+  "chemical": "surface-water-quality-manual-chemical-parameters-cpcb",
+  "biological": "surface-water-quality-manual-biological-parameters-cpcb"
+ },
+ "states": {
+  "AP": "Andhra Pradesh",
+  "AR": "Arunachal Pradesh",
+  "AS": "Assam",
+  "BR": "Bihar",
+  "CG": "Chhattisgarh",
+  "CH": "Chandigarh",
+  "DD": "Daman and Diu",
+  "DL": "Delhi",
+  "DN": "Dadra and Nagar Haveli",
+  "GA": "Goa",
+  "GJ": "Gujarat",
+  "HP": "Himachal Pradesh",
+  "HR": "Haryana",
+  "JH": "Jharkhand",
+  "JK": "Jammu and Kashmir",
+  "KA": "Karnataka",
+  "KL": "Kerala",
+  "LD": "Lakshadweep",
+  "MH": "Maharashtra",
+  "ML": "Meghalaya",
+  "MN": "Manipur",
+  "MP": "Madhya Pradesh",
+  "MZ": "Mizoram",
+  "NL": "Nagaland",
+  "OD": "Odisha",
+  "PB": "Punjab",
+  "PY": "Puducherry",
+  "RJ": "Rajasthan",
+  "SK": "Sikkim",
+  "TN": "Tamil Nadu",
+  "TR": "Tripura",
+  "TS": "Telangana",
+  "UK": "Uttarakhand",
+  "UP": "Uttar Pradesh",
+  "WB": "West Bengal"
+ },
+ "resources": [
+  {
+   "family": "biological",
+   "state_code": "AP",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "ae640682-126b-4780-9abb-37b03cb0827d",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "AP",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "e33a7208-99ba-46fb-ad26-bb4f30527a37",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "AP",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "02cdf4bb-7394-48d8-b47c-21401e26bca8",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "AP",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "e2f1252f-d637-4d32-8b6f-5b084a57971e",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "AP",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "497ebfa5-5fb7-4958-91e7-822a2d908999",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "AP",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "8f1faea0-1c82-4d1a-b550-549aaaf0243c",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "AP",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "5cad6b33-4b7b-4304-a85a-a00f2566da4c",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "AP",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "5b6b9c20-0af6-4af4-bb0c-16cb7d40b10e",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "AP",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "1a5e7840-50d4-4311-9f0a-75c90cbc2349",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "AR",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "e5cc7b95-5e5c-4610-bdc4-516db6e17225",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "AR",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "ef87fb8c-afea-419a-b777-ecad03886a40",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "AR",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "3c1216d5-246d-4aba-bce1-204259ce1f02",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "AR",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "d95ef376-3f49-413f-a32d-6ce5f39b9df7",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "AR",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "e4e39871-a873-4ab4-be01-7e7757f8f426",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "AR",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "d7ea78be-8904-4aff-97ec-208dcb578f69",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "AR",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "4724b20d-32f0-4971-9f0c-8089c8561301",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "AR",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "b4110a9a-d9e9-40ad-a2b4-9fec487f32da",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "AS",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "0e4164fc-7559-4f50-9b4b-72da39ed8493",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "AS",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "454bad42-744f-440b-a9ed-341c49a88c16",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "AS",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "3a1bb0dd-5c24-47fa-adb2-fe2699abb595",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "AS",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "ff764d6b-0d73-44a8-bc66-d5665ab15115",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "AS",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "403dc726-26af-4e5c-922c-4a8b63cd0c64",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "AS",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "c4d6f9d5-e8c6-46a0-bd07-fb1598571f41",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "AS",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "7c5f3049-6cae-4b41-9c9e-f7b94a1513ea",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "AS",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "53ef91b6-482a-450c-b087-e66889d5edb1",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "AS",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "1d125015-d2ca-48bf-9fd2-0a4065351fe9",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "BR",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "585be455-ff48-414f-b1b5-43cdc0695e75",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "BR",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "018d772b-ed10-478b-a921-3d05ba552f9b",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "BR",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "a83ca753-8d8d-488d-8c16-14e0eeef7b6c",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "BR",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "1b20004a-21b7-4715-a6d5-724cf886fd26",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "BR",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "15c58032-fa40-4fae-9013-41ac8a035220",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "BR",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "1f33c7e6-fe28-49c0-b190-59da00d1e5d5",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "BR",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "b66caf7e-63c2-4154-a00e-6ad294a1a3a8",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "BR",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "3693c0d1-9db8-41e5-bde0-84331553c5b3",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "BR",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "dbd9aefd-9555-4abe-ab78-cfb64371b4d6",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "CG",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "0d0990b8-4a5a-4101-be0f-5b8a37cf9c95",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "CG",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "50ad56e3-fdd6-4ea1-abbc-5e7c520402c7",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "CG",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "53311e3f-a841-4571-8ea5-a15a137688d9",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "CG",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "d1052bfd-e789-4336-8931-871a2a73de06",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "CG",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "a5f596a5-e6de-45d9-8fe1-b199290a052c",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "CG",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "8440fa1b-5e16-4ff3-868c-a8978d2be106",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "CG",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "ec5420bc-621e-4e7c-8862-c2b034fd2cca",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "CG",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "7b1a3508-98df-451c-b3b5-dc80bf859261",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "CG",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "952cd13d-c960-43b0-99e4-d80c02fd54f4",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "CH",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "a7410df7-eed9-443a-83f7-a0060708f529",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "CH",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "d1a25fd2-7bb1-4a0e-b0c5-eb14c2f6ac58",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "CH",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "c00bdb27-b2a9-49a0-a68b-159d735bf70a",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "CH",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "e0a5fa8f-fe54-436a-a9c9-73186f8be66b",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "CH",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "56c277a9-3e6a-471b-90ce-af216eb6935c",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "CH",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "5f1c022f-5a77-40ad-8456-0fc45ad75866",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "CH",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "1c51d218-6587-40d0-b493-4cb6f44dd818",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "CH",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "dff19d06-9afa-4b25-bded-ed7a7ebaa6c0",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "CH",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "513fda6f-9917-4b78-ae19-566aedd4b8e8",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "DD",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "a788ca52-9da7-4384-908f-7abd25ab571a",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "DD",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "29fd7de5-136b-4073-af9a-dcd285ae2ba3",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "DD",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "d83ea6aa-1250-4cf1-a818-90b4073988b9",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "DD",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "24861aad-5fb9-47d0-a1b6-8efc711c2bdf",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "DD",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "cf31b975-021d-42da-a8e5-c7b1291c6463",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "DD",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "6dc1f6f8-5351-4d85-aee3-e83ad7f3d2a4",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "DD",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "5144f204-5301-4433-b3d5-37b4c6ce4845",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "DD",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "74873ec2-89a6-4284-9f09-871e9dc38f06",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "DD",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "326cb3d3-0fa9-4373-8f5f-c0b1e0b1a9a9",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "DL",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "54e6d073-3d27-4a74-a2d2-1143a457ddd8",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "DL",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "6ed3c6b7-c176-4a9c-bc26-77e2077730d8",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "DL",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "f1c0f552-e0dd-4b9c-86d7-8493a462c305",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "DL",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "b97926ce-5793-4b6b-8c21-471446ccfda5",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "DL",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "53ac7be2-2d1f-4283-850b-27fd16fce338",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "DL",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "5f984dc9-8031-4a44-a728-61c8925a3361",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "DL",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "5db37423-3a1d-4a68-9bbe-ac0ac80d8be9",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "DL",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "9221eabd-c583-469b-87a9-7da93d49dabb",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "DL",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "07a1737d-3b7a-4600-ade7-d4bfb349fbe3",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "DN",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "e22421ba-ed7f-45e3-b50c-5fa19f551279",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "DN",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "d34e8650-7607-4e6c-9560-66cd09124dce",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "DN",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "efb304a7-b0f3-4433-a363-833f076b118b",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "DN",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "71d8df6f-51ca-424f-9a86-e8a317ee9f79",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "DN",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "dad980ba-e075-4024-b7f9-216c73c1ae34",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "DN",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "7d1a20ed-df0c-4e22-980b-f047f8640d28",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "DN",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "f59208c0-6541-4d8f-9c3b-85542b5ee5a7",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "DN",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "bff1d93d-3ade-4bd5-ac79-c1a6d3ee5df3",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "DN",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "0abcb09c-01d9-43c8-b85f-5fc673c8ecc5",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "GA",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "313eaee6-1f66-4cc9-ae1f-fdc84e6dd293",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "GA",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "6f1b1fe3-ada0-4d58-ae4f-6519e2b562ab",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "GA",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "8360afcb-7cb6-47bd-83e4-ac9010a7d8de",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "GA",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "3cbf5247-7809-49cf-b937-35f79352a2cf",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "GA",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "61820399-e3de-47bc-bb7f-e7d95b7e3a25",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "GA",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "9d0f889c-9aed-46ee-a16c-6faec32a53ee",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "GA",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "9d2d5e68-2386-495e-9f3f-19444d893541",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "GA",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "7f230e8e-0eee-4b32-9976-75f92c1e56dd",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "GA",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "d155e86b-44c2-4e62-abab-ea62708108c9",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "GJ",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "18752d76-eb55-47e4-868b-a167acdc7eb8",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "GJ",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "45dd3804-5e99-4ab6-9942-2b12207fe637",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "GJ",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "318783dd-ef9a-4ec6-8894-e00d6491fd60",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "GJ",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "90de9aa8-b079-4ad3-81d2-b3b1c92d0739",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "GJ",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "35b88783-4d47-44db-aef9-526bbe63fc96",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "GJ",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "41939d3e-925e-4993-aca7-6a813d48eb9b",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "GJ",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "5f28f607-583d-4b88-8caa-facd8fb0db4a",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "GJ",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "b7c5018d-842d-4b1c-96cf-4c1d3a55807d",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "GJ",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "e408ffcd-99d5-473e-8f5a-08416eed0168",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "HP",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "8d96d501-9db1-48da-b5f6-f2e43dea9f77",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "HP",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "e9343889-6007-49c2-8c87-383e2b62a87d",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "HP",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "d210d885-b7d4-4878-bf93-515eb076cc54",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "HP",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "132cf50e-2bab-42e4-ac68-d529789e311a",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "HP",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "d62e1b87-b206-4698-a8cc-4fc09d03c6a5",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "HP",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "1c9dcf12-ce50-4d4a-9623-44c1ad796ad2",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "HP",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "501d6d3e-5993-4b9a-89ac-0b92607807ba",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "HP",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "5ecbb1c9-cc40-446e-98a7-ed1db44418b0",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "HP",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "a01675ae-3a78-436b-a926-b0905902a1d5",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "HR",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "30672a15-ef07-4cb8-b0e7-b4e57a899c52",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "HR",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "3c701f4c-9741-463c-b2d2-ff4fc1284f7f",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "HR",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "6fcf24c8-daff-4abf-92b5-43b0f77ca833",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "HR",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "acdbb46b-0e98-4fe9-b57f-ab7d79bc40f8",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "HR",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "6b38ce22-71da-4a54-b2c6-18ea41fba440",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "HR",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "36551fdf-a34e-449b-9d1a-37d7799c1158",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "HR",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "6ff682e5-b57c-4a3d-ba51-423a8251cc28",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "HR",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "b59d22f1-ce98-4b58-aa02-248ee3b4cce7",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "HR",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "a00607d7-19f3-48b7-ae41-8b25cada5951",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "JH",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "03d21fa5-f1f8-4e42-8860-a9929407f7c2",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "JH",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "a6059516-33bb-4678-a712-9239700d0a2d",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "JH",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "6e5ba086-dbb9-4393-aba6-106a296ced12",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "JH",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "4403c826-591f-41ad-bd27-5ef27ea00f38",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "JH",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "b4fb4f5b-23a0-49b9-a954-f22d8731e09c",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "JH",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "1e1b01fc-2ba7-4f7e-bfbf-582c2efeb3a0",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "JH",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "a2224e66-196c-42e6-86e8-c9bdfd8a73c6",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "JH",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "41cbe4d8-9c7e-4602-ae53-335bad1c0a7d",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "JH",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "8c4c8481-57cb-43e1-ac39-228ebddccf47",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "JK",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "6ff6a536-7858-438f-aa8b-4f96cbb600b1",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "JK",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "a8e18c8b-63e3-4a00-a426-40b4aeace1dd",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "JK",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "1a82d577-db14-46fe-9377-5be0eefbdd21",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "JK",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "514b821b-0191-4c5f-a4ca-1e7ad1a0d7a2",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "JK",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "bfba0434-7a7c-4538-a749-8f1fdc6852e4",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "JK",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "2edc1107-bc5f-41c5-bdb2-4b4cb66a5489",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "JK",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "570dc030-3321-483c-98ba-c3cc65be83ee",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "JK",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "891996c9-93e3-44b4-a657-fbf27004fd56",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "JK",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "baf77056-1dce-45c4-9a17-11ede79b6ea5",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "KA",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "01aad372-9366-4d55-8b66-ff818656b23b",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "KA",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "49e2be45-6e31-4c11-8f95-a901186f29d7",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "KA",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "8562374e-c2bd-4781-898a-e809485e5995",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "KA",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "2201e28b-d67c-4786-ba8c-c268b98a4950",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "KA",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "5253f62c-ea7d-4012-a005-9044a36726ca",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "KA",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "d21f11a0-43e4-419b-8dd6-2a87c38182a8",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "KA",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "7944876d-c4d5-4ffe-8b34-e74cdef1d7cd",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "KA",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "fc936b2d-a0ae-4d71-8bc6-ca95f99ee7dd",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "KA",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "b3fed3f4-78a3-4afd-9d80-05f0e7d68f4f",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "KL",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "9f475321-4ce8-495a-85b3-587c82cf5330",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "KL",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "86278f9e-8017-4abe-8841-75f7363a95f5",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "KL",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "e9f9f4ba-4e66-4f0c-8129-5211ffa7e6e3",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "KL",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "744b2bd4-7483-4eb1-a59a-5fbe06b62588",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "KL",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "ad1de5c1-470b-465d-9e00-09e9a63989ca",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "KL",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "8a46d49a-1b2f-46df-83de-2a951e459e4b",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "KL",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "fc02a232-85dd-45cd-85db-da751b4b0c2b",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "KL",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "d3f43e00-8a13-4763-9d47-3fbf213bf2c8",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "KL",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "da231ba9-94e2-4f87-99c9-c3e885f63dfb",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "LD",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "f24dff8b-afcf-4183-af27-e094aee5dfed",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "LD",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "85278c29-d839-4235-a99d-a3fef3865fd7",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "LD",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "38faaf96-7fb6-4618-97f6-42e02bb9aeb7",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "LD",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "a74a879c-e902-48cb-9567-928664da334e",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "LD",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "1119fbf3-318b-410d-b962-5d5a40bf4f23",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "LD",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "b5d6e9a1-773c-4527-b90d-98ecd3e93df2",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "LD",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "a7de6953-56bc-452b-bc62-5c70b07d1f67",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "LD",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "2bad3029-dcf7-4a56-be81-a41f1afb840e",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "LD",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "fb2112f5-c768-4a9b-92a4-dac9ba6831dc",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "MH",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "f8cb7b43-009e-4f15-b6d7-c229e03ea7d0",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "MH",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "ada5467f-bda6-47cf-b663-42d77f1a2f2c",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "MH",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "842e7c01-23b5-4832-be0a-e54f50b296db",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "MH",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "e0aea216-fcf6-479e-910c-b99bc4d2f9fd",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "MH",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "4593ba3e-3097-4f26-800c-b25c692adaef",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "MH",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "a3b61440-bc51-401c-872c-f7414d62afa3",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "MH",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "380cc112-a27a-475c-a097-e1f4b7120b31",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "MH",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "e333c91d-5e2f-4e0e-992d-5256ad49f10c",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "MH",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "0a65b1c9-a18b-414e-97be-86145457ebcd",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "ML",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "e442b177-79a6-40b2-b487-bb82384f315d",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "ML",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "fce7835a-3ebd-4fb3-934d-1924c2fdd0e5",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "ML",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "c008c2a3-3187-4e67-b335-956ff321fa1c",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "ML",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "f4055435-7b1d-4bec-a858-4b7e24ca5752",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "ML",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "f588286e-4f97-4837-b36f-30a3078a88b5",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "ML",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "b798659d-a8f1-4f6d-9ce8-d776c5d31f39",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "ML",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "c140173b-a632-4d81-b9b1-0c7d0beec2cc",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "ML",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "77090174-7f88-4be8-8fce-673c11b200f0",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "ML",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "c492f113-a81c-4a43-90e5-65fdbc94ef1a",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "ML",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "a5779f6c-4410-40fc-8a43-3a7ff2e350d1",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "MN",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "4a62fe40-6134-4849-8956-de01b69a26bf",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "MN",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "cd4ed603-2d3d-4df6-bc41-e77ad90d6098",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "MN",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "5812c462-dbe1-48de-bfe7-de30a2adc37c",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "MN",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "19e719a2-6061-4c8b-9308-2ae69c7eb3a8",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "MN",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "e25f61ab-519f-4cb8-8157-95e1cf64959b",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "MN",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "986d369b-c085-4c98-a61b-e6c3433af54d",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "MN",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "f56bd422-af0d-4562-bcc6-11c78dd84aa9",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "MN",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "82a5c48a-7f94-4be6-92fc-32ae338124d1",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "MN",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "3d7c4557-cecf-4603-a9bd-525bdbedf7ce",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "MP",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "d2ccd02c-759b-41c0-bb8c-5106c496a6cd",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "MP",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "67d696d4-00fa-4863-84d6-3865661bb55c",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "MP",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "613223fe-9c5b-40aa-bc33-cf19910572d2",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "MP",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "ca8196be-05b9-4597-af2e-5617d61fdbfb",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "MP",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "d092a7d1-7824-49d4-a021-5fb5c86bec25",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "MP",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "89e55506-8819-4f35-84bd-210d66cc224c",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "MP",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "845edfa8-113b-4d53-8b7d-37de5d596e2d",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "MP",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "a37764dc-a5b3-4bba-bbfc-231783eca2d1",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "MP",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "0ba55947-f0a0-4dcf-a8f8-4c5aed7e5584",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "MZ",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "dcf0ca9e-2da4-4942-aebd-8c320ddda67a",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "MZ",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "e2b37a44-fc5a-46e4-a263-408bb9fd8fa9",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "MZ",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "aadd3d1b-5999-42db-af69-a1e6dddc298b",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "MZ",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "485ad321-10e7-401d-aace-02aa4144c1b2",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "MZ",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "339f9ef4-9fac-49cb-bb97-d6bec9d733c3",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "MZ",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "27bd6b9a-6d95-4be3-ace9-5f83e593fa08",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "MZ",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "7e89ffd3-21b6-4ca9-a3c0-33c12cd6dcb1",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "MZ",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "71760e7a-8c72-47a7-9397-fd22eae2775f",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "MZ",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "58aa780d-f31b-4330-acfb-6bad81bacb9e",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "NL",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "239af3f7-504c-4e45-9a22-74cb6b1cc906",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "NL",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "3acd8cf2-60f0-4abe-bf19-12abc67a353d",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "NL",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "d3dec25d-0245-45fa-a9e1-ed313a417169",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "NL",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "7c93b94f-3ab0-445e-8068-64d4c23d98b9",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "NL",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "f72482ad-faf9-4a25-9849-a2a32202e3c5",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "NL",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "1af90e12-46c4-41a8-89d1-f5b6ac47f833",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "NL",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "0f205652-8476-43ba-8f35-68c8f631277f",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "NL",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "0f589f38-3539-4945-8ead-6b0b60c90b27",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "NL",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "70486f3d-3d87-4034-97ea-9179e8e86318",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "OD",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "02e39cb2-1076-4f47-8fd8-3a2391b45d6c",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "OD",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "17366e3b-0d97-42e4-9b97-620cf2825f98",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "OD",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "6d892f16-ea6c-4e0a-95f6-397a540dfde4",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "OD",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "54da2ff3-6ce2-47ae-9d21-635fdb515d62",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "OD",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "97e1f17a-c63d-4a7b-a2b1-c42c3001885d",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "OD",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "63935094-a163-4c94-9f75-33bca69bf360",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "OD",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "401690b4-4d8a-4de7-ae60-e0f4ad114225",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "OD",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "6c814180-b0dd-4ef8-8f82-33dcbb8472a5",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "OD",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "ccdb7cc6-4df6-42bb-a3d8-ced96673e1f1",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "PB",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "4699508d-0687-4678-af2d-3f115b35adac",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "PB",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "8fe847c6-bc4c-42ff-b925-e6ca7570b6a8",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "PB",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "ff058923-3bcf-43a3-808c-c4042a28468d",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "PB",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "27ce0fd8-5b38-4a55-9621-f2d7428014a3",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "PB",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "6c1f5087-1a70-4b58-9ab3-f021aa4703cc",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "PB",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "321e047a-a9bd-4b9e-b8f8-7088b32873d2",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "PB",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "cde96480-0462-4dc2-a712-ae3fc5763887",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "PB",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "c48c09bc-6ec9-4157-a9c8-5c9a96ecba42",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "PB",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "ef9d7670-0634-4445-a580-83ad5ded1936",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "PY",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "6af6d198-d560-4d5c-a71c-3156477bb595",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "PY",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "ebbd497c-60cb-4243-a317-2f9de02ec736",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "PY",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "b452ead5-2439-4456-b1e2-2257f1d968d9",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "PY",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "2ca4fa68-da22-4ff2-a74e-28a8ef58bacd",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "PY",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "8efae70d-3f84-4c99-9692-e8def0173da5",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "PY",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "8e19a34d-5441-4ef0-bae8-e8749c8b8629",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "PY",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "b7dda53b-5751-4c63-99b4-2f64850e1745",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "PY",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "8268c12b-6a4c-4022-a693-7734538fcd54",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "PY",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "c7e63332-8482-4282-a093-2f2c4026335c",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "RJ",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "35faecdf-3cc9-40c4-b963-9a94a4a7ce80",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "RJ",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "d22a3add-d789-40d6-81af-ba69ce3ad4ea",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "RJ",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "0dc2b9c2-d40c-4b08-93f9-9fd77778dfad",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "RJ",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "494e602e-e3d0-4b23-aba8-00dda5156b30",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "RJ",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "8e9428bf-3fd7-4c07-bcc4-0c5193e522a3",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "RJ",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "06d69cd4-4da7-4cda-adee-809b7ef305f5",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "RJ",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "68b55b55-95fd-4b44-861d-220aea357586",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "RJ",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "9572557c-5878-4026-9298-20a2169d3593",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "RJ",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "4420e9d2-233b-4862-959e-a3d808a409d6",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "SK",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "64e4e4f5-c1f3-40a1-9961-e97e5697381e",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "SK",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "1a1e5778-9817-49ea-8b3e-8920a47289db",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "SK",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "d81612f9-4985-46fa-b072-8ec2a0cd056f",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "SK",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "ce084c9e-2965-4429-b4be-d6cf7a35775b",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "SK",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "db5da37c-d12a-4c66-8929-deb4dc7f5271",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "SK",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "2bf1dc2b-5c5c-45be-b90e-20aa34a74cc4",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "SK",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "72e09291-b395-4e81-a25b-c2cc11a23564",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "SK",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "12b46ae3-8d64-4cd9-817e-9b47a8494cfe",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "SK",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "a692ba60-4cce-4065-b85b-110d488e2fa6",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "TN",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "d178b063-cc4b-40ba-921e-b392889e1258",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "TN",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "38d272b1-9f88-41d7-ac60-843bf0b447aa",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "TN",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "14bdab87-1ec1-4d9e-a171-c49dcdffe8ca",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "TN",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "0a26c675-11d1-433d-b19d-9d3a8dcb3796",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "TN",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "acc41e2e-3da2-43d2-8e6a-0081cc64392a",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "TN",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "07a850cd-9c2f-4092-821b-04f0a1df1182",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "TN",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "6b46cd1f-48e6-421d-af37-3e08fa98dc08",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "TN",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "d44ae053-9b0f-420b-8851-f9ad67f1b0b5",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "TN",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "08699d0f-a4e7-492f-bedb-6adc64e183ad",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "TR",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "04475d36-e898-44c3-b7ce-1bc0fac55e87",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "TR",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "c4e41f7b-eeaf-44ce-a30f-dfdf7724d9bf",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "TR",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "8a27fc5c-9dcd-4bfb-a5ea-8eedb382422e",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "TR",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "3678c90e-39ed-44f7-9658-ef05e880a086",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "TR",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "feb429f4-26ec-4cc3-af3d-d04fc7236a90",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "TR",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "75e88d1a-ad48-40f9-86a6-2fe2d0a7407f",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "TR",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "78435057-39e1-4b49-a38f-f12b82106b46",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "TR",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "9b12bb97-2640-421c-b8b5-c50b3558d3d9",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "TR",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "d122bf7a-1eea-4b88-b72b-d50f52914db6",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "TS",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "49764017-20e5-49f0-87ef-4f8ab4139ec0",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "TS",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "154e9b90-80d5-4388-b486-95054bcd88a9",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "TS",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "e7a96de0-28c3-4c1f-8289-a4d363dcb7ec",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "TS",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "ec5d2766-9bfb-458c-9918-0538f70b082a",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "TS",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "419eb956-895e-454a-9079-1f32c8d65ef0",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "TS",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "eee67aa3-d47a-4e35-b8ef-52a36024ab1c",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "TS",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "d74792cb-3d07-42e3-a452-0787e6f236bf",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "TS",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "0599de72-2294-4071-9808-bbbb86af6c5e",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "TS",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "7a2a7620-f7f8-4585-aa96-986997f719a2",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "UK",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "311ea49e-9bcd-41e5-80f7-ada2865588d0",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "UK",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "80723c8d-df0d-4dd2-b944-4de9c946c2d3",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "UK",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "5c98155d-7a33-4777-91bc-f632fde948e7",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "UK",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "e3f4da82-35dd-4ab5-9259-9c9c709ac6b1",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "UK",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "1a4df84d-64f0-4016-b473-4fc3aee537d3",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "UK",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "531010d8-06b3-4a15-a0de-b7dee21f62ab",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "UK",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "3f305608-d86b-44e8-b62d-8ce0d19ce521",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "UK",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "351806c0-7da2-4e02-a9d5-3aef4299492c",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "UK",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "a545a44a-cafc-44d9-9baa-e2566d301082",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "UP",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "4b7b29f0-be59-499a-986a-58635449a08c",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "UP",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "31003ead-35e6-488d-84c9-8536a3dd7ab9",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "UP",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "af7a8bd1-8c90-4518-9032-5b3930685d5d",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "UP",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "75c260b7-ab36-4cda-a21b-f6fe22387eb6",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "UP",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "fb147bf0-f952-4153-84ad-ef5cb39f6517",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "UP",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "22e7f5f0-f21d-47e6-86d5-252f1ffc2424",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "UP",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "3aac0149-d815-42a6-975a-2e5c757256f6",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "UP",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "caf05460-e4bc-498d-85f3-2ed21a595e89",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "UP",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "15226299-3d28-4461-ba88-1b668d9d8557",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "WB",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "6569d625-4335-437e-a13e-fa3f02dd8dc4",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "WB",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "5b3639ae-8675-4142-8f41-07892de9ecfe",
+   "datastore_active": true
+  },
+  {
+   "family": "biological",
+   "state_code": "WB",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "006eff94-abf3-4575-9d25-2afd2d3c17f0",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "WB",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "3c22f9e8-0727-45fd-8c17-7d07fd952337",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "WB",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "99b72eec-6d21-4be0-9a1d-ed5b3d2fc20f",
+   "datastore_active": true
+  },
+  {
+   "family": "chemical",
+   "state_code": "WB",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "60e1c56a-14f0-4771-9748-d48332738e87",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "WB",
+   "year_from": 1961,
+   "year_to": 2020,
+   "resource_id": "b0b48a2c-159a-4ae7-ad89-6680d6c8ae7f",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "WB",
+   "year_from": 2021,
+   "year_to": 2025,
+   "resource_id": "2e23c2c3-5c39-4255-8c21-517d63a79ce3",
+   "datastore_active": true
+  },
+  {
+   "family": "physical",
+   "state_code": "WB",
+   "year_from": 2026,
+   "year_to": 2030,
+   "resource_id": "6bb271db-30f3-4f66-b04f-61b85cb26493",
+   "datastore_active": true
+  }
+ ]
+}

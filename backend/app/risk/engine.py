@@ -87,6 +87,12 @@ SIGNATURE_SEVERITY: dict[str, float] = {
     PollutionSignature.OIL_LIKE_SIGNATURE: 1.00,
     PollutionSignature.ALGAE_BLOOM_SIGNATURE: 0.65,
     PollutionSignature.PLASTIC_DEBRIS_SIGNATURE: 0.55,
+    # Floating material carries the same weight as the deprecated plastic
+    # signature it replaces: the measurement is identical, only the claim is
+    # narrower. Turbidity sits lowest of the optical signatures because on
+    # this coast it is usually a river doing what rivers do.
+    PollutionSignature.FLOATING_MATERIAL: 0.55,
+    PollutionSignature.TURBIDITY_PLUME: 0.35,
     PollutionSignature.DARK_FORMATION: 0.45,
     PollutionSignature.SURFACE_ANOMALY: 0.30,
     PollutionSignature.NO_ANOMALY: 0.00,

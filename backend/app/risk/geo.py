@@ -62,6 +62,34 @@ PROTECTED_AREAS: tuple[ProtectedArea, ...] = (
         "Gulf of Mannar Marine National Park", "IN", 9.10, 79.20, "Marine National Park"
     ),
     ProtectedArea("Sundarbans", "IN/BD", 21.90, 89.20, "World Heritage Site"),
+    # Indian marine protected areas, one per monitored stretch of coast. Two
+    # entries (Gulf of Mannar, Sundarbans) covered the whole Indian EEZ
+    # before the regions moved here, so a detection in the Gulf of Kutch
+    # resolved to a reserve 1,400 km away.
+    ProtectedArea(
+        "Marine National Park, Gulf of Kachchh",
+        "IN",
+        22.45,
+        69.20,
+        "Marine National Park",
+    ),
+    ProtectedArea("Malvan Marine Sanctuary", "IN", 16.05, 73.47, "Marine Sanctuary"),
+    ProtectedArea(
+        "Gahirmatha (Marine) Wildlife Sanctuary", "IN", 20.75, 87.00, "Marine Sanctuary"
+    ),
+    ProtectedArea(
+        "Bhitarkanika Mangroves", "IN", 20.73, 86.90, "Ramsar Site"
+    ),
+    ProtectedArea("Chilika Lake", "IN", 19.72, 85.32, "Ramsar Site"),
+    ProtectedArea(
+        "Point Calimere Wildlife Sanctuary", "IN", 10.29, 79.85, "Wildlife Sanctuary"
+    ),
+    ProtectedArea(
+        "Mahatma Gandhi Marine National Park", "IN", 11.55, 92.62, "Marine National Park"
+    ),
+    ProtectedArea(
+        "Pitti Island Bird Sanctuary", "IN", 10.83, 72.19, "Wildlife Sanctuary"
+    ),
     ProtectedArea("Ras Mohammed National Park", "EG", 27.80, 34.25, "National Park"),
     ProtectedArea(
         "Tubbataha Reefs Natural Park", "PH", 8.90, 119.90, "World Heritage Site"
@@ -96,10 +124,50 @@ PROTECTED_AREAS: tuple[ProtectedArea, ...] = (
 #: coastline distance wherever coverage is sparse. Reported precision note
 #: makes that explicit.
 COASTAL_REFERENCE_POINTS: tuple[tuple[str, float, float], ...] = (
+    # -- Indian coastline and islands ------------------------------------
+    # Dense here on purpose. The monitored regions are the Indian EEZ, and a
+    # sparse list over-states distance-to-coast badly: with only four
+    # mainland cities the Andaman cells reported 750-965 km from land while
+    # sitting among the islands, and that distance is a weighted factor in
+    # the risk engine.
+    #
+    # West coast, north to south
+    ("Kandla, IN", 23.03, 70.22),
+    ("Vadinar, IN", 22.28, 69.72),
+    ("Okha, IN", 22.47, 69.07),
+    ("Porbandar, IN", 21.64, 69.61),
+    ("Veraval, IN", 20.91, 70.37),
+    ("Hazira, IN", 21.10, 72.65),
     ("Mumbai, IN", 18.94, 72.84),
+    ("Ratnagiri, IN", 16.99, 73.30),
+    ("Mormugao, IN", 15.40, 73.80),
+    ("Karwar, IN", 14.81, 74.13),
+    ("New Mangalore, IN", 12.92, 74.80),
+    ("Kozhikode, IN", 11.25, 75.78),
     ("Kochi, IN", 9.97, 76.24),
+    ("Kollam, IN", 8.88, 76.59),
+    ("Vizhinjam, IN", 8.38, 76.99),
+    # Southern tip and Palk Bay
+    ("Kanyakumari, IN", 8.08, 77.55),
+    ("Thoothukudi, IN", 8.76, 78.13),
+    ("Rameswaram, IN", 9.29, 79.31),
+    ("Nagapattinam, IN", 10.77, 79.84),
+    # East coast, south to north
     ("Chennai, IN", 13.09, 80.29),
+    ("Ennore, IN", 13.24, 80.33),
+    ("Krishnapatnam, IN", 14.28, 80.12),
+    ("Kakinada, IN", 16.99, 82.25),
+    ("Visakhapatnam, IN", 17.69, 83.22),
+    ("Gopalpur, IN", 19.27, 84.92),
+    ("Paradip, IN", 20.26, 86.61),
+    ("Haldia, IN", 22.06, 88.10),
     ("Kolkata, IN", 22.54, 88.33),
+    # Islands
+    ("Port Blair, IN", 11.62, 92.73),
+    ("Car Nicobar, IN", 9.17, 92.78),
+    ("Kavaratti, IN", 10.57, 72.64),
+    ("Minicoy, IN", 8.28, 73.05),
+    # -- Rest of the world ------------------------------------------------
     ("Karachi, PK", 24.85, 67.01),
     ("Chittagong, BD", 22.33, 91.81),
     ("Colombo, LK", 6.94, 79.84),

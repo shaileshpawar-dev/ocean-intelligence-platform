@@ -36,6 +36,19 @@ import {
 } from "@/components/ui";
 
 const HORIZONS = [7, 10, 14, 21];
+/** What the forecaster is pointed at.
+ *
+ *  "Detection activity" projects this platform's own detections, which is
+ *  what this page has always done. The three index options project a
+ *  *measured* Sentinel-2 series instead — real acquisitions on real dates —
+ *  through the same model and the same naive-baseline backtest. */
+const FORECAST_TARGETS = [
+  { key: "activity", label: "Detection activity" },
+  { key: "ndci", label: "Chlorophyll index (NDCI)" },
+  { key: "ndti", label: "Turbidity index (NDTI)" },
+  { key: "fdi", label: "Floating Debris Index (FDI)" },
+];
+
 const MODELS = [
   { key: "holt", label: "Holt linear damped" },
   { key: "moving_average", label: "Moving average" },
@@ -46,6 +59,10 @@ export default function Forecasts() {
   const [horizon, setHorizon] = useState(7);
   const [model, setModel] = useState("holt");
   const [region, setRegion] = useState<string | null>(null);
+  // null = the original detection-activity forecast. The index options
+  // project a measured Sentinel-2 series through the same model and the
+  // same backtest.
+  const [index, setIndex] = useState<string | null>(null);
 
   const trends = useQuery({
     queryKey: ["trends", 60],
@@ -66,8 +83,8 @@ export default function Forecasts() {
   const [forecast] = useQueries({
     queries: [
       {
-        queryKey: ["forecast", active, horizon, model],
-        queryFn: () => api.forecast(active!, horizon, model),
+        queryKey: ["forecast", active, horizon, model, index],
+        queryFn: () => api.forecast(active!, horizon, model, 60, index),
         enabled: Boolean(active),
       },
     ],
@@ -141,7 +158,7 @@ export default function Forecasts() {
     <>
       <PageHeader
         title="Forecasts"
-        subtitle="Forecasts of this platform's own detection activity — not the physical movement of a pollutant."
+        subtitle="Detection activity, or a measured Sentinel-2 index. Backtested against last-value-carried-forward either way — not the physical movement of a pollutant."
       />
 
       <SectionCard padded={false}>
@@ -165,6 +182,20 @@ export default function Forecasts() {
             aria-label="Model"
           >
             {MODELS.map((option) => (
+              <option key={option.key} value={option.key}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <select
+            className="select"
+            value={index ?? "activity"}
+            onChange={(event) =>
+              setIndex(event.target.value === "activity" ? null : event.target.value)
+            }
+            aria-label="What to forecast"
+          >
+            {FORECAST_TARGETS.map((option) => (
               <option key={option.key} value={option.key}>
                 {option.label}
               </option>

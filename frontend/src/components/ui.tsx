@@ -9,12 +9,148 @@
  */
 
 import type { ReactNode } from "react";
-import { AlertTriangle, Info, Inbox, RefreshCw, ServerCrash } from "lucide-react";
+import { Link } from "react-router-dom";
+import {
+  AlertTriangle,
+  Droplets,
+  Info,
+  Inbox,
+  Layers,
+  Leaf,
+  Moon,
+  Package,
+  RefreshCw,
+  ServerCrash,
+  Waves as WavesIcon,
+} from "lucide-react";
 import type { EvidenceLevel, Severity } from "@/lib/types";
 
 /* -------------------------------------------------------------------------
    Evidence
    ------------------------------------------------------------------------- */
+
+/** What each detection signature is, in one line, with its own colour.
+ *
+ *  The wording matters as much as the colour. A signature names *what was
+ *  seen by a given instrument*, not what caused it: FDI responds to anything
+ *  floating and cannot identify plastic, NDTI responds to sediment that is
+ *  usually a river doing its job, and a SAR dark formation is a flat patch
+ *  whose cause is undetermined. Each label here is written to survive being
+ *  read on its own, because on a crowded page that is how it will be read.
+ */
+export const SIGNATURE_META: Record<
+  string,
+  { label: string; hint: string; colour: string; Icon: typeof AlertTriangle }
+> = {
+  oil_like_signature: {
+    label: "Oil-like",
+    hint: "Dark formation whose shape and contrast are consistent with a surface film. Not a confirmed spill.",
+    colour: "var(--sig-oil, #B91C1C)",
+    Icon: Droplets,
+  },
+  dark_formation: {
+    label: "Dark formation",
+    hint: "Low-backscatter patch in radar, cause undetermined. Calm water and rain cells look the same.",
+    colour: "var(--sig-dark, #6B21A8)",
+    Icon: Moon,
+  },
+  algae_bloom_signature: {
+    label: "Algal bloom",
+    hint: "Elevated chlorophyll-a in Sentinel-2 (NDCI). Productive water, which may be a bloom, upwelling or a nutrient plume.",
+    colour: "var(--sig-algae, #15803D)",
+    Icon: Leaf,
+  },
+  floating_material: {
+    label: "Floating material",
+    hint: "Near-infrared brighter than the surrounding water (FDI). Says something is floating; does not identify it, and is not evidence of plastic.",
+    colour: "var(--sig-floating, #C2410C)",
+    Icon: Package,
+  },
+  turbidity_plume: {
+    label: "Turbidity plume",
+    hint: "Elevated suspended sediment (NDTI). Frequently natural on this coast — river discharge and runoff raise it.",
+    colour: "var(--sig-turbidity, #A16207)",
+    Icon: WavesIcon,
+  },
+  plastic_debris_signature: {
+    label: "Floating material (legacy)",
+    hint: "A deprecated label kept only for stored rows. The index behind it cannot identify plastic; new detections use Floating material.",
+    colour: "var(--sig-floating, #C2410C)",
+    Icon: Package,
+  },
+  surface_anomaly: {
+    label: "Surface anomaly",
+    hint: "Anomalous but unclassifiable under the available instrument.",
+    colour: "var(--sig-anomaly, #0E7490)",
+    Icon: Layers,
+  },
+  no_anomaly: {
+    label: "No anomaly",
+    hint: "Measured and found unremarkable. An explicit negative is data too.",
+    colour: "var(--sig-none, #64748B)",
+    Icon: Info,
+  },
+};
+
+export function signatureMeta(signature: string) {
+  return (
+    SIGNATURE_META[signature] ?? {
+      label: signature.replace(/_/g, " "),
+      hint: "",
+      colour: "var(--sig-none, #64748B)",
+      Icon: Layers,
+    }
+  );
+}
+
+/** A detection signature, with its colour and icon. */
+export function SignatureBadge({
+  signature,
+  showHint = false,
+  caveats,
+}: {
+  signature: string;
+  showHint?: boolean;
+  /** The event's caveats. When the first one is the anomaly sentence
+   *  ("Statistical anomaly: top 1% of this region's last 12 months…") it is
+   *  shown instead of the generic hint, because on a list row that sentence
+   *  is the one thing stopping a reader taking the badge for an incident. */
+  caveats?: string[];
+}) {
+  const meta = signatureMeta(signature);
+  const { Icon } = meta;
+  const anomaly = caveats?.find((c) => c.startsWith("Statistical anomaly:"));
+  const tooltip = anomaly ? `${anomaly} ${meta.hint}` : meta.hint;
+  return (
+    <span className="signature-badge" style={{ color: meta.colour }} title={tooltip}>
+      <Icon size={13} aria-hidden />
+      <span>{meta.label}</span>
+      {anomaly && <abbr className="anomaly-marker" title={anomaly}>stat.</abbr>}
+      {showHint && meta.hint && <em className="signature-hint">{meta.hint}</em>}
+    </span>
+  );
+}
+
+/** Legend for whichever signatures are actually present in a view. */
+export function SignatureLegend({ signatures }: { signatures: string[] }) {
+  const seen = [...new Set(signatures)].filter((s) => s in SIGNATURE_META);
+  if (seen.length === 0) return null;
+  return (
+    <div className="signature-legend">
+      {seen.map((signature) => {
+        const meta = signatureMeta(signature);
+        const { Icon } = meta;
+        return (
+          <span key={signature} className="signature-legend-item">
+            <Icon size={13} aria-hidden style={{ color: meta.colour }} />
+            <strong style={{ color: meta.colour }}>{meta.label}</strong>
+            <span>{meta.hint}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
 const EVIDENCE_META: Record<
   string,
@@ -124,6 +260,20 @@ export function severityColor(severity: Severity | null | undefined): string {
   return severity ? SEVERITY_COLOR[severity].fg : "var(--neutral)";
 }
 
+/** What a severity word on this platform actually means.
+ *
+ *  "CRITICAL" beside a statistical anomaly is the single most misreadable
+ *  thing on these pages. The score is not a measure of how certain the
+ *  detection is, nor of how bad the water is — it is *potential impact if
+ *  the detection were confirmed*: how close to a coast, how close to a
+ *  protected area, how large an area, under what sea state. A CRITICAL
+ *  anomaly in the Gulf of Mannar is CRITICAL because a marine national park
+ *  is nearby, not because anything has been established about the water.
+ */
+export const RISK_MEANING =
+  "Risk score = potential impact if confirmed (exposure, proximity, sea state). " +
+  "Not a confirmed incident.";
+
 export function RiskBadge({
   severity,
   score,
@@ -134,7 +284,11 @@ export function RiskBadge({
   if (!severity) return <Unavailable />;
   const { fg, bg } = SEVERITY_COLOR[severity];
   return (
-    <span className="risk-badge" style={{ color: fg, background: bg, borderColor: fg }}>
+    <span
+      className="risk-badge"
+      style={{ color: fg, background: bg, borderColor: fg }}
+      title={RISK_MEANING}
+    >
       {severity}
       {score !== null && score !== undefined && (
         <strong>{score.toFixed(1)}</strong>
@@ -351,9 +505,16 @@ export function EmptyState({
 export function ErrorState({
   error,
   onRetry,
+  emptyTitle,
+  emptyHint,
 }: {
   error: unknown;
   onRetry?: () => void;
+  /** Heading to use when the failure is a 404 rather than a fault. */
+  emptyTitle?: string;
+  /** Explanation to use for a 404. "Not found" and "broken" deserve
+   *  different words: one is a normal outcome, the other is a bug. */
+  emptyHint?: string;
 }) {
   const message =
     error && typeof error === "object" && "friendly" in error
@@ -363,14 +524,26 @@ export function ErrorState({
     error && typeof error === "object" && "isInsufficientData" in error
       ? Boolean((error as { isInsufficientData: boolean }).isInsufficientData)
       : false;
+  const missing =
+    error && typeof error === "object" && "isEmpty" in error
+      ? Boolean((error as { isEmpty: boolean }).isEmpty)
+      : false;
+
+  const notFound = missing && Boolean(emptyTitle);
 
   return (
     <div className="state-block">
-      <span className={`state-icon ${insufficient ? "warn" : "error"}`}>
-        {insufficient ? <Info size={20} /> : <ServerCrash size={20} />}
+      <span className={`state-icon ${insufficient || notFound ? "warn" : "error"}`}>
+        {insufficient || notFound ? <Info size={20} /> : <ServerCrash size={20} />}
       </span>
-      <h3>{insufficient ? "Insufficient data" : "Data unavailable"}</h3>
-      <p>{message}</p>
+      <h3>
+        {notFound
+          ? emptyTitle
+          : insufficient
+            ? "Insufficient data"
+            : "Data unavailable"}
+      </h3>
+      <p>{notFound ? emptyHint : message}</p>
       {onRetry && (
         <button className="btn btn-ghost" onClick={onRetry}>
           <RefreshCw size={13} /> Retry
@@ -392,6 +565,65 @@ export function SimulatedBanner({ detail }: { detail?: string }) {
             "Demo mode is active. These records are synthetic, tagged SIMULATED by the API, and describe no real satellite acquisition."}
         </span>
       </div>
+    </div>
+  );
+}
+
+/** Where a measurement's inputs came from, when that is not live traffic.
+ *
+ *  Deliberately not a SimulatedBanner: the inferences behind a replayed
+ *  benchmark are real, and only the window timestamps are assigned. Calling
+ *  that "simulated data" would understate the measurement and overstate the
+ *  caveat at the same time.
+ */
+export function ProvenanceNote({ children }: { children: ReactNode }) {
+  return (
+    <div className="provenance-note" role="note">
+      <Info size={15} />
+      <span>{children}</span>
+    </div>
+  );
+}
+
+/** What the marine module is, and is not.
+ *
+ *  It used to say the events here were simulated, which was true and is no
+ *  longer. The 666 seeded detections were deleted on 21 Nov 2026 and
+ *  replaced by detections derived from measured Sentinel-2 indices.
+ *
+ *  The note stays because the claim still needs bounding, just differently:
+ *  these are *statistical anomalies* against each region's own twelve-month
+ *  baseline, not confirmed incidents and not measurements against a limit.
+ *  A realistic region name and a real satellite date make that distinction
+ *  easier to lose, not harder.
+ */
+export function MarineScopeNote({ full = false }: { full?: boolean }) {
+  return (
+    <div className="provenance-note" role="note">
+      <Info size={15} />
+      <span>
+        {full ? (
+          <>
+            <strong>Real detections, statistical thresholds.</strong> The
+            marine module monitors 15 regions across India&rsquo;s exclusive
+            economic zone. Every detection here is derived from a{" "}
+            <strong>measured Sentinel-2 acquisition</strong> on the date
+            shown. A detection means the reading sits in the{" "}
+            <strong>top 1% of that region&rsquo;s own last 12 months</strong>{" "}
+            &mdash; it is not a confirmed pollution incident and not a
+            measurement against a regulatory limit. See also the 306
+            Sentinel-1 benchmark candidates in{" "}
+            <Link to="/app/candidate-review">Candidate Review</Link>.
+          </>
+        ) : (
+          <>
+            Indian EEZ. Detections are{" "}
+            <strong>statistical anomalies</strong> against each
+            region&rsquo;s own 12-month baseline from measured Sentinel-2
+            data &mdash; not confirmed incidents.
+          </>
+        )}
+      </span>
     </div>
   );
 }
@@ -436,6 +668,23 @@ export function formatDateTime(iso: string | null | undefined): string {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+  });
+}
+
+/** A calendar date, with no time of day.
+ *
+ *  A satellite acquisition date is a date, not an instant: rendering
+ *  "2026-11-20" through formatDateTime would invent a midnight the scene was
+ *  not taken at, and shift it by a timezone on top. */
+export function formatDate(value: string | null | undefined): string {
+  if (!value) return "—";
+  // Parsed as UTC noon so a local-timezone offset cannot move the day.
+  const date = new Date(`${value.slice(0, 10)}T12:00:00Z`);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
   });
 }
 

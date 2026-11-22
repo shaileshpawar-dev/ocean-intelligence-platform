@@ -6,6 +6,7 @@ import { router } from "./App";
 import "leaflet/dist/leaflet.css";
 import "./styles/theme.css";
 import "./styles/app.css";
+import "./styles/water.css";
 
 /**
  * Query defaults tuned for a monitoring console: data is fresh for a minute,

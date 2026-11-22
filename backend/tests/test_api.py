@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import io
 
+import pytest
+
 from fastapi.testclient import TestClient
 
 
@@ -169,6 +171,24 @@ class TestAnalytics:
         for item in items:
             assert 0.0 <= item["coverage_ratio"] <= 1.0
 
+    def test_every_region_offered_by_trends_can_be_forecast(
+        self, seeded_client: TestClient
+    ) -> None:
+        """The Forecasts dropdown is built from /trends, so the two must agree.
+
+        Stage-2 refined sub-cells get a ZoneHistory row the moment they are
+        refined, with a day or two of history. Before they were filtered out,
+        running refine put regions into the dropdown that the forecaster could
+        only ever answer with "insufficient history".
+        """
+        items = seeded_client.get("/api/v1/trends", params={"days": 90}).json()["items"]
+        assert items, "no regions in trends"
+        for item in items:
+            code = item["region_code"]
+            assert "__r" not in code, f"{code} is a sub-cell and cannot be forecast"
+            response = seeded_client.get(f"/api/v1/forecast/{code}")
+            assert response.status_code == 200, code
+
     def test_forecast_declares_its_scope(self, seeded_client: TestClient) -> None:
         """Never a dispersion forecast."""
         items = seeded_client.get("/api/v1/pollution-zones").json()["items"]
@@ -187,6 +207,26 @@ class TestAnalytics:
 
     def test_forecast_unknown_region_is_404(self, client: TestClient) -> None:
         assert client.get("/api/v1/forecast/atlantis").status_code == 404
+
+    def test_forecast_of_a_refined_subcell_explains_itself(
+        self, seeded_client: TestClient
+    ) -> None:
+        """A sub-cell exists but holds no history, so 404 would be a lie.
+
+        Detections are recorded against the monitored region; stage-2 refined
+        sub-cells carry none of their own. Before this guard the endpoint
+        returned 200 with an empty series and the message "No stored history",
+        which reads as a data gap rather than the wrong code being asked for.
+        """
+        items = seeded_client.get("/api/v1/pollution-zones").json()["items"]
+        parent = items[0]["region_code"]
+        response = seeded_client.get(f"/api/v1/forecast/{parent}__r3c4")
+
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert "sub-cell" in detail
+        # It must name the code the caller should use instead.
+        assert f"/forecast/{parent}" in detail
 
     def test_overview_counts(self, seeded_client: TestClient) -> None:
         body = seeded_client.get("/api/v1/overview").json()
@@ -211,8 +251,273 @@ class TestModelRegistry:
         sar = next(d for d in detectors if d["name"] == "sar-dark-formation")
         assert "plastic_debris_signature" not in sar["supported_signatures"]
 
+    def test_evaluated_detectors_report_their_measured_metrics(
+        self, client: TestClient
+    ) -> None:
+        """The endpoint must not drop what the detector already measured.
+
+        ``describe()`` on the evaluated SAR screeners carries ``test_metrics``
+        and ``baseline_comparison``, but the response schema listed seven
+        fields and silently discarded the rest -- so the API reported nothing
+        about models that had in fact been scored on a held-out split.
+        """
+        detectors = client.get("/api/v1/models/detectors").json()
+        evaluated = [
+            d
+            for d in detectors
+            if d.get("evaluation_status") == "evaluated_on_labeled_test_data"
+        ]
+        assert evaluated, "no detector reported an evaluated status"
+
+        for detector in evaluated:
+            metrics = detector["test_metrics"]
+            assert metrics, f"{detector['name']} reports no test_metrics"
+            # Spelling differs between checkpoints; one of each pair must exist.
+            assert metrics.get("precision") or metrics.get("Precision")
+            assert metrics.get("recall") or metrics.get("Recall")
+            assert detector["baseline_comparison"], (
+                f"{detector['name']} reports no baseline to compare against"
+            )
+
+    def test_unevaluated_detectors_report_null_not_zero(
+        self, client: TestClient
+    ) -> None:
+        """The mock and rule-based detectors have no metrics, and must say so."""
+        detectors = client.get("/api/v1/models/detectors").json()
+        mock = next(d for d in detectors if d["name"] == "mock-detector")
+        assert mock["test_metrics"] is None
+        assert mock["baseline_comparison"] is None
+        assert mock["evaluation_status"] is None
+
     def test_unknown_model_is_404(self, client: TestClient) -> None:
         assert client.get("/api/v1/models/ghost/1.0").status_code == 404
+
+
+class TestPredictionLogWriter:
+    """The single writer that latency stats and drift both read.
+
+    It was a private helper inside the satellite route, so a batch replay had
+    to hand-craft rows and could drift out of step with what the live endpoint
+    records. These pin the parts a batch caller depends on.
+    """
+
+    class _Detection:
+        def __init__(self, confidence: float, signature: str) -> None:
+            self.confidence = confidence
+            self.signature = signature
+
+    def test_it_summarises_the_detections_it_is_given(self, db) -> None:
+        from app.models import PredictionLog
+        from app.monitoring.prediction_log import log_prediction
+
+        assert log_prediction(
+            db,
+            request_id="test_req_1",
+            detector_name="sar-oil-slick-v2.2",
+            version="2.2.0-experimental",
+            latency_ms=12.5,
+            detections=[self._Detection(0.8, "oil_like_signature"),
+                        self._Detection(0.4, "dark_formation")],
+        )
+
+        row = db.query(PredictionLog).filter_by(request_id="test_req_1").one()
+        assert row.detection_count == 2
+        assert row.max_confidence == pytest.approx(0.8)
+        assert row.mean_confidence == pytest.approx(0.6)
+        assert row.predicted_classes == ["oil_like_signature", "dark_formation"]
+        assert row.success is True
+        # Defaults match what the live detect endpoint records.
+        assert row.endpoint == "POST /api/v1/detect"
+
+    def test_a_batch_caller_can_set_endpoint_and_timestamp(self, db) -> None:
+        """Without these a replay cannot place rows in a drift window."""
+        from datetime import UTC, datetime, timedelta
+
+        from app.models import PredictionLog
+        from app.monitoring.prediction_log import log_prediction
+
+        when = datetime.now(UTC) - timedelta(days=20)
+        log_prediction(
+            db,
+            request_id="test_req_2",
+            detector_name="sar-oil-slick-v2.2",
+            version="2.2.0-experimental",
+            latency_ms=9.0,
+            detections=[],
+            endpoint="BATCH /sar-candidates/replay",
+            created_at=when,
+            input_stats={"timestamp_is_synthetic": True},
+        )
+
+        row = db.query(PredictionLog).filter_by(request_id="test_req_2").one()
+        assert row.endpoint == "BATCH /sar-candidates/replay"
+        stored = row.created_at
+        if stored.tzinfo is None:  # SQLite drops the offset
+            stored = stored.replace(tzinfo=UTC)
+        assert abs((stored - when).total_seconds()) < 1
+        # A replay must declare that its timestamp is assigned, not observed.
+        assert row.input_stats["timestamp_is_synthetic"] is True
+        # No detections means null confidence, never zero.
+        assert row.max_confidence is None
+        assert row.mean_confidence is None
+
+
+class TestMeasurementProvenance:
+    """The panels must say what they are actually measuring.
+
+    Two ways these numbers mislead by omission: one percentile computed over
+    two different detectors, and a drift verdict over replayed benchmark rows
+    presented as if it came from live traffic.
+    """
+
+    def _log(self, db, *, model: str, latency: float, stats: dict | None = None):
+        from app.monitoring.prediction_log import log_prediction
+
+        log_prediction(
+            db,
+            request_id=f"prov_{model}_{latency}",
+            detector_name=model,
+            version="1.0.0",
+            latency_ms=latency,
+            detections=[],
+            input_stats=stats,
+        )
+
+    def test_latency_names_the_single_model_it_covers(self, db) -> None:
+        from app.monitoring.metrics import latency_summary
+
+        self._log(db, model="sar-oil-slick-v2.2", latency=9.0)
+        summary = latency_summary(db, days=7)
+        assert summary["models"] == ["sar-oil-slick-v2.2"]
+        assert summary["model_label"] == "sar-oil-slick-v2.2"
+
+    def test_two_models_in_one_window_are_reported_as_mixed(self, db) -> None:
+        """One percentile over a 9 ms screener and a 900 ms detector
+        describes neither, so the card must not imply a single model."""
+        from app.monitoring.metrics import latency_summary
+
+        self._log(db, model="sar-oil-slick-v2.2", latency=9.0)
+        self._log(db, model="mock-detector", latency=900.0)
+        summary = latency_summary(db, days=7)
+        assert summary["model_label"] == "mixed"
+        assert len(summary["models"]) == 2
+
+    def test_latency_can_be_filtered_to_one_model(self, db) -> None:
+        from app.monitoring.metrics import latency_summary
+
+        self._log(db, model="sar-oil-slick-v2.2", latency=9.0)
+        self._log(db, model="mock-detector", latency=900.0)
+        summary = latency_summary(db, days=7, model="sar-oil-slick-v2.2")
+        assert summary["n"] == 1
+        assert summary["model_label"] == "sar-oil-slick-v2.2"
+
+    def test_an_empty_window_names_no_model(self, client: TestClient) -> None:
+        body = client.get("/api/v1/metrics").json()
+        assert body["latency"]["models"] == []
+        assert body["latency"]["model_label"] is None
+
+    def test_live_traffic_carries_no_replay_caveat(self, db) -> None:
+        """A note about a replayed batch must not appear without one."""
+        from app.monitoring.drift import run_drift_checks
+
+        self._log(db, model="sar-oil-slick-v2.2", latency=9.0)
+        assert run_drift_checks(db)["provenance"]["note"] is None
+
+    def test_replayed_rows_are_declared_with_their_split(self, db) -> None:
+        from datetime import UTC, datetime, timedelta
+
+        from app.monitoring.drift import run_drift_checks
+        from app.monitoring.prediction_log import log_prediction
+
+        now = datetime.now(UTC)
+        for index, (days, split) in enumerate(
+            [(20, "Benchmark 1 (Phase 12 Held-Out Test Set)")] * 3
+            + [(1, "Benchmark 2 (Phase 13 Locked Final Test Set)")] * 3
+        ):
+            log_prediction(
+                db,
+                request_id=f"replay_{index}",
+                detector_name="sar-oil-slick-v2.2",
+                version="2.2.0-experimental",
+                latency_ms=9.0,
+                detections=[],
+                endpoint="BATCH /sar-candidates/replay",
+                created_at=now - timedelta(days=days),
+                input_stats={"timestamp_is_synthetic": True, "split": split},
+            )
+
+        provenance = run_drift_checks(db)["provenance"]
+        assert provenance["baseline"]["is_replayed"] is True
+        assert provenance["current"]["is_replayed"] is True
+        note = provenance["note"]
+        assert "Phase 12" in note and "Phase 13" in note
+        # The sentence must not let a reader think this is live traffic, and
+        # must not undersell the inferences as fabricated either.
+        assert "timestamps are assigned" in note
+        assert "Inferences are real" in note
+
+    def test_the_note_agrees_with_the_number_the_psi_used(self, db) -> None:
+        """A window can hold rows the confidence PSI cannot use.
+
+        The two old mock-detector rows log no confidence, so the window held
+        102 rows while the statistic ran over 100. Quoting only the row count
+        made the sentence say 102 beside a table saying 100, which reads as
+        one of them being wrong rather than as two different questions.
+        """
+        from datetime import UTC, datetime, timedelta
+
+        from app.monitoring.drift import run_drift_checks
+        from app.monitoring.prediction_log import log_prediction
+
+        class _Scored:
+            confidence = 0.8
+            signature = "oil_like_signature"
+
+        now = datetime.now(UTC)
+        for index in range(3):
+            log_prediction(
+                db,
+                request_id=f"scored_{index}",
+                detector_name="sar-oil-slick-v2.2",
+                version="2.2.0-experimental",
+                latency_ms=9.0,
+                detections=[_Scored()],
+                endpoint="BATCH /sar-candidates/replay",
+                created_at=now - timedelta(days=20),
+                input_stats={"timestamp_is_synthetic": True, "split": "Phase 12"},
+            )
+        # One row with no detections, so mean_confidence is NULL.
+        log_prediction(
+            db,
+            request_id="unscored_0",
+            detector_name="mock-detector",
+            version="sim-1.0.0",
+            latency_ms=0.2,
+            detections=[],
+            created_at=now - timedelta(days=20),
+        )
+        log_prediction(
+            db,
+            request_id="current_0",
+            detector_name="sar-oil-slick-v2.2",
+            version="2.2.0-experimental",
+            latency_ms=9.0,
+            detections=[_Scored()],
+            endpoint="BATCH /sar-candidates/replay",
+            created_at=now - timedelta(days=1),
+            input_stats={"timestamp_is_synthetic": True, "split": "Phase 13"},
+        )
+
+        report = run_drift_checks(db)
+        baseline = report["provenance"]["baseline"]
+        assert baseline["n"] == 4
+        assert baseline["scored_n"] == 3
+
+        note = report["provenance"]["note"]
+        assert "4 rows, 3 with confidence" in note
+
+        # A window where every row scored keeps the plain form.
+        assert "(n=1)" in note
 
 
 class TestMonitoring:

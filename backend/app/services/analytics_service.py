@@ -164,6 +164,14 @@ def get_trends(
         select(ZoneHistory, Region)
         .join(Region, Region.id == ZoneHistory.region_id)
         .where(ZoneHistory.bucket_date >= since)
+        # Stage-2 refined sub-cells are excluded. They are subdivisions of a
+        # monitored region, so counting both double-counts the same water --
+        # and because a sub-cell only exists from the moment it was refined, it
+        # carries a day or two of history at most. Including them put regions
+        # in the Forecasts dropdown that could never be forecast, which is the
+        # failure this filter exists to prevent: running stage-2 refine would
+        # otherwise reintroduce "insufficient history" on a page that works.
+        .where(Region.code.not_like("%\\_\\_r%c%", escape="\\"))
         .order_by(ZoneHistory.bucket_date)
     )
     if parent_region:
@@ -323,7 +331,19 @@ def summary_counts(db: Session) -> dict:
     dark_water_extent = (
         db.scalar(select(func.sum(PollutionEvent.estimated_area_km2))) or 0.0
     )
-    observations = db.scalar(select(func.count(SatelliteObservation.id))) or 0
+    # Satellite observations, across both stores. The SAR table is empty
+    # now that the seeded rows are gone; the measured Sentinel-2 readings
+    # live in their own table because a real index and a simulated
+    # backscatter statistic should never have differed only by a column.
+    # Counting one and not the other reported "0 observations" on a platform
+    # holding three thousand of them.
+    from app.models.optical import OpticalIndexObservation
+
+    sar_observations = db.scalar(select(func.count(SatelliteObservation.id))) or 0
+    optical_observations = (
+        db.scalar(select(func.count(OpticalIndexObservation.id))) or 0
+    )
+    observations = sar_observations + optical_observations
     simulated = (
         db.scalar(
             select(func.count(PollutionEvent.id)).where(
@@ -339,11 +359,114 @@ def summary_counts(db: Session) -> dict:
         # Extent of regions whose signature is slick-plausible. This is the
         # figure a dashboard should headline.
         "slick_scale_area_km2": round(float(slick_scale_area), 2),
-        # Extent of all low-backscatter regions, dominated by coarse-grid
-        # dark formations. Useful for monitoring coverage; NOT a pollution
-        # figure, and must not be labelled as one.
+        # Total extent of every flagged region, whatever the instrument.
+        # Dominated by coarse-grid cells: an optical anomaly is averaged over
+        # the whole water area of its cell, and a SAR dark formation spans
+        # one. Useful for monitoring coverage; NOT a pollution figure, and
+        # must not be labelled as one. The key keeps its name because
+        # consumers read it, but it no longer means "low backscatter" alone.
         "dark_water_extent_km2": round(float(dark_water_extent), 2),
+        "flagged_extent_km2": round(float(dark_water_extent), 2),
+        "flagged_extent_note": (
+            "Sum of the water area each flagged cell was measured over, not "
+            "the extent of any anomaly within it. A regional mean cannot "
+            "give the size of the thing it averaged."
+        ),
         "observations": observations,
+        "observations_breakdown": {
+            "sentinel2_index_readings": optical_observations,
+            "sar_scene_statistics": sar_observations,
+        },
         "simulated_events": simulated,
         "contains_simulated_data": simulated > 0,
     }
+
+
+#: Which stored column each forecastable index reads from, and how to say
+#: what it is. Means rather than percentiles: the forecaster wants the
+#: regional average, and the percentile columns exist for the detection
+#: thresholds, which is a different question.
+INDEX_SERIES: dict[str, dict[str, str]] = {
+    "ndci": {
+        "column": "ndci_mean",
+        "label": "Chlorophyll index (NDCI)",
+        "unit": "index",
+        "about": (
+            "Normalised Difference Chlorophyll Index, measured from "
+            "Sentinel-2. Rises with algal biomass."
+        ),
+    },
+    "ndti": {
+        "column": "ndti_mean",
+        "label": "Turbidity index (NDTI)",
+        "unit": "index",
+        "about": (
+            "Normalised Difference Turbidity Index. Rises with suspended "
+            "sediment, which on this coast is frequently natural."
+        ),
+    },
+    "fdi": {
+        "column": "fdi_mean",
+        "label": "Floating Debris Index (FDI)",
+        "unit": "index",
+        "about": (
+            "Responds to possible floating material. Does not identify what "
+            "the material is."
+        ),
+    },
+}
+
+
+def get_region_index_series(
+    db: Session, region_code: str, index: str, days: int = 365
+) -> tuple[list[float], list[date]]:
+    """Daily series of one measured Sentinel-2 index for one region.
+
+    Built from :class:`OpticalIndexObservation` -- real acquisitions on real
+    dates -- rather than from the event table. Events are only *threshold
+    exceedances*, so a series made from them is mostly zeros and forecasting
+    it would be forecasting the threshold rather than the water.
+
+    Readings below the water-pixel floor are excluded: a mean over eight
+    pixels would move the series without describing anything.
+
+    Gaps are forward-filled to the regular daily grid the smoothing models
+    need, which matters more here than for detection activity -- Sentinel-2
+    revisits every few days, so most days in the grid are carried forward.
+    The forecast response states this.
+    """
+    from app.models.optical import OpticalIndexObservation
+    from app.vision.sentinel2_indices import MIN_WATER_PIXELS
+
+    spec = INDEX_SERIES.get(index.lower())
+    if spec is None:
+        return [], []
+    column = getattr(OpticalIndexObservation, spec["column"])
+
+    since = (datetime.now(UTC) - timedelta(days=days)).date()
+    rows = db.execute(
+        select(OpticalIndexObservation.observed_on, column)
+        .join(Region, Region.id == OpticalIndexObservation.region_id)
+        .where(
+            Region.code == region_code,
+            OpticalIndexObservation.observed_on >= since,
+            OpticalIndexObservation.water_pixels >= MIN_WATER_PIXELS,
+        )
+        .order_by(OpticalIndexObservation.observed_on)
+    ).all()
+
+    observed = {day: value for day, value in rows if value is not None}
+    if not observed:
+        return [], []
+
+    start, end = min(observed), max(observed)
+    values: list[float] = []
+    dates: list[date] = []
+    last = observed[start]
+    current = start
+    while current <= end:
+        last = observed.get(current, last)
+        values.append(float(last))
+        dates.append(current)
+        current += timedelta(days=1)
+    return values, dates

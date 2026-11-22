@@ -13,15 +13,16 @@ import {
   EmptyState,
   ErrorState,
   EvidenceBadge,
+  formatDateTime,
+  formatTime,
   LoadingSkeleton,
+  MarineScopeNote,
   MetricCard,
   PageHeader,
   RiskBadge,
   SectionCard,
+  SignatureBadge,
   Unavailable,
-  formatDateTime,
-  formatTime,
-  titleise,
 } from "@/components/ui";
 
 export default function LiveMonitoring() {
@@ -51,7 +52,12 @@ export default function LiveMonitoring() {
     onSuccess: invalidateAll,
   });
 
-  const activeDetector = detectors.data?.find((detector) => detector.available);
+  // The detector whose output this platform presents, which the API now
+  // marks. "First available" returned the mock, because a simulated
+  // detector is perfectly available -- it just measures nothing.
+  const activeDetector =
+    detectors.data?.find((detector) => detector.is_active) ??
+    detectors.data?.find((detector) => detector.available && !detector.is_simulated);
 
   if (health.isLoading && overview.isLoading) {
     return <LoadingSkeleton rows={4} height={88} />;
@@ -74,7 +80,28 @@ export default function LiveMonitoring() {
             </button>
             <button
               className="btn btn-outline btn-sm"
-              onClick={() => refine.mutate()}
+              onClick={() => {
+                // Refinement writes: it mints sub-cell regions and new
+                // events, and cannot be undone from the UI. Easy to hit by
+                // accident mid-demo while reaching for Refresh.
+                if (
+                  window.confirm(
+                    [
+                      "Run stage-2 refinement?",
+                      "",
+                      "This writes to the database: it subdivides the most " +
+                        "anomalous monitored cells into sub-cell regions and " +
+                        "creates new pollution events from them, raising the " +
+                        "event count.",
+                      "",
+                      "It cannot be undone from this page. Restore with " +
+                        "scripts/reset_demo.sh if you need the previous state.",
+                    ].join("\n"),
+                  )
+                ) {
+                  refine.mutate();
+                }
+              }}
               disabled={refine.isPending}
             >
               <ZoomIn size={13} />
@@ -86,6 +113,8 @@ export default function LiveMonitoring() {
           </div>
         }
       />
+
+      <MarineScopeNote />
 
       {(ingest.isError || refine.isError) && (
         <ErrorState error={ingest.error ?? refine.error} />
@@ -140,7 +169,9 @@ export default function LiveMonitoring() {
           detail={
             metrics.data?.latency.p50_ms !== null &&
             metrics.data?.latency.p50_ms !== undefined
-              ? `p50 ${metrics.data.latency.p50_ms} ms`
+              ? `p50 ${metrics.data.latency.p50_ms} ms · ${
+                  metrics.data.latency.model_label ?? "unknown model"
+                }`
               : "No latency recorded yet"
           }
         />
@@ -168,7 +199,7 @@ export default function LiveMonitoring() {
                 </span>
                 <span className="feed-dot" />
                 <span className="feed-body">
-                  <strong>{titleise(event.signature)}</strong>
+                  <SignatureBadge signature={event.signature} />
                   <span className="muted-note">
                     {event.region_name} · confidence{" "}
                     {(event.confidence * 100).toFixed(1)}%

@@ -12,10 +12,24 @@ import { Shell } from "./components/Shell";
 import { LoadingSkeleton } from "./components/ui";
 
 const Landing = lazy(() => import("./pages/Landing"));
+
+// India Water Intelligence. The map is the primary surface, so it is a
+// top-level route rather than a tab inside a dashboard.
+const IndiaWaterMap = lazy(() => import("./pages/IndiaWaterMap"));
+const IndiaOverview = lazy(() => import("./pages/IndiaOverview"));
+const WaterBodyDetail = lazy(() => import("./pages/WaterBodyDetail"));
+const StatePage = lazy(() => import("./pages/StatePage"));
+const CityPage = lazy(() => import("./pages/CityPage"));
+const StationDetail = lazy(() => import("./pages/StationDetail"));
+const WaterStandards = lazy(() => import("./pages/WaterStandards"));
+const DataSources = lazy(() => import("./pages/DataSources"));
+const WaterAI = lazy(() => import("./pages/WaterAI"));
 const Overview = lazy(() => import("./pages/Overview"));
 const LiveMonitoring = lazy(() => import("./pages/LiveMonitoring"));
 const Events = lazy(() => import("./pages/Events"));
 const OceanMap = lazy(() => import("./pages/OceanMap"));
+const CandidateReview = lazy(() => import("./pages/CandidateReview"));
+const OpticalObservations = lazy(() => import("./pages/OpticalObservations"));
 const Forecasts = lazy(() => import("./pages/Forecasts"));
 const RiskAnalysis = lazy(() => import("./pages/RiskAnalysis"));
 const KnowledgeGraph = lazy(() => import("./pages/KnowledgeGraph"));
@@ -41,11 +55,25 @@ function Page({ children }: { children: React.ReactNode }) {
 }
 
 const APP_ROUTES: { path: string; element: React.ReactNode }[] = [
+  // -- India water intelligence ---------------------------------------
+  { path: "/app/india", element: <IndiaOverview /> },
+  { path: "/app/water/:slug", element: <WaterBodyDetail /> },
+  { path: "/app/state/:slug", element: <StatePage /> },
+  { path: "/app/city/:slug", element: <CityPage /> },
+  { path: "/app/stations/:stationId", element: <StationDetail /> },
+  { path: "/app/standards", element: <WaterStandards /> },
+  { path: "/app/data-quality", element: <DataSources /> },
+  { path: "/app/ai", element: <WaterAI /> },
+
+  // -- Marine pollution intelligence (preserved) ----------------------
   { path: "/app/overview", element: <Overview /> },
   { path: "/app/live", element: <LiveMonitoring /> },
   { path: "/app/events", element: <Events /> },
   { path: "/app/events/:eventId", element: <Events /> },
-  { path: "/app/map", element: <OceanMap /> },
+  { path: "/app/ocean-map", element: <OceanMap /> },
+  { path: "/app/candidate-review", element: <CandidateReview /> },
+  { path: "/app/real-observations", element: <OpticalObservations /> },
+  { path: "/app/candidate-review/:candidateId", element: <CandidateReview /> },
   { path: "/app/forecasts", element: <Forecasts /> },
   { path: "/app/risk", element: <RiskAnalysis /> },
   { path: "/app/risk/:eventId", element: <RiskAnalysis /> },
@@ -64,6 +92,18 @@ const APP_ROUTES: { path: string; element: React.ReactNode }[] = [
 ];
 
 export const router = createBrowserRouter([
+  {
+    // The map is rendered inside the shell but with the page padding
+    // removed, so the geography gets the entire viewport.
+    path: "/app/map",
+    element: (
+      <Shell fullBleed>
+        <Suspense fallback={<LoadingSkeleton rows={1} height={480} />}>
+          <IndiaWaterMap />
+        </Suspense>
+      </Shell>
+    ),
+  },
   {
     path: "/app",
     element: (

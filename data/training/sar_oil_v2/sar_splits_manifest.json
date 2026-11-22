@@ -1,0 +1,858 @@
+{
+  "metadata": {
+    "dataset": "PANGAEA 980773 / DARTIS 2019",
+    "citation": "Yang & Singha (2025), Earth System Science Data",
+    "license": "CC BY 4.0",
+    "sensor": "Sentinel-1 C-SAR GRD VV polarization",
+    "split_method": "Scene-stratified (unique Sentinel_ID per split; zero spatial/temporal leakage)",
+    "random_seed": 42
+  },
+  "splits": {
+    "train": [
+      {
+        "image": "ow-0568.jpg",
+        "xml": "ow-0568.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "ow-0692.jpg",
+        "xml": "ow-0692.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "oc-0368.jpg",
+        "xml": "oc-0368.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "oc"
+      },
+      {
+        "image": "ow-0170.jpg",
+        "xml": "ow-0170.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "oc-0275.jpg",
+        "xml": "oc-0275.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "oc"
+      },
+      {
+        "image": "ow-0028.jpg",
+        "xml": "ow-0028.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "oc-0259.jpg",
+        "xml": "oc-0259.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "oc"
+      },
+      {
+        "image": "oc-0340.jpg",
+        "xml": "oc-0340.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "oc"
+      },
+      {
+        "image": "ow-0990.jpg",
+        "xml": "ow-0990.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "ow-0273.jpg",
+        "xml": "ow-0273.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "ow-0742.jpg",
+        "xml": "ow-0742.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "ow-0483.jpg",
+        "xml": "ow-0483.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "oc-0066.jpg",
+        "xml": "oc-0066.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "oc"
+      },
+      {
+        "image": "oc-0239.jpg",
+        "xml": "oc-0239.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "oc"
+      },
+      {
+        "image": "ow-0577.jpg",
+        "xml": "ow-0577.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "ow-0304.jpg",
+        "xml": "ow-0304.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "ow-0134.jpg",
+        "xml": "ow-0134.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "oc-0346.jpg",
+        "xml": "oc-0346.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "oc"
+      },
+      {
+        "image": "ow-0192.jpg",
+        "xml": "ow-0192.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "ow-0284.jpg",
+        "xml": "ow-0284.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "ow-0675.jpg",
+        "xml": "ow-0675.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "ow-0264.jpg",
+        "xml": "ow-0264.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "ow-0389.jpg",
+        "xml": "ow-0389.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "ow-0249.jpg",
+        "xml": "ow-0249.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "ow-0851.jpg",
+        "xml": "ow-0851.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "oc-0321.jpg",
+        "xml": "oc-0321.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "oc"
+      },
+      {
+        "image": "ow-0949.jpg",
+        "xml": "ow-0949.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "oc-0006.jpg",
+        "xml": "oc-0006.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "oc"
+      },
+      {
+        "image": "oc-0131.jpg",
+        "xml": "oc-0131.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "oc"
+      },
+      {
+        "image": "ow-0670.jpg",
+        "xml": "ow-0670.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "ow-0541.jpg",
+        "xml": "ow-0541.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "oc-0145.jpg",
+        "xml": "oc-0145.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "oc"
+      },
+      {
+        "image": "ow-0205.jpg",
+        "xml": "ow-0205.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "ow-0244.jpg",
+        "xml": "ow-0244.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "ow-0762.jpg",
+        "xml": "ow-0762.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "nw-0063-00-000063.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nc-0113-01-000037.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nc"
+      },
+      {
+        "image": "nw-1748-10-000156.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-0256-01-000084.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-0694-04-000029.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-1344-08-000095.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nc-0053-00-000053.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nc"
+      },
+      {
+        "image": "nw-0191-01-000019.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nc-0200-02-000040.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nc"
+      },
+      {
+        "image": "nc-0104-01-000028.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nc"
+      },
+      {
+        "image": "nw-0443-02-000100.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-0474-02-000131.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-1442-09-000018.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-0359-02-000016.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-1795-11-000029.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-1244-07-000166.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-1027-06-000115.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-0660-03-000157.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-0485-02-000142.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nc-0052-00-000052.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nc"
+      },
+      {
+        "image": "nw-0310-01-000138.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-0189-01-000017.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nc-0030-00-000030.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nc"
+      },
+      {
+        "image": "nw-0670-04-000005.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-0274-01-000102.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-0907-05-000161.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-1638-10-000046.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-0913-06-000001.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-1268-08-000019.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-1901-11-000135.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-1024-06-000112.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nc-0069-00-000069.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nc"
+      },
+      {
+        "image": "nw-0408-02-000065.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-0756-05-000010.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-0944-06-000032.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      }
+    ],
+    "val": [
+      {
+        "image": "ow-0847.jpg",
+        "xml": "ow-0847.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "ow-0800.jpg",
+        "xml": "ow-0800.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "ow-0916.jpg",
+        "xml": "ow-0916.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "ow-0576.jpg",
+        "xml": "ow-0576.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "ow-0151.jpg",
+        "xml": "ow-0151.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "oc-0159.jpg",
+        "xml": "oc-0159.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "oc"
+      },
+      {
+        "image": "ow-0015.jpg",
+        "xml": "ow-0015.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "ow-0773.jpg",
+        "xml": "ow-0773.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "oc-0170.jpg",
+        "xml": "oc-0170.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "oc"
+      },
+      {
+        "image": "ow-0034.jpg",
+        "xml": "ow-0034.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "nw-0813-05-000067.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-0464-02-000121.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-0556-03-000053.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-1445-09-000021.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-0095-00-000095.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nc-0066-00-000066.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nc"
+      },
+      {
+        "image": "nc-0341-04-000062.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nc"
+      },
+      {
+        "image": "nw-1065-06-000153.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-0448-02-000105.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nc-0166-02-000006.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nc"
+      }
+    ],
+    "test": [
+      {
+        "image": "oc-0203.jpg",
+        "xml": "oc-0203.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "oc"
+      },
+      {
+        "image": "oc-0303.jpg",
+        "xml": "oc-0303.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "oc"
+      },
+      {
+        "image": "ow-0613.jpg",
+        "xml": "ow-0613.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "oc-0271.jpg",
+        "xml": "oc-0271.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "oc"
+      },
+      {
+        "image": "ow-0529.jpg",
+        "xml": "ow-0529.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "ow-0696.jpg",
+        "xml": "ow-0696.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "ow-0031.jpg",
+        "xml": "ow-0031.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "oc-0062.jpg",
+        "xml": "oc-0062.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "oc"
+      },
+      {
+        "image": "oc-0086.jpg",
+        "xml": "oc-0086.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "oc"
+      },
+      {
+        "image": "ow-0364.jpg",
+        "xml": "ow-0364.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "ow-0664.jpg",
+        "xml": "ow-0664.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "oc-0057.jpg",
+        "xml": "oc-0057.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "oc"
+      },
+      {
+        "image": "ow-0931.jpg",
+        "xml": "ow-0931.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "ow-0903.jpg",
+        "xml": "ow-0903.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "ow"
+      },
+      {
+        "image": "oc-0078.jpg",
+        "xml": "oc-0078.xml",
+        "label": 1,
+        "class_name": "oil_slick_candidate",
+        "subset": "oc"
+      },
+      {
+        "image": "nw-0493-02-000150.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-1325-08-000076.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-1441-09-000017.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-1532-09-000108.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nc-0047-00-000047.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nc"
+      },
+      {
+        "image": "nw-0123-00-000123.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-0764-05-000018.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-0663-03-000160.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-0685-04-000020.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-0161-00-000161.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-0438-02-000095.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-0882-05-000136.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nc-0347-04-000068.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nc"
+      },
+      {
+        "image": "nw-0444-02-000101.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      },
+      {
+        "image": "nw-1590-09-000166.jpg",
+        "xml": "",
+        "label": 0,
+        "class_name": "look_alike",
+        "subset": "nw"
+      }
+    ]
+  }
+}

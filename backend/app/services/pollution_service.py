@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
+from app.models.optical import OpticalIndexObservation
 from app.models import (
     EvidenceLevel,
     PollutionEvent,
@@ -156,7 +157,21 @@ def list_zones(db: Session, limit: int = 200) -> list[dict]:
             .where(SatelliteObservation.region_id == region.id)
             .order_by(SatelliteObservation.acquired_at.desc())
         )
-        if observation is None:
+        # The SAR observation table holds radar backscatter statistics and is
+        # empty since the seeded rows were removed. The platform's real
+        # observations are Sentinel-2 index readings in their own table, so a
+        # region with one of those has certainly been looked at -- and
+        # skipping it here emptied the whole map layer.
+        optical = (
+            None
+            if observation is not None
+            else db.scalar(
+                select(OpticalIndexObservation)
+                .where(OpticalIndexObservation.region_id == region.id)
+                .order_by(OpticalIndexObservation.observed_on.desc())
+            )
+        )
+        if observation is None and optical is None:
             continue
 
         event = db.scalar(
@@ -178,10 +193,26 @@ def list_zones(db: Session, limit: int = 200) -> list[dict]:
                     region.max_lon,
                     region.max_lat,
                 ],
-                "last_observed_at": observation.acquired_at.isoformat(),
-                "mean_backscatter_db": observation.mean_db,
-                "platform": observation.platform,
-                "observation_evidence_level": observation.evidence_level,
+                "last_observed_at": (
+                    observation.acquired_at.isoformat()
+                    if observation is not None
+                    else datetime.combine(
+                        optical.observed_on, time(0, 0), tzinfo=UTC
+                    ).isoformat()
+                ),
+                # Backscatter is a radar quantity. An optical cell has none,
+                # and reporting a number here would be inventing one.
+                "mean_backscatter_db": (
+                    observation.mean_db if observation is not None else None
+                ),
+                "platform": (
+                    observation.platform if observation is not None else "Sentinel-2"
+                ),
+                "observation_evidence_level": (
+                    observation.evidence_level
+                    if observation is not None
+                    else optical.evidence_level
+                ),
                 "signature": event.signature if event else None,
                 "confidence": round(event.confidence, 4) if event else None,
                 "risk_score": (
@@ -191,8 +222,11 @@ def list_zones(db: Session, limit: int = 200) -> list[dict]:
                 ),
                 "severity": event.severity if event else None,
                 "event_id": event.event_id if event else None,
-                "is_simulated": observation.evidence_level
-                == str(EvidenceLevel.SIMULATED),
+                "is_simulated": (
+                    observation.evidence_level == str(EvidenceLevel.SIMULATED)
+                    if observation is not None
+                    else False
+                ),
             }
         )
     return zones

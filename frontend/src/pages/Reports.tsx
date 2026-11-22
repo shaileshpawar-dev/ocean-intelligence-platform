@@ -153,6 +153,39 @@ export default function Reports() {
               )}
             </SectionCard>
 
+            {/* The AI summary sits in its own card, after the deterministic
+                one, never in place of it. A reader who ignores this card
+                loses nothing: the figures above are the figures. */}
+            {detail.data.ai_summary && (
+              <SectionCard
+                title={detail.data.ai_summary.label}
+                description={
+                  `${detail.data.ai_summary.model ?? "language model"}` +
+                  (detail.data.ai_summary.generated_at
+                    ? ` · ${formatDateTime(detail.data.ai_summary.generated_at)}`
+                    : "")
+                }
+                actions={<span className="badge-ai">AI-generated</span>}
+              >
+                <p className="narrative">{detail.data.ai_summary.text}</p>
+                <p className="provenance-note" role="note">
+                  <span>
+                    {detail.data.ai_summary.note}
+                    {typeof detail.data.ai_summary.numbers_checked === "number" && (
+                      <>
+                        {" "}
+                        <strong>
+                          {detail.data.ai_summary.numbers_checked} figure
+                          {detail.data.ai_summary.numbers_checked === 1 ? "" : "s"}
+                        </strong>{" "}
+                        checked.
+                      </>
+                    )}
+                  </span>
+                </p>
+              </SectionCard>
+            )}
+
             {SECTION_ORDER.map(([key, level, description]) => {
               const section = detail.data!.sections?.[key];
               if (!section) return null;

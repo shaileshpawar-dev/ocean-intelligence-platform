@@ -526,6 +526,97 @@ REFERENCES: tuple[SeedDocument, ...] = (
 )
 
 
+# ---------------------------------------------------------------------------
+# India water quality
+#
+# Summaries of the two CPCB documents the water status engine actually applies,
+# plus the platform's own note on how it handles data age. The numeric
+# thresholds quoted here were verified against the CPCB criteria before being
+# written, and are the same values app/water/standards.py enforces -- so a
+# retrieved passage and a computed status cannot disagree.
+# ---------------------------------------------------------------------------
+WATER_DOCUMENTS: tuple[SeedDocument, ...] = (
+    SeedDocument(
+        document_id="cpcb-designated-best-use",
+        title="CPCB Designated Best Use Water Quality Criteria (Classes A-E)",
+        doc_type="regulation",
+        publication="Central Pollution Control Board, India",
+        jurisdiction="India",
+        source_url=(
+            "https://cpcb.nic.in/wqm/Designated_Best_Use_Water_Quality_Criteria.pdf"
+        ),
+        regions=["india"],
+        topics=["water quality", "standards", "rivers", "bod", "dissolved oxygen"],
+        text=(
+            "CPCB classifies inland surface water by its designated best use, "
+            "because whether water is polluted depends on what it is used for. "
+            "Class A, drinking water source without conventional treatment but "
+            "after disinfection: total coliform 50 MPN/100mL or less, pH 6.5 to "
+            "8.5, dissolved oxygen 6 mg/L or more, biochemical oxygen demand "
+            "(BOD) 2 mg/L or less. Class B, organised outdoor bathing: total "
+            "coliform 500 MPN/100mL or less, pH 6.5 to 8.5, dissolved oxygen 5 "
+            "mg/L or more, BOD 3 mg/L or less. Class C, drinking water source "
+            "after conventional treatment and disinfection: total coliform 5000 "
+            "MPN/100mL or less, pH 6 to 9, dissolved oxygen 4 mg/L or more, BOD "
+            "3 mg/L or less. Class D, propagation of wildlife and fisheries: pH "
+            "6.5 to 8.5, dissolved oxygen 4 mg/L or more, free ammonia as N 1.2 "
+            "mg/L or less. Class E, irrigation, industrial cooling and "
+            "controlled waste disposal: pH 6.0 to 8.5, electrical conductivity "
+            "at most 2250 micromhos/cm, sodium adsorption ratio at most 26, "
+            "boron at most 2 mg/L. A parameter a class does not list has no "
+            "limit under that class. Low dissolved oxygen is harmful, so for "
+            "dissolved oxygen the criterion is a minimum rather than a maximum."
+        ),
+    ),
+    SeedDocument(
+        document_id="cpcb-polluted-river-stretches",
+        title="CPCB Polluted River Stretches: Identification Criteria and Priority",
+        doc_type="regulation",
+        publication="Central Pollution Control Board, India",
+        jurisdiction="India",
+        source_url="https://cpcb.nic.in/wqm/RS-criteria-status.pdf",
+        regions=["india"],
+        topics=["polluted river stretch", "bod", "priority", "rivers"],
+        text=(
+            "CPCB identifies polluted river stretches using biochemical oxygen "
+            "demand. A monitoring location where BOD exceeds 3 mg/L, the limit "
+            "for outdoor bathing, is treated as polluted. Two or more polluted "
+            "locations in continuous sequence on the same river are defined as "
+            "a Polluted River Stretch. Stretches are ranked into five priority "
+            "classes by BOD: Priority I, BOD above 30 mg/L; Priority II, 20 to "
+            "30 mg/L; Priority III, 10 to 20 mg/L; Priority IV, 6 to 10 mg/L; "
+            "Priority V, 3 to 6 mg/L. Priority I stretches need the most urgent "
+            "intervention. The classification is based on monitored BOD and "
+            "says nothing directly about other pollutants such as heavy metals."
+        ),
+    ),
+    SeedDocument(
+        document_id="oip-water-freshness-methodology",
+        title="How This Platform Handles Data Age and Water Status",
+        doc_type="reference",
+        publication="OceanAI methodology note",
+        regions=["india"],
+        topics=["freshness", "methodology", "status", "data age"],
+        notice=METHOD_NOTICE,
+        text=(
+            "The platform never describes a water body as currently polluted or "
+            "currently clean from an old observation. Freshness is judged "
+            "against the cadence the source promises: CPCB manual monitoring "
+            "is roughly monthly, so an observation older than twelve months is "
+            "reported as no recent data. The latest CPCB extracts published on "
+            "the National Water Data Portal are from 2021. Every water body "
+            "therefore carries two statuses: a present-tense status, which is "
+            "no recent data wherever the source has not published lately, and "
+            "a status as of its most recent measurement, always shown with "
+            "that date. Status is a band reached by named rules, not a score. "
+            "A parameter that was not measured is never treated as compliant, "
+            "and satellite imagery is never used to report laboratory-only "
+            "parameters such as BOD, coliform or dissolved metals."
+        ),
+    ),
+)
+
+
 def all_seed_documents() -> list[SeedDocument]:
     """Every document in the seed corpus."""
-    return [*REGULATIONS, *REFERENCES]
+    return [*REGULATIONS, *REFERENCES, *WATER_DOCUMENTS]

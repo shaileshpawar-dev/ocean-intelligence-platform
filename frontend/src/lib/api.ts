@@ -15,14 +15,23 @@ import type {
   AgentRunResult,
   AgentRunSummary,
   Alert,
+  CandidateEvaluation,
   CorpusStats,
   DetectorInfo,
   DriftReport,
   Forecast,
+  KnowledgeGraphResponse,
+  KnowledgeGraphSummary,
   HealthResponse,
   ListResponse,
   Metrics,
   ModelVersion,
+  MarineConditionsResponse,
+  CandidateVesselActivity,
+  Sentinel1ScreeningResponse,
+  IncidentReplayResponse,
+  OpticalIndexResponse,
+  VesselActivityResponse,
   Overview,
   PollutionEvent,
   PollutionEventDetail,
@@ -31,8 +40,48 @@ import type {
   ReportSummary,
   ResearchAnswer,
   RiskAssessment,
+  SARCandidate,
+  SARCandidateDetail,
+  SARCandidateSummary,
+  CandidateMapPoint,
+  CandidateReviewCreateIn,
+  OpticalScene,
+  SARCandidateOpticalEvidence,
+  CandidateFootprintCollection,
+  SARSceneListResponse,
+  MultiSensorAssessment,
+  CandidateVesselAssociation,
+  DriftSimulation,
+  Vessel,
+  MarineReceptor,
+  CandidateImpactAssessment,
   Zone,
 } from "./types";
+import type {
+  AvailableParameter,
+  DistrictDetail,
+  ListEnvelope,
+  MapFeature,
+  BoundaryCollection,
+  CitySummary,
+  ClusterResponse,
+  GeometryCollection,
+  MapLayerCatalogue,
+  SearchResponse,
+  WaterCoverage,
+  ParameterTrend,
+  StandardsSummary,
+  StateDetail,
+  StateSummary,
+  StationDetail,
+  StationSummary,
+  WaterBodyDetail,
+  WaterBodySummary,
+  WaterOverview,
+  WaterQualityReport,
+  WaterAnswer,
+  WaterSource,
+} from "./waterTypes";
 
 const BASE =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ??
@@ -187,12 +236,21 @@ export const api = {
       `/trends${qs({ days, parent_region: parentRegion })}`,
     ),
 
-  forecast: (regionCode: string, horizon = 7, model = "holt", historyDays = 60) =>
+  forecast: (
+    regionCode: string,
+    horizon = 7,
+    model = "holt",
+    historyDays = 60,
+    /** "ndci" | "ndti" | "fdi" to project a measured index instead of
+     *  detection activity. Null keeps the original behaviour. */
+    index: string | null = null,
+  ) =>
     get<Forecast>(
       `/forecast/${encodeURIComponent(regionCode)}${qs({
         horizon,
         model,
         history_days: historyDays,
+        index,
       })}`,
     ),
 
@@ -225,6 +283,27 @@ export const api = {
     get<DriftReport>(
       `/drift${qs({ baseline_days: baselineDays, current_days: currentDays })}`,
     ),
+  knowledgeGraph: (params: {
+    centerType?: string | null;
+    centerId?: string | null;
+    depth?: number;
+    limit?: number;
+  } = {}) =>
+    get<KnowledgeGraphResponse>(
+      `/knowledge-graph${qs({
+        center_type: params.centerType ?? null,
+        center_id: params.centerId ?? null,
+        depth: params.depth ?? 1,
+        limit: params.limit ?? null,
+      })}`,
+    ),
+  knowledgeGraphSummary: () =>
+    get<KnowledgeGraphSummary>("/knowledge-graph/summary"),
+
+  candidateEvaluation: (threshold = 0.5) =>
+    get<CandidateEvaluation>(
+      `/models/sar-candidates/evaluation${qs({ threshold })}`,
+    ),
 
   /* -- intelligence ----------------------------------------------------- */
   research: (question: string, limit = 5, docType?: string | null) =>
@@ -253,4 +332,238 @@ export const api = {
     ),
   generateReport: (eventId: string) =>
     post<ReportDetail>("/reports/generate", { event_id: eventId }),
+
+  /* -- Real Sentinel-2 observations -------------------------------------
+     Measured indices from Copernicus scenes. Served from stored rows; the
+     fetch is a job, so a page load never waits on a satellite API. */
+
+  marineConditions: () => get<MarineConditionsResponse>("/marine-conditions"),
+
+  vesselActivity: () => get<VesselActivityResponse>("/vessel-activity"),
+
+  incidentReplay: () => get<IncidentReplayResponse>("/incident-replay"),
+
+  sentinel1Screening: () =>
+    get<Sentinel1ScreeningResponse>("/sentinel1-screening"),
+
+  /** Aggregate vessel activity near a candidate. No identities, by design. */
+  candidateVesselActivity: (candidateId: string) =>
+    get<CandidateVesselActivity>(
+      `/sar-candidates/${encodeURIComponent(candidateId)}/vessel-activity`,
+    ),
+  incidentReplayThumbnailUrl: (name: string) =>
+    `${API_ROOT}/incident-replay/${encodeURIComponent(name)}/thumbnail`,
+
+  opticalIndices: (latestOnly = true, region?: string) =>
+    get<OpticalIndexResponse>(
+      `/optical-indices${qs({ latest_only: latestOnly, region })}`,
+    ),
+  /** Direct URL: the browser fetches the PNG itself, so this is not a get(). */
+  opticalThumbnailUrl: (regionCode: string, observedOn: string) =>
+    `${API_ROOT}/optical-indices/${encodeURIComponent(regionCode)}/thumbnail` +
+    `?observed_on=${encodeURIComponent(observedOn)}`,
+
+  /* -- India water intelligence ----------------------------------------
+     Every endpoint below is backed by CPCB observations ingested from the
+     National Water Informatics Centre. None of it is generated or seeded. */
+
+  waterOverview: () => get<WaterOverview>("/water-overview"),
+
+  waterBodies: (params: {
+    state?: string | null;
+    district?: string | null;
+    water_type?: string | null;
+    status?: string | null;
+    q?: string | null;
+    bbox?: string | null;
+    limit?: number;
+    offset?: number;
+  } = {}) =>
+    get<ListEnvelope<WaterBodySummary>>(`/water-bodies${qs(params)}`),
+
+  /** `reference` overrides the selected standard: a class letter (A-E) or a code. */
+  waterBody: (slug: string, reference?: string | null) =>
+    get<WaterBodyDetail>(
+      `/water-bodies/${encodeURIComponent(slug)}${qs({ reference })}`,
+    ),
+
+  waterBodyParameters: (slug: string) =>
+    get<{ count: number; items: AvailableParameter[] }>(
+      `/water-bodies/${encodeURIComponent(slug)}/parameters`,
+    ),
+
+  waterTrend: (slug: string, parameter: string, days?: number | null) =>
+    get<ParameterTrend>(
+      `/water-bodies/${encodeURIComponent(slug)}/trend${qs({ parameter, days })}`,
+    ),
+
+  waterBodySources: (slug: string) =>
+    get<{ count: number; items: WaterSource[] }>(
+      `/water-bodies/${encodeURIComponent(slug)}/sources`,
+    ),
+
+  station: (stationId: number) => get<StationDetail>(`/stations/${stationId}`),
+
+  stations: (params: { state?: string | null; bbox?: string | null; limit?: number } = {}) =>
+    get<ListEnvelope<StationSummary>>(`/stations${qs(params)}`),
+
+  mapWaterBodies: (params: {
+    bbox?: string | null;
+    state?: string | null;
+    water_type?: string | null;
+    status?: string | null;
+    limit?: number;
+  } = {}) => get<{ count: number; items: MapFeature[] }>(`/map/water-bodies${qs(params)}`),
+
+  mapStations: (params: { bbox?: string | null; state?: string | null; limit?: number } = {}) =>
+    get<{ count: number; items: StationSummary[] }>(`/map/stations${qs(params)}`),
+
+  waterNear: (lat: number, lon: number, radiusKm = 25, extra: {
+    water_type?: string | null;
+    status?: string | null;
+    limit?: number;
+  } = {}) =>
+    get<ListEnvelope<WaterBodySummary> & { radius_km: number }>(
+      `/map/near${qs({ lat, lon, radius_km: radiusKm, ...extra })}`,
+    ),
+
+  states: () => get<{ count: number; items: StateSummary[] }>("/states"),
+  state: (slug: string) => get<StateDetail>(`/states/${encodeURIComponent(slug)}`),
+  city: (slug: string) => get<DistrictDetail>(`/cities/${encodeURIComponent(slug)}`),
+  cities: () => get<{ count: number; items: CitySummary[] }>("/cities"),
+
+  /* -- Geography layers ------------------------------------------------ */
+  mapLayers: () => get<MapLayerCatalogue>("/map/layers"),
+
+  mapGeometries: (params: {
+    bbox?: string | null;
+    zoom?: number | null;
+    state?: string | null;
+    water_type?: string | null;
+    status?: string | null;
+  }) => get<GeometryCollection>(`/map/geometries${qs(params)}`),
+
+  stationClusters: (params: { bbox?: string | null; zoom: number; state?: string | null }) =>
+    get<ClusterResponse>(`/map/station-clusters${qs(params)}`),
+
+  stateBoundaries: (zoom?: number | null) =>
+    get<BoundaryCollection>(`/boundaries/states${qs({ zoom })}`),
+
+  districtBoundaries: (params: { state?: string | null; bbox?: string | null; zoom?: number | null }) =>
+    get<BoundaryCollection>(`/boundaries/districts${qs(params)}`),
+
+  waterCoverage: () => get<WaterCoverage>("/water-coverage"),
+
+  waterSearch: (q: string, limit = 25) => get<SearchResponse>(`/search${qs({ q, limit })}`),
+
+  waterStandards: () => get<StandardsSummary>("/water-standards"),
+  waterQualityReport: () => get<WaterQualityReport>("/water-quality-report"),
+
+  /** Grounded Q&A. Figures come from stored observations, never a model. */
+  waterAsk: (question: string) => post<WaterAnswer>("/water/ask", { question }),
+
+  /* -- SAR Candidate Review & Analyst Workflow (Phase 13.2) ----------- */
+  sarCandidates: (params: {
+    screening_status?: string | null;
+    review_status?: string | null;
+    model_version?: string | null;
+    is_coastal?: boolean | null;
+    split?: string | null;
+    search?: string | null;
+    start_date?: string | null;
+    end_date?: string | null;
+    limit?: number;
+    offset?: number;
+  } = {}) => get<ListResponse<SARCandidate>>(`/sar-candidates${qs(params)}`),
+
+  sarCandidateSummary: () => get<SARCandidateSummary>("/sar-candidates/summary"),
+
+  sarCandidateMapPoints: () => get<CandidateMapPoint[]>("/sar-candidates/map-points"),
+
+  sarCandidateDetail: (candidateId: string) =>
+    get<SARCandidateDetail>(`/sar-candidates/${encodeURIComponent(candidateId)}`),
+
+  submitCandidateReview: (candidateId: string, payload: CandidateReviewCreateIn) =>
+    post<SARCandidateDetail>(`/sar-candidates/${encodeURIComponent(candidateId)}/reviews`, payload),
+
+  sarCandidateImageUrl: (candidateId: string) =>
+    `${API_ROOT}/sar-candidates/${encodeURIComponent(candidateId)}/image`,
+
+  /* -- Sentinel-2 Optical Evidence (Phase 14.1) ---------------------- */
+  sarCandidateOpticalScenes: (candidateId: string) =>
+    get<OpticalScene[]>(`/sar-candidates/${encodeURIComponent(candidateId)}/optical-scenes`),
+
+  sarCandidateOpticalEvidence: (candidateId: string) =>
+    get<SARCandidateOpticalEvidence[]>(`/sar-candidates/${encodeURIComponent(candidateId)}/optical-evidence`),
+
+  processCandidateOpticalEvidence: (
+    candidateId: string,
+    payload: { scene_id?: string | null; chip_size?: number } = {},
+  ) =>
+    post<SARCandidateOpticalEvidence>(
+      `/sar-candidates/${encodeURIComponent(candidateId)}/optical-evidence/process`,
+      payload,
+    ),
+
+  sarCandidateOpticalImageUrl: (
+    candidateId: string,
+    evidenceId: number,
+    productType: "rgb" | "false_color" | "scl" | "ndci",
+  ) =>
+    `${API_ROOT}/sar-candidates/${encodeURIComponent(candidateId)}/optical-evidence/${evidenceId}/image/${productType}`,
+
+  /* -- Full-Scene SAR Processing (Phase 14.2) ----------------------- */
+  sarScenes: (params: { limit?: number; offset?: number; search?: string | null } = {}) =>
+    get<SARSceneListResponse>(`/sar-scenes${qs(params)}`),
+
+  sarSceneMetadata: (sceneId: string) =>
+    get<Record<string, unknown>>(`/sar-scenes/${encodeURIComponent(sceneId)}`),
+
+  processSarScene: (
+    sceneId: string,
+    payload: { confidence_threshold?: number; tile_size?: number; overlap_pct?: number } = {},
+  ) => post<Record<string, unknown>>(`/sar-scenes/${encodeURIComponent(sceneId)}/process`, payload),
+
+  sarSceneFootprints: (sceneId: string) =>
+    get<CandidateFootprintCollection>(`/sar-scenes/${encodeURIComponent(sceneId)}/footprints`),
+
+  sarSceneHeatmapUrl: (sceneId: string) =>
+    `${API_ROOT}/sar-scenes/${encodeURIComponent(sceneId)}/heatmap`,
+
+  /* -- Multi-Sensor Evidence Fusion (Phase 14.3) -------------------- */
+  sarCandidateFusion: (candidateId: string) =>
+    get<MultiSensorAssessment>(`/sar-candidates/${encodeURIComponent(candidateId)}/fusion`),
+
+  /* -- AIS Vessel Tracking & Association (Phase 15) ----------------- */
+  vessels: (params: { vessel_type?: string | null; risk_profile?: string | null; search?: string | null; limit?: number } = {}) =>
+    get<Vessel[]>(`/vessels${qs(params)}`),
+
+  vesselDetail: (mmsi: string) =>
+    get<Vessel>(`/vessels/${encodeURIComponent(mmsi)}`),
+
+  candidateVessels: (candidateId: string) =>
+    get<CandidateVesselAssociation[]>(`/sar-candidates/${encodeURIComponent(candidateId)}/vessels`),
+
+  correlateCandidateVessels: (candidateId: string) =>
+    post<CandidateVesselAssociation[]>(`/sar-candidates/${encodeURIComponent(candidateId)}/vessels/correlate`, {}),
+
+  /* -- Lagrangian Oil Drift Simulation (Phase 16) ------------------- */
+  candidateDrift: (candidateId: string) =>
+    get<DriftSimulation>(`/sar-candidates/${encodeURIComponent(candidateId)}/drift`),
+
+  runCandidateDrift: (
+    candidateId: string,
+    payload: { duration_hours?: number; oil_type?: string; spill_volume_m3?: number } = {},
+  ) =>
+    post<DriftSimulation>(`/sar-candidates/${encodeURIComponent(candidateId)}/drift`, payload),
+
+  /* -- Environmental Impact & Marine Protected Areas (Phase 17) ----- */
+  receptors: (params: { category?: string | null; search?: string | null } = {}) =>
+    get<MarineReceptor[]>(`/receptors${qs(params)}`),
+
+  candidateImpact: (candidateId: string) =>
+    get<CandidateImpactAssessment>(`/sar-candidates/${encodeURIComponent(candidateId)}/impact`),
+
+  evaluateCandidateImpact: (candidateId: string) =>
+    post<CandidateImpactAssessment>(`/sar-candidates/${encodeURIComponent(candidateId)}/impact/evaluate`, {}),
 };

@@ -2,8 +2,9 @@
 
 from app.vision.base import BaseDetector, Detection
 from app.vision.mock_detector import MockDetector
-from app.vision.registry import get_image_detector, get_sar_detector
+from app.vision.registry import get_image_detector, get_sar_detector, get_sar_v2_detector
 from app.vision.sar_detector import SARDarkFormationDetector
+from app.vision.sar_detector_v2 import SAROilSlickDetectorV2
 from app.vision.yolo_detector import YOLODetector
 
 __all__ = [
@@ -11,7 +12,9 @@ __all__ = [
     "Detection",
     "MockDetector",
     "SARDarkFormationDetector",
+    "SAROilSlickDetectorV2",
     "YOLODetector",
     "get_image_detector",
     "get_sar_detector",
+    "get_sar_v2_detector",
 ]

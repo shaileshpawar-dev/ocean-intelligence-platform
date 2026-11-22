@@ -61,7 +61,21 @@ class PollutionSignature(StrEnum):
     """Optical-only. Elevated chlorophyll-a / discolouration."""
 
     PLASTIC_DEBRIS_SIGNATURE = "plastic_debris_signature"
-    """Optical-only, high uncertainty. Floating debris-like reflectance."""
+    """Deprecated. Retained because stored rows reference it; nothing new is
+    written with it. The index that would produce it (FDI) cannot distinguish
+    plastic from seaweed, foam, timber or spume, so the name claims more than
+    any measurement here supports. Use ``FLOATING_MATERIAL``."""
+
+    FLOATING_MATERIAL = "floating_material"
+    """Optical. Near-infrared brighter than the surrounding water, which is
+    what the Floating Debris Index responds to. Says material is floating
+    there; says nothing about what the material is."""
+
+    TURBIDITY_PLUME = "turbidity_plume"
+    """Optical. Elevated suspended sediment against the regional background.
+    On the Indian coast this is frequently natural -- river discharge and
+    post-monsoon runoff -- so it is a condition worth seeing, not a pollutant
+    by itself."""
 
     SURFACE_ANOMALY = "surface_anomaly"
     """Anomalous but unclassifiable under the available modality."""
@@ -81,6 +95,10 @@ class DetectionMethod(StrEnum):
 
     MANUAL = "manual"
     """Human-entered."""
+
+    OPTICAL_INDEX = "optical_index"
+    """Published band-ratio index computed over Sentinel-2 L2A reflectance
+    (NDCI, NDTI, FDI), water-masked by the scene classification layer."""
 
     SIMULATED = "simulated"
     """Demo-mode fixture."""
@@ -135,3 +153,115 @@ class AgentRunStatus(StrEnum):
     SUCCESS = "success"
     FAILED = "failed"
     PARTIAL = "partial"
+
+
+# ---------------------------------------------------------------------------
+# India Water Intelligence vocabularies
+#
+# These sit alongside the marine-pollution vocabularies above rather than
+# replacing them. A satellite pollution detection and a laboratory BOD
+# measurement are different kinds of claim, and collapsing them into one
+# enum is exactly the conflation this platform exists to avoid.
+# ---------------------------------------------------------------------------
+class WaterBodyType(StrEnum):
+    """What kind of water body a record describes.
+
+    Kept explicit because behaviour genuinely differs: a river has stretches
+    and an upstream/downstream order, a lake does not.
+    """
+
+    RIVER = "river"
+    RIVER_STRETCH = "river_stretch"
+    LAKE = "lake"
+    POND = "pond"
+    RESERVOIR = "reservoir"
+    CANAL = "canal"
+    CREEK = "creek"
+    ESTUARY = "estuary"
+    COASTAL = "coastal"
+    MARINE = "marine"
+    GROUNDWATER = "groundwater"
+    DRAIN = "drain"
+    OTHER = "other"
+    """Used when the source gives no basis to classify. Never guessed."""
+
+
+class WaterEvidenceType(StrEnum):
+    """How a piece of water-body evidence came to exist.
+
+    The separation that matters most is MEASURED from everything else. A
+    laboratory BOD value and a satellite turbidity proxy are both useful and
+    are not the same claim; only one of them is a measurement of the quantity
+    it names.
+    """
+
+    MEASURED = "MEASURED"
+    """Laboratory or field instrument measurement of the named quantity."""
+
+    SATELLITE_OBSERVED = "SATELLITE_OBSERVED"
+    """Derived from satellite reflectance or backscatter. A proxy, not a lab
+    value. Never describes BOD, COD, coliform or dissolved metals."""
+
+    IMAGE_DETECTED = "IMAGE_DETECTED"
+    """Output of a detector run on an image. Describes appearance only."""
+
+    REPORTED = "REPORTED"
+    """Asserted by a document, bulletin or person. Not independently verified."""
+
+    INFERRED = "INFERRED"
+    """Derived by reasoning over other evidence. The weakest claim."""
+
+    FORECAST = "FORECAST"
+    """A projection about the future."""
+
+    RETRIEVED = "RETRIEVED"
+    """A passage retrieved from the document corpus, quoted as found."""
+
+
+class WaterStatus(StrEnum):
+    """Evidence-based status of a water body.
+
+    Deliberately not a 0-100 score. A single number invites the reader to
+    believe a precision the underlying monthly grab samples cannot support,
+    and it hides which parameter drove it. Each band below is reached by a
+    stated rule over named parameters against a cited standard.
+    """
+
+    WITHIN_REFERENCE = "WITHIN_REFERENCE"
+    """Every evaluable parameter satisfies the selected standard."""
+
+    ELEVATED = "ELEVATED"
+    """At least one parameter breaches its limit, none severely."""
+
+    HIGH_CONCERN = "HIGH_CONCERN"
+    """Severe breach, or several simultaneous breaches."""
+
+    POLLUTED_STRETCH = "POLLUTED_STRETCH"
+    """Listed as a polluted river stretch by an official source (CPCB). Only
+    ever set from a source classification, never from observations alone."""
+
+    INSUFFICIENT_DATA = "INSUFFICIENT_DATA"
+    """Observations exist but none of the parameters the standard needs."""
+
+    NO_RECENT_DATA = "NO_RECENT_DATA"
+    """Latest observation is too old to describe the present state."""
+
+    NO_APPLICABLE_REFERENCE = "NO_APPLICABLE_REFERENCE"
+    """Measured, but no reference standard is established for this water
+    body, so no judgement is made. Not a pass and not a failure."""
+
+
+class QualityFlag(StrEnum):
+    """Result of validating one ingested record.
+
+    Malformed values are flagged and kept, not silently dropped. A discarded
+    record is invisible; a flagged one can be counted, inspected and fixed.
+    """
+
+    OK = "ok"
+    SUSPECT = "suspect"
+    """Parsed, but a validation rule fired -- implausible magnitude, censored
+    value, future date."""
+
+    INVALID = "invalid"
+    """Could not be parsed into the parameter's type at all."""

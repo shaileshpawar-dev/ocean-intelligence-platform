@@ -96,6 +96,31 @@ Fixing this properly means either RDS PostgreSQL (`DATABASE_URL` already
 supports it — no code change) or mounting an EFS volume at the database path.
 Neither is implemented.
 
+## Water data on an ephemeral container
+
+The water pages read from the same SQLite file, so a task restart would empty
+them. `WATER_BOOTSTRAP_STATES` (for example `MH,DL,KA`) makes a container that
+starts with no water observations ingest those states from the public CPCB
+source in a background thread. Health checks pass immediately; the water
+section reports zero observations until the run completes, never invented
+ones. Verified locally in Docker: Maharashtra (25,507 observations) rebuilt in
+11 seconds, and a restart of the same container kept the data and correctly
+skipped the bootstrap.
+
+This makes the demo self-healing. It is not persistence: a new task still
+re-downloads. RDS PostgreSQL remains the real fix.
+
+The Fargate task needs outbound HTTPS to `nwdp.nwic.gov.in`. The current task
+already pulls its image from ECR without a NAT gateway, so it has outbound
+internet access, but the NWDP call has **not** been verified from Fargate.
+
+Manual sync, respecting the source's actual cadence:
+
+```bash
+python -m app.water.cli ingest --states MH DL KA
+python -m app.water.cli health
+```
+
 ## Not deployed
 
 Listing absent infrastructure is as useful as listing what exists:

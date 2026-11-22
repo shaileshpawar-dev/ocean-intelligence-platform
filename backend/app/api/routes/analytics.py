@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -17,6 +19,11 @@ from app.services import forecast_service
 from app.services.analytics_service import get_trends, summary_counts
 
 router = APIRouter(tags=["analytics"])
+
+#: Codes that ``refinement_service`` mints for stage-2 sub-cells, as
+#: ``{parent_code}__r{row}c{col}``. These regions hold no detection history of
+#: their own, so they cannot be forecast.
+REFINED_CELL_CODE = re.compile(r"__r\d+c\d+$")
 
 
 @router.get(
@@ -59,13 +66,24 @@ def forecast(
     horizon: int = Query(7, ge=1, le=30),
     model: str = Query("holt", description="naive | moving_average | holt"),
     history_days: int = Query(60, ge=7, le=365),
+    index: str | None = Query(
+        None,
+        description=(
+            "Forecast a measured Sentinel-2 index instead of detection "
+            "activity: ndci | ndti | fdi. Omit for detection activity."
+        ),
+    ),
     db: Session = Depends(get_db),
 ) -> ForecastOut:
-    """Forecast the trend in this platform's own detections for a region.
+    """Forecast a region's detection activity, or one measured index.
 
-    This is **not** a physical dispersion forecast: the system ingests no
-    current, wind or wave fields, so it cannot predict where a slick will
-    drift. ``forecast_kind`` makes the distinction explicit on every response.
+    Without ``index`` this forecasts the trend in this platform's own
+    detections. With it, the same model and the same backtest are run over a
+    **measured** Sentinel-2 series instead -- real acquisitions on real dates.
+
+    Neither is a physical dispersion forecast: the system does not model where
+    a slick will drift. ``forecast_kind`` and the caveats make the distinction
+    explicit on every response.
     """
     if model not in forecast_service.MODELS:
         raise HTTPException(
@@ -74,15 +92,52 @@ def forecast(
                 f"Unknown model {model!r}. Available: {sorted(forecast_service.MODELS)}"
             ),
         )
+    # Checked before the region exists, because this is a statement about the
+    # shape of the code rather than about one row: a stage-2 refined sub-cell
+    # is never forecastable, refined or not. Detections are recorded against
+    # the monitored region one level up, so a sub-cell holds no history of its
+    # own and would otherwise come back as "no stored history" -- which reads
+    # as a data gap rather than as the wrong code being asked for.
+    #
+    # The marker is the suffix refinement_service writes
+    # (``{parent}__r{row}c{col}``). ``Region.parent_code`` cannot be used:
+    # every region has one, and it holds a display name, not a region code.
+    refined = REFINED_CELL_CODE.search(region_code)
+    if refined:
+        parent_code = region_code[: refined.start()]
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{region_code!r} is a stage-2 refined sub-cell. Detection "
+                "history is aggregated at the monitored-region level, so "
+                "sub-cells cannot be forecast individually. Request "
+                f"/forecast/{parent_code} instead."
+            ),
+        )
+
     region = db.scalar(select(Region).where(Region.code == region_code))
     if region is None:
         raise HTTPException(status_code=404, detail=f"No region {region_code!r}")
 
-    result = forecast_service.forecast_region(
-        db, region_code, horizon=horizon, model=model, history_days=history_days
-    )
+    if index:
+        # An index series is sparse (Sentinel-2 revisit plus cloud), so it
+        # gets the longer default window rather than the 60 days that suit
+        # daily detection counts.
+        result = forecast_service.forecast_region_index(
+            db,
+            region_code,
+            index,
+            horizon=horizon,
+            model=model,
+            history_days=max(history_days, 365),
+        )
+    else:
+        result = forecast_service.forecast_region(
+            db, region_code, horizon=horizon, model=model, history_days=history_days
+        )
     payload = result.to_dict()
     payload["region_code"] = region_code
+    payload["index"] = index
     payload["bands"] = forecast_service.forecast_to_severity_bands(result)
     return ForecastOut(**payload)
 

@@ -58,7 +58,16 @@ FROM python:3.12-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:$PATH" \
-    DATABASE_URL="sqlite:////app/data/oip.db"
+    DATABASE_URL="sqlite:////app/data/oip.db" \
+    WATER_CACHE_DIR="/app/data/raw" \
+    WATER_OBJECT_DIR="/app/data/objects" \
+    SAR_TRAINING_DIR="/app/data/training/sar_oil_v2"
+
+# libexpat is the one shared library the OSM extract reader (osmium) needs;
+# the slim base does not carry it. ~100 KB, and only the extract job uses it.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libexpat1 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Run as a non-root user. The container writes only to /app/data.
 RUN useradd --create-home --uid 1000 oip
@@ -78,9 +87,11 @@ USER oip
 
 EXPOSE 8000
 
-# The health endpoint returns 200 even when optional services are missing,
-# so this checks liveness rather than full capability.
+# Liveness, not readiness: this decides whether to restart the container, and
+# restarting cannot fix an unreachable database. A load balancer should poll
+# /api/v1/health/ready instead, which returns 503 when the database is gone so
+# the task is taken out of rotation rather than killed.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=4).status==200 else 1)"
+    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/v1/health/live', timeout=4).status==200 else 1)"
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -245,3 +245,108 @@ The distinction between the columns is enforced in code — by the signature
 vocabulary, the `EvidenceLevel` propagation, the plausibility gate and the
 `forecast_kind` field — and asserted by the scientific-integrity CI job. It is
 the point of the project.
+
+## 8. India water intelligence
+
+**Data age, and the one exception.** CPCB's published extracts mostly end in
+2020–2021 and the Central Water Commission's run to April–June 2025. Since
+Phase 4 there is also **CPCB's real-time network**: automatic analysers
+reporting hourly, which the platform reads and which can describe a water body
+*now*.
+
+That exception is small and must not be read as more than it is:
+
+| | Covered |
+|---|---|
+| Stations | **40 of 4,951** |
+| Water bodies | **26 of 2,740** |
+| States | **6 of 35** (UK, UP, HR, BR, JH, WB) |
+| Rivers | the Ganga and its tributaries, not the whole country |
+| Parameters | 9 of the 12 series published; depth and stage are hydrology, and total organic carbon has no entry in the registry |
+
+For every other water body the platform still says "current condition cannot
+be established from this dataset", names the newest source and gives its date.
+**There is no nationwide real-time water-quality coverage in India that this
+platform can reach**, and it does not pretend otherwise.
+
+**Sensors are not laboratories.** The real-time values come from field
+analysers: they drift, they are cleaned on a schedule, and they go offline.
+The feed publishes each station's maintenance diary. A station that stops
+reporting keeps its last value in the feed, so **the feed being live does not
+mean every station in it is** — on the day it was integrated, 39 of 40 had
+reported within the hour and one had not reported for 24 days. Freshness is
+judged per observation from its own timestamp, never assumed from the source
+being live.
+
+**Two sources, not one truth.** CPCB and CWC sample different stations by
+different programmes. Their observations are stored separately, shown as
+separate series, and never averaged. Where both measure a parameter the
+status uses the most recent value and says which agency produced it. The
+platform does not rank agencies: `source_type`, `observation_method` and a
+reliability note are recorded as facts.
+
+**Coverage.** CPCB: 35 state/UT codes. CWC: 29. See
+[DATASET_COVERAGE.md](DATASET_COVERAGE.md) for the counts, which are computed
+from the database.
+
+**Identity is parsed for CPCB and read from drainage columns for CWC.**
+CPCB's `River` column is empty, so its water bodies come from station names.
+CWC fills `River`, `Basin` and `Tributary`, but the `River` column repeats the
+`Basin` name in most rows, where it is a basin label rather than the water
+body: read literally it put all 36 Sikkim stations on the Brahmaputra
+mainstem, up to 264 km from the Teesta they sample. The rule that replaced it
+is in [water-geospatial.md](water-geospatial.md#2-canonical-identity).
+
+**A sub-basin is not always the stream sampled.** Where the source gives only
+a basin and a sub-basin, the sub-basin is used and recorded at confidence
+0.55. It can still be too coarse: a station at Ujjain is in the Yamuna
+sub-basin but stands on the Shipra, which the source never names, so it is
+attached to the Yamuna. `cli geometry-qa` reports every station further than
+25 km from its water body's geometry — that report is the measure of this
+limitation, not a list of bugs, and it is not silently repaired. Untyped
+same-named bodies are not linked across states, so generic names can still
+appear more than once.
+
+**Geometry** comes from an OpenStreetMap regional extract, matched offline by
+name, water-type affinity and station proximity, with connectivity for rivers.
+Coverage is partial: many small ponds and unclassified bodies have no named
+OSM feature near their stations, and some matches are refused as ambiguous
+rather than guessed. Shapes are OSM's, not a survey; boundaries are
+geoBoundaries (2011 states, 2021 districts), not the official boundaries of
+India.
+
+**Standards.** Rivers are compared against the EP Rules 1986 bathing-water
+criteria, which is what CPCB uses to identify polluted stretches; everything
+else says "reference comparison unavailable" unless a designated use is
+recorded or chosen. 6 reference standards (including CPCB Bathing Criteria
+and Drinking Water thresholds) are loaded. 351 official CPCB polluted-stretch
+classifications (Priority I through V) are loaded in source_classifications.
+
+**Units.** Conversions are applied only where they are exact. Both agencies
+label conductivity mS/cm while publishing µS/cm magnitudes; the platform
+resolves that by magnitude and flags the observation `unit_assumed_us_cm`
+rather than multiplying every reading by a thousand. A unit it cannot convert
+is stored unconverted and flagged `unit_not_convertible`, never compared.
+
+**Satellite.** One path: Sentinel-2 L2A for lakes with a matched polygon,
+with strict per-lake cloud and water checks. The stored value is an
+uncalibrated index (NDTI) with no unit — not turbidity, never compared with a
+standard or with CPCB's NTU. 17 Sentinel-2 L2A scenes are stored locally in
+the PostGIS database and available offline without cloud dependencies.
+
+**Database.** PostgreSQL 16 + PostGIS 3.4 is the production target and is
+what the spatial queries run on; SQLite remains for development and tests,
+where the Python geometry helpers are used instead. The two paths are
+exercised by the same test suite, but only PostGIS is exercised against the
+full national dataset.
+
+**Deployment.** Local execution only. The AWS cloud account is suspended
+following credit exhaustion; zero cloud resources or AWS credentials are used.
+The application stack runs fully locally under Docker Desktop via `docker compose`
+with PostgreSQL 16/PostGIS and FastAPI backend.
+
+**Not implemented:** user-reported issues, pollution-source attribution,
+basin boundaries, vector tiles, automated cloud GPU retraining.
+
+**Q&A.** Rule-based routing and entity resolution; no language model is used
+on the water path. Unusual phrasings fail towards "no evidence".

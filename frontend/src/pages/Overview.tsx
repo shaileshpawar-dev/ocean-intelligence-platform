@@ -9,16 +9,7 @@
 
 import { Link } from "react-router-dom";
 import { useQueries } from "@tanstack/react-query";
-import {
-  Activity,
-  AlertTriangle,
-  ArrowRight,
-  Cpu,
-  Gauge,
-  HeartPulse,
-  Radar,
-  Waves,
-} from "lucide-react";
+import { Activity, AlertTriangle, ArrowRight, ClipboardCheck, Cpu, Gauge, HeartPulse, Radar, Waves } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -29,21 +20,25 @@ import {
   YAxis,
 } from "recharts";
 import { api } from "@/lib/api";
+import MarineConditionsPanel from "@/components/MarineConditionsPanel";
+import VesselActivityPanel from "@/components/VesselActivityPanel";
 import {
+  ErrorState,
   EvidenceBadge,
   EvidenceLegend,
-  ErrorState,
+  formatDateTime,
   LoadingSkeleton,
+  MarineScopeNote,
   MetricCard,
   NotEvaluated,
   PageHeader,
   RiskBadge,
   SectionCard,
+  SignatureBadge,
   SimulatedBanner,
   StatusBadge,
-  Unavailable,
-  formatDateTime,
   titleise,
+  Unavailable,
 } from "@/components/ui";
 
 const DRIFT_TONE: Record<string, "ok" | "warn" | "error" | "neutral"> = {
@@ -63,10 +58,21 @@ export default function Overview() {
       { queryKey: ["alerts", "HIGH"], queryFn: () => api.alerts("HIGH") },
       { queryKey: ["trends", 30], queryFn: () => api.trends(30) },
       { queryKey: ["models"], queryFn: api.models },
+      { queryKey: ["marine-conditions"], queryFn: api.marineConditions },
+      { queryKey: ["vessel-activity"], queryFn: api.vesselActivity },
     ],
   });
-
-  const [overview, health, metrics, drift, alerts, trends, models] = results;
+  const [
+    overview,
+    health,
+    metrics,
+    drift,
+    alerts,
+    trends,
+    models,
+    conditions,
+    vesselActivity,
+  ] = results;
 
   if (results.every((result) => result.isLoading)) {
     return <LoadingSkeleton rows={5} height={96} />;
@@ -102,7 +108,7 @@ export default function Overview() {
     <>
       <PageHeader
         title="Ocean Intelligence Command Center"
-        subtitle="Real-time environmental monitoring, AI analysis and ML operations."
+        subtitle="Measured Sentinel-2 detections over India's EEZ, live sea state and vessel traffic, and the models behind them."
         actions={
           health.data ? (
             <div className="header-status">
@@ -122,6 +128,24 @@ export default function Overview() {
           ) : null
         }
       />
+
+      <MarineScopeNote full />
+
+      <Link className="real-data-card" to="/app/candidate-review">
+        <div>
+          <span className="real-data-kicker">Real Sentinel-1 data</span>
+          <strong>306 benchmark candidates</strong>
+          <span className="muted-note">
+            Measured Sentinel-1 patches from PANGAEA 980773 (CC BY 4.0),
+            collocated with ERA5 wind. Nothing here is simulated.
+          </span>
+        </div>
+        <ClipboardCheck size={22} aria-hidden />
+      </Link>
+
+      <MarineConditionsPanel query={conditions} />
+
+      <VesselActivityPanel query={vesselActivity} />
 
       {overview.data?.contains_simulated_data && (
         <SimulatedBanner
@@ -144,7 +168,11 @@ export default function Overview() {
           icon={<Radar size={15} />}
           label="Satellite Observations"
           value={overview.data?.observations ?? <Unavailable />}
-          detail="Measurements stored across all monitored cells"
+          detail={
+            overview.data?.observations_breakdown
+              ? `${overview.data.observations_breakdown.sentinel2_index_readings.toLocaleString()} measured Sentinel-2 index readings`
+              : "Measurements stored across all monitored cells"
+          }
           tone="ok"
           evidence="OBSERVED"
         />
@@ -161,7 +189,11 @@ export default function Overview() {
               <Unavailable />
             )
           }
-          detail="Slick-plausible signatures only — not total dark water"
+          detail={
+            (overview.data?.slick_scale_area_km2 ?? 0) > 0
+              ? "Slick-plausible signatures only — not total flagged extent"
+              : "No oil-like signature currently detected. Zero is the measurement, not a gap."
+          }
           tone="warn"
           evidence="INFERRED"
         />
@@ -203,7 +235,11 @@ export default function Overview() {
           }
           detail={
             metrics.data
-              ? `${metrics.data.volume.total_requests} request(s) in ${metrics.data.window_days}d`
+              ? `${metrics.data.volume.total_requests} request(s) in ${metrics.data.window_days}d${
+                  metrics.data.latency.model_label
+                    ? ` · ${metrics.data.latency.model_label}`
+                    : ""
+                }`
               : undefined
           }
           tone="neutral"
@@ -311,7 +347,7 @@ export default function Overview() {
                   <Link to={`/app/risk/${alert.event_id}`} className="alert-row">
                     <RiskBadge severity={alert.severity} score={alert.risk_score} />
                     <span className="alert-body">
-                      <strong>{titleise(alert.signature)}</strong>
+                      <SignatureBadge signature={alert.signature} />
                       <span>{alert.region_name}</span>
                     </span>
                     <span className="alert-conf">

@@ -16,15 +16,20 @@ import {
   EmptyState,
   ErrorState,
   EvidenceBadge,
+  formatDateTime,
   LoadingSkeleton,
+  MarineScopeNote,
   PageHeader,
+  RISK_MEANING,
   RiskBadge,
   SectionCard,
+  SignatureBadge,
+  SignatureLegend,
+  signatureMeta,
   SimulatedBanner,
+  titleise,
   Unavailable,
   Value,
-  formatDateTime,
-  titleise,
 } from "@/components/ui";
 
 const SEVERITIES: (Severity | "ALL")[] = ["ALL", "CRITICAL", "HIGH", "MEDIUM", "LOW"];
@@ -54,6 +59,7 @@ function EventDetailPanel({ eventId, onClose }: { eventId: string; onClose: () =
           <>
             <div className="detail-hero">
               <RiskBadge severity={data.severity} score={data.risk_score} />
+              <span className="muted-note risk-meaning">{RISK_MEANING}</span>
               <EvidenceBadge level={data.evidence_level} />
             </div>
 
@@ -202,8 +208,10 @@ export default function Events() {
     <>
       <PageHeader
         title="Pollution Events"
-        subtitle="Detections made by the platform, ranked by risk. Each is a claim with stated uncertainty, not a confirmed incident."
+        subtitle="Detections made by the platform, ranked by risk. Risk score = potential impact if confirmed (exposure, proximity, sea state). Not a confirmed incident."
       />
+
+      <MarineScopeNote />
 
       {data?.provenance.contains_simulated_data && <SimulatedBanner />}
 
@@ -240,7 +248,7 @@ export default function Events() {
             <option value="ALL">All signatures</option>
             {signatures.map((option) => (
               <option key={option} value={option}>
-                {titleise(option)}
+                {signatureMeta(option).label}
               </option>
             ))}
           </select>
@@ -285,7 +293,7 @@ export default function Events() {
                     }}
                   >
                     <td>
-                      <strong>{titleise(event.signature)}</strong>
+                      <SignatureBadge signature={event.signature} caveats={event.caveats} />
                       <span className="cell-sub">{event.region_name}</span>
                     </td>
                     <td>
@@ -314,6 +322,10 @@ export default function Events() {
             </table>
           </div>
         )}
+
+        {/* What each signature means, for the ones actually on screen. A
+            colour alone would make the table prettier and no clearer. */}
+        <SignatureLegend signatures={all.map((event) => event.signature)} />
       </SectionCard>
 
       {eventId && (

@@ -151,6 +151,9 @@ def run_drift_checks(db: Session, baseline_days: int = 30, current_days: int = 7
     else:
         overall = str(DriftStatus.OK)
 
+    baseline_provenance = _window_provenance(db, baseline_start, current_start)
+    current_provenance = _window_provenance(db, current_start, None)
+
     return {
         "overall_status": overall,
         "baseline_window_days": baseline_days,
@@ -158,11 +161,93 @@ def run_drift_checks(db: Session, baseline_days: int = 30, current_days: int = 7
         "min_samples_required": MIN_SAMPLES,
         "thresholds": {"warning": PSI_WARNING, "drift": PSI_DRIFT},
         "checks": checks,
+        # What the two windows actually hold, so the panel can say whether it
+        # is comparing live traffic or a replayed benchmark.
+        "provenance": {
+            "baseline": baseline_provenance,
+            "current": current_provenance,
+            "note": _provenance_note(baseline_provenance, current_provenance),
+        },
         "action": (
             "Flag for human review. This platform does not retrain "
             "automatically on drift."
         ),
     }
+
+
+def _window_provenance(db: Session, start: datetime, end: datetime | None) -> dict:
+    """Where a window's rows came from, read from what the rows themselves say.
+
+    A batch replay records ``timestamp_is_synthetic`` and the benchmark
+    ``split`` in ``input_stats``. Reading it back here means the panel's
+    honesty label is derived rather than asserted: if the replay is ever
+    removed, the label disappears with it instead of lingering as a claim
+    about data that is no longer there.
+
+    Read in Python rather than with a JSON operator because the suite runs on
+    SQLite and the deployment on PostgreSQL, and a window is a hundred rows.
+    """
+    stmt = select(PredictionLog.input_stats, PredictionLog.mean_confidence).where(
+        PredictionLog.created_at >= start
+    )
+    if end is not None:
+        stmt = stmt.where(PredictionLog.created_at < end)
+
+    total = 0
+    replayed = 0
+    # The confidence PSI only sees rows with a confidence, so a window can
+    # hold more rows than the statistic was computed over. Counting both keeps
+    # the sentence under the panel from contradicting the table beside it.
+    scored = 0
+    splits: Counter[str] = Counter()
+    for stats, mean_confidence in db.execute(stmt).all():
+        total += 1
+        if mean_confidence is not None:
+            scored += 1
+        if not isinstance(stats, dict):
+            continue
+        if stats.get("timestamp_is_synthetic"):
+            replayed += 1
+            if split := stats.get("split"):
+                splits[str(split)] += 1
+
+    return {
+        "n": total,
+        "scored_n": scored,
+        "replayed_n": replayed,
+        "is_replayed": replayed > 0,
+        "splits": dict(splits.most_common()),
+        "dominant_split": splits.most_common(1)[0][0] if splits else None,
+    }
+
+
+def _provenance_note(baseline: dict, current: dict) -> str | None:
+    """One sentence naming what each window actually holds, or None.
+
+    Returns None when nothing in either window was replayed, so a live
+    deployment never carries a caveat about a batch it does not contain.
+
+    Where a window holds rows the confidence PSI could not use -- the two old
+    mock-detector rows log no confidence -- both counts are given. Quoting only
+    the row count made the sentence say 102 while the table beside it said 100,
+    which reads as one of them being wrong rather than as two different
+    questions.
+    """
+    if not (baseline["is_replayed"] or current["is_replayed"]):
+        return None
+
+    def describe(window: dict) -> str:
+        split = window["dominant_split"] or "unlabelled batch"
+        total, scored = window["n"], window["scored_n"]
+        if scored == total:
+            return f"{split} (n={total})"
+        return f"{split} ({total} rows, {scored} with confidence)"
+
+    return (
+        f"Replayed benchmark: baseline = {describe(baseline)}, "
+        f"current = {describe(current)}. Inferences are real; window "
+        "timestamps are assigned, not live traffic."
+    )
 
 
 def _classes_between(db: Session, start: datetime, end: datetime | None) -> list[str]:

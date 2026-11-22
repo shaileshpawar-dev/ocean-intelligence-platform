@@ -138,8 +138,8 @@ The wrong response is to raise the gate until claims pass. The right response
 is to look closer:
 
 ```
-Stage 1   38 cells · 1 GEE call each · whole ocean
-          → "Persian Gulf SW shows anomalous dark structure"
+Stage 1   40 cells · 1 GEE call each · whole Indian EEZ
+          → "Gulf of Kutch W shows anomalous dark structure"
           → max claim: dark_formation
 
 Stage 2   subdivide 6×6 → 9,334 km² sub-cells · re-query

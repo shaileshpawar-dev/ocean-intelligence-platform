@@ -1,0 +1,972 @@
+# Implementation summary — OceanAI India Water Intelligence
+
+Branch `feature/india-water-intelligence`, built on `main` at `738f1ca`
+(the published v1). **Nothing was deployed and the public v1 was not
+changed.** Phase 4 (below) builds on Phase 3, which builds on Phase 2 and
+Phase 1; each earlier phase is kept further down as the record of that
+change.
+
+---
+
+# PHASE 4 FINAL — operable, and current where the data is
+
+## Core changes
+
+Phase 3 made the platform persistent. Phase 4 made it operable: jobs that are
+tracked and scheduled, a web process that only serves, health endpoints a load
+balancer can act on, an object store for evidence, and — the change that
+alters what the product can say — a source that reports hourly.
+
+## Real-time CPCB source
+
+CPCB runs automatic analysers on the Ganga and its tributaries under Namami
+Gange and publishes them as plain JSON behind its dashboard at
+`rtwqmsdb1.cpcb.gov.in`: no key, no registration. Verified reachable from this
+environment and integrated end to end.
+
+| | |
+|---|---|
+| Stations | **40** (of 4,951) |
+| States | **6** — Uttarakhand, Uttar Pradesh, Haryana, Bihar, Jharkhand, West Bengal |
+| Water bodies reached | **26** (of 2,740) |
+| Cadence | **hourly** |
+| Parameters ingested | 9 of 12 published |
+| Not ingested | depth and stage (hydrology), total organic carbon (no registry entry) |
+
+**This is not nationwide real-time coverage.** It is the Ganga basin. For
+every other water body the platform still refuses to describe the present.
+
+The Ganga's page now reads *"High concern as of 26 Sep 2026 … 0 days ago,
+within the source's hourly reporting cadence"*, with CWC (22 May 2025) and
+CPCB manual (30 Dec 2021) listed beneath as older sources, unmerged.
+
+## Historical sources
+
+Unchanged and still whole: CPCB manual (582,192 observations, 35 state/UT
+codes, mostly to 2021) and CWC manual (4,017,920 observations, 29 states, to
+June 2025). The real-time source did not overwrite a single row of either; on
+the Ganga the three sit side by side with 176, 324,002 and 23,380
+observations.
+
+## Ingestion architecture
+
+Four job commands with the names the deployment uses — `sync-water-data`,
+`import-geometry`, `process-satellite`, `reindex-water-rag`, plus
+`archive-evidence` and `db upgrade`. The older names still work.
+
+Every job records a row in `ingestion_runs` with `job_type`, counts
+(seen / inserted / updated / skipped / duplicate / rejected), duration and
+errors. A failure is written down and re-raised; nothing is deleted, so the
+last good run stays queryable. `GET /api/v1/water-jobs` and `cli jobs` report
+recent runs and when each kind last succeeded.
+
+## Incremental sync
+
+Unchanged resources are skipped on a stored row count; the live feed reports
+no count and is always re-read, which is safe because the uniqueness key is
+(source, station, parameter, observed_at). Verified against the live feed:
+two consecutive runs, **356 seen, 0 inserted, 356 duplicates** each, every
+count identical afterwards, and **zero** duplicate groups across 4.6M rows.
+Seven regression tests cover the cursor, the key, `--full`, and a provider
+that reports no count at all.
+
+## Job scheduling
+
+EventBridge Scheduler rules in the template, each running a command in the job
+task definition at the cadence of its source: real-time hourly, manual
+extracts weekly, satellite weekly. **Configured, not running** — no AWS
+environment exists.
+
+## Database
+
+PostgreSQL 16.4 + PostGIS 3.4.3, Alembic-owned schema, now seven revisions.
+The web process creates nothing: on a server database `init_db()` only checks
+that `alembic_version` exists, because `create_all` cannot create the PostGIS
+columns and would produce a schema that looks complete and has no spatial
+support. Connection pool sized for RDS (5 + 5, recycled at 900 s, pre-ping).
+
+## PostGIS
+
+Unchanged in substance: 405 matched geometries, GIST indexes, spatial identity
+for stations whose names identify no water body — `nearest_mapped_body` within
+1 km, recorded with the distance. 21 PostGIS tests pass against a real server.
+
+## S3
+
+An object store with two backends behind one interface: a directory (the
+default, so a checkout needs no cloud account) and S3 (`WATER_EVIDENCE_BUCKET`).
+`cli archive-evidence` copies rendered scenes in and records
+backend/bucket/key/URI/size beside the metadata — never the bytes in
+PostgreSQL. Run for real against the local backend: three scenes, 1.2 MB and
+204 KB PNGs on disk, second run reported all three already archived.
+**The S3 path has never run against a real bucket.** Its four failure modes —
+denied, missing bucket, missing object, no boto3 — are covered against a stub,
+and each returns nothing and logs once rather than breaking a page.
+
+## RAG
+
+All six required questions answer from structured lookups with sources, dates
+and citations. The Ganga answers in the present tense from the real-time
+source while naming CWC's cut-off; the Mithi answers "1,759 days ago, too old
+to describe the present"; mercury returns no value and says so. A gap found
+and fixed: the parameter-intent items promised "dated per item" while carrying
+no date — the date was only in the citation.
+
+## Freshness
+
+Freshness is judged against the cadence of the source that produced the newest
+measurement, not a hard-coded monthly default — an hourly reading was being
+called "within the source's monthly reporting cadence". Three wordings written
+when everything was years old were corrected: the overview's "refuses to
+describe present condition from data this old", a water-body page that said
+both "supported by recent data" and "not a statement about today" about the
+same reading, and dates rendering in local time beside UTC sentences (one page
+showed "Sep 27" and "26 Sep" for one observation).
+
+## Map
+
+No regression. National geometry 515 ms / 287 KB, state view 11 ms, city
+17 ms, nearby 23 ms, clusters 23 ms. The AI → map handoff (highlight, focus,
+fly-to, panel) works for the Ganga, the Mithi, Mumbai and Maharashtra. One
+real fix: the Ganga's BOD trend returned 14,311 points and 2.5 MB; each source
+now keeps its 500 most recent measurements — capped per source so no agency's
+line disappears — giving 191 KB with all three series and a note stating what
+was trimmed.
+
+## Security
+
+No secrets in tracked files; `.env` ignored; no key material committed; a CI
+step greps for the shapes that leaked before. No `eval`/`exec`/`subprocess`,
+no user-controlled URL reaching a fetch, fixed outbound hosts. The one
+interpolated SQL identifier is now validated against the list it comes from.
+Container runs as uid 1000. The ALB ingress CIDR is a template parameter
+rather than a hard-coded `0.0.0.0/0`, because the API has no authentication
+and no rate limiting.
+
+## Performance
+
+Measured on 4,601,153 observations (PostgreSQL + PostGIS, median of 10):
+
+| Route | Median | p90 |
+|---|---|---|
+| `/health/live` | **2.1 ms** | 2.3 ms |
+| `/health/ready` | 5.9 ms | 6.9 ms |
+| Search | 55 ms | 58 ms |
+| Water body, typical (Mithi) | 32 ms | 43 ms |
+| Water body, heaviest (Ganga) | 647 ms | 729 ms |
+| National map geometries, z6 | 515 ms | 566 ms |
+| State map (Maharashtra) | 11 ms | 13 ms |
+| City (Mumbai) | 17 ms | 19 ms |
+| Nearby, 25 km | 23 ms | 28 ms |
+| RAG question | 210 ms | 231 ms |
+| Jobs | 9 ms | 10 ms |
+
+Essentially unchanged from Phase 3 (Ganga 654 → 647, geometries 527 → 515,
+nearby 27 → 23): the Phase 4 work cost nothing measurable.
+
+## Testing
+
+556 passed, 21 skipped; 21 PostGIS tests against a real PostGIS server; ruff,
+`tsc --noEmit` and ESLint clean; the test-isolation script passes. New this
+phase: object store (14), provider outage (6), real-time provider (9), health
+semantics (9), incremental sync (7), job records (8), trend capping (3).
+
+## Docker
+
+Builds at 341 MB, runs as uid 1000, reports `healthy`, liveness and readiness
+both correct, `alembic`/`sqlalchemy`/`osmium`/`httpx` present. The local stack
+test now builds **every** service image first — building only the backend left
+the migrate and jobs containers running last week's CLI, which silently
+invalidated a whole test run.
+
+## AWS Infrastructure
+
+`infra/aws/staging.yaml`: 26 resources — ALB, ECS Fargate service and job task
+definition, RDS PostgreSQL/PostGIS, S3 evidence bucket, three EventBridge
+schedules, three IAM roles, three security groups. Validated statically: parses
+as YAML, no dangling references, and accepted by
+`aws cloudformation validate-template`. Static validation caught a real bug — an
+unquoted colon in a `Description` that would have failed at deploy time.
+
+**AWS infrastructure code validated locally. AWS environment not created.**
+
+## Cost model
+
+From the AWS Pricing API for ap-south-1, on-demand, 730 hours — **estimated
+and configured, never billed**:
+
+| Item | Monthly |
+|---|---|
+| ALB | $17.45 (+ up to $5.84 LCU) |
+| RDS `db.t4g.micro` + 20 GB gp3 | $17.95 |
+| Fargate 0.25 vCPU / 0.5 GB | $9.47 |
+| CloudWatch Logs (7-day) | ~$1 |
+| S3, EventBridge | <$0.10 |
+| **Total** | **≈ $46/month** |
+
+No NAT gateway, which would add ~$33. Graviton would take the task to $5.30;
+dropping the ALB saves $17.45.
+
+## Known limitations
+
+Real-time coverage is 40 stations in 6 states, not the country. Sensors are
+not laboratories and a live feed does not mean every station in it is live.
+The Ganga page is 647 ms, over the 200 ms target, because it holds 7.5% of all
+observations. The S3 backend is unverified against AWS. Outbound access from
+inside a VPC to the CPCB portals is unverified. `db.t4g.micro` against the full
+dataset is untested. The geometry job's 1.7 GB OSM extract has no home in the
+AWS design. No TLS certificate, no authentication, no rate limiting.
+
+## Credentials/security actions required
+
+- The previously exposed **ngrok token** and **GCP service-account key** must
+  remain revoked and rotated. No replacement is committed anywhere.
+- **`synq-deployer` holds PowerUserAccess + IAMFullAccess** through the
+  `SYNQ-Deployers` group — far more than a deploy needs, and shared with other
+  projects in the account. Recommended: a deploy-scoped policy limited to
+  CloudFormation, ECS, ECR, RDS, ELB, S3, Logs, EventBridge and the specific
+  IAM roles. Not changed here, because it would affect SYNQ.
+- Before exposing staging: restrict `AllowedIngressCidr`, add a certificate,
+  and consider rate limiting `POST /water/ask`.
+
+## Deployment readiness
+
+**STAGING READY.** Not a production candidate: no AWS environment exists, so
+nothing about running there has been verified.
+
+## Exact next steps
+
+1. Deploy the staging stack (~$46/month) and verify what only AWS can verify:
+   outbound access to the CPCB portals from inside the VPC, `db.t4g.micro`
+   under the full dataset, and the S3 path.
+2. Give the geometry job a home for the 1.7 GB extract (S3 plus a download
+   step) so `import-geometry` can run in AWS.
+3. Cache the per-source summary on the water body at `refresh-status` time —
+   the one change that puts the Ganga page under 200 ms.
+4. Narrow the deployer credential, add a certificate, restrict the ingress.
+
+---
+
+# Phase 3 — persistence, geometry at scale, second source
+
+## P3.1 Summary
+
+Phase 3 turned the V2 prototype into something that could be deployed: a real
+database with a real migration path, geometry built from a bulk extract instead
+of thousands of API calls, a second agency's data alongside the first without
+either overwriting the other, and jobs separated from serving.
+
+The chain the work followed — data, persistence, geometry, evidence, freshness,
+map, AI, deployment — held up. What it mostly produced, though, was evidence
+about the *data*: reading the Central Water Commission's `River` column as a
+water body put 933 stations on the wrong river, and it took a geometry QA pass
+over the national dataset to see it.
+
+## P3.2 Persistence
+
+- **PostgreSQL 16.4 + PostGIS 3.4.3** is the production target; SQLite remains
+  for development and tests. The same test suite covers both paths.
+- **Alembic** owns the schema (`backend/migrations`, six revisions from an
+  initial 29-table baseline to the current head). `python -m app.water.cli db
+  upgrade` is the only supported way to build it; the compose `migrate` job
+  runs exactly that.
+- Autogenerate is filtered (`include_object`) so it ignores PostGIS's own
+  tables and schemas, the hand-written spatial indexes and the PostgreSQL-only
+  geometry columns — otherwise every autogenerated revision proposed dropping
+  them.
+- **Geometry is stored twice on purpose**: GeoJSON with full provenance is the
+  record, the PostGIS `geom` column is derived from it by `db sync-geometry`
+  and indexed with GIST. The GeoJSON is what a different deployment could
+  rebuild from.
+- Start-up says which backend it is talking to, and how far the schema got:
+  "PostgreSQL 16.4 + PostGIS 3.4.3", or "… but 0 of 6 geometry columns exist
+  (migrations have not run)". `ENVIRONMENT=production` refuses to start on
+  SQLite, without PostGIS, or with an unmigrated schema.
+
+## P3.3 Geometry at scale
+
+Phase 2 fetched geometry per water body from the public Overpass API: 119
+matches after hours of polite rate-limited requests. Phase 3 reads one
+Geofabrik regional extract (`india-latest.osm.pbf`, 1.7 GB, ODbL) once with
+pyosmium into 41,970 named water lines and 31,066 named water areas, then
+matches offline.
+
+- `cli extract-osm` — stream the PBF, keep named water features (~4 minutes).
+- `cli import-geometry` — match by name cores, water-type affinity, station
+  proximity and, for rivers, connectivity along shared endpoints. A national
+  pass takes under a minute and makes no network requests.
+- Rivers are merged by proper geometry union over connected components, not by
+  concatenating unrelated fragments; ambiguous matches are refused rather than
+  guessed.
+- `cli geometry-qa` validates what was stored: parseability, degeneracy, zero
+  area, implausible extent, position inside India, stale bbox columns,
+  stations far from their shape, one OSM element claimed by two bodies, and on
+  PostGIS `ST_IsValid` and SRID. Repairs happen only with `--fix` and each one
+  is logged.
+
+## P3.4 A second source, without a merge
+
+The portal carries a second agency: **CWC Surface Water Quality (Manual)**, 29
+states, 169 fetchable resources, observations into **June 2025** where CPCB's
+extracts mostly stop in 2021. India-WRIS and `rtwqms.cpcb.gov.in` were checked
+and are unreachable from this environment; data.gov.in requires a key for the
+same CPCB tables. What was checked and what it returned is in
+[docs/data-sources.md](docs/data-sources.md).
+
+Both sources are kept whole:
+
+- an observation belongs to one source; the uniqueness key includes it;
+- the status engine uses the most recent value per parameter and names the
+  agency that produced it;
+- the trend chart draws one line per agency and never joins them;
+- `source_type`, `observation_method` and a reliability note are recorded as
+  facts — the platform does not rank agencies;
+- every resource's row count is stored (`source_resource_state`), so a monthly
+  re-run costs one request per unchanged resource instead of paging millions
+  of rows.
+
+## P3.5 The defect that mattered: a basin is not a river
+
+Geometry QA over the national dataset reported **511 stations more than 25 km
+from the water body they were attached to**, up to 943 km. Sampling the
+published rows showed why: CWC's `River` column repeats `Basin` in 72% of rows
+(100% for Uttar Pradesh), where it is a **basin label**, and the watercourse is
+in `Tributary`. Every Sikkim station carried `River=Brahmaputra,
+Basin=Brahmaputra, Tributary=Teesta` and had been attached to the Brahmaputra
+mainstem, up to 264 km from the Teesta it samples. Gurudongmar Lake, a lake in
+that basin, had become part of the Brahmaputra.
+
+The rule now reads the three columns as what they are:
+
+| Evidence | Reading |
+|---|---|
+| `River` ≠ `Basin` | `River` names a watercourse (Odisha: basin "Brahmani and Baitarni", river "Baitarani") |
+| `River` = `Basin` | basin label; empty `Tributary` ("-") means the basin's main river |
+| `River` = `Basin`, `Tributary` set | the sub-basin, recorded at confidence 0.55 |
+| the station label names a column | that column wins ("Tapi at Sarangkheda" vs "Purna at Gopalkheda") |
+| the label names a lake, tank or well | that water body, whatever it drains to |
+
+Repairing stations already stored is explicit, never automatic: an ordinary
+ingest must not re-point a station, because the reconcile pass moves stations
+between bodies when it merges river fragments. `cli ingest
+--reassign-identity` moves them and records every move as
+`station: old -> new` in the run detail. National re-read: **631 CWC stations
+and 266 CPCB stations reassigned**, 182 correct sub-basin rivers created, zero
+errors, no double-counted observations.
+
+Two smaller findings from the same pass:
+
+- `A/c` and `B/c` ("after/before confluence") are position markers. Read as
+  names they had produced 31 water bodies with one station each — "Krishna A/c
+  With Tungabhadra" is a gauge on the Krishna.
+- 21 OSM ways were each claimed by two water bodies. Two pairs were one river
+  spelled twice (Subarnarekha/Swarnrekha, Kosi/Koshi) and were canonicalised
+  on the commoner published spelling; the rest are left reported, because the
+  Sonai and the Tuirial are one watercourse under two names in two states and
+  "Banjara Kunta" versus "Banjara Lake" is a label clash, not a spelling
+  variant. Shared elements: 21 → 6.
+
+Geometry QA over the national dataset: **523 findings → 217** on the rebuilt
+data. What remains is 210 stations further than 25 km from their water body's
+shape -- the sub-basin limitation above, median 91 km, reported rather than
+repaired and documented as a limitation -- 6 OpenStreetMap elements shared by
+two water bodies, and 1 self-intersecting source polygon. No derived geometry
+is unusable.
+
+## P3.6 What is in the database
+
+Rebuilt from the sources in 41 minutes (jobs only; nothing was served from a
+half-loaded database):
+
+| | |
+|---|---|
+| Observations | **4,600,112** |
+| Monitoring stations | 4,911 |
+| Water bodies | 2,731 |
+| Water bodies with a matched PostGIS geometry | 405 |
+| Identity taken from a sub-basin (confidence 0.55) | 124 |
+| State and district boundaries | 771 |
+| Cities (documented district groupings) | 35 |
+| Sentinel-2 scenes accepted | 17 (105 lakes had no clear scene) |
+
+| Source | Observations | Stations | Range |
+|---|---|---|---|
+| CWC Surface Water Quality (Manual) | 4,017,920 | 911 | 01 Aug 1963 – **05 Jun 2025** |
+| CPCB Surface Water Quality (Manual) | 582,192 | 4,000 | 01 Jan 2018 – 01 Jan 2025 |
+
+Zero ingestion errors on both national runs, and zero identity reassignments:
+the rule reads the drainage columns correctly at ingest, so the correction is
+not needed on a fresh load.
+
+## P3.7 Performance (PostgreSQL + PostGIS, 4.6M observations, median of 10)
+
+| Route | Median | p90 | Payload |
+|---|---|---|---|
+| `/health` | 3 ms | 6 ms | 1 KB |
+| `/map/water-bodies` national | 63 ms | 127 ms | 368 KB |
+| `/map/water-bodies` city viewport | 7 ms | 20 ms | 6 KB |
+| `/map/geometries` national, zoom 6 | 527 ms | 547 ms | 287 KB |
+| `/map/geometries` city, zoom 11 | 25 ms | 28 ms | 10 KB |
+| `/map/station-clusters` national | 23 ms | 31 ms | 12 KB |
+| `/map/near` 25 km | 27 ms | 33 ms | 24 KB |
+| `/boundaries/states` | 79 ms | 93 ms | 185 KB |
+| Water body, typical (Mithi) | 45 ms | 48 ms | 30 KB |
+| Water body, heaviest (Ganga, 347k observations) | 654 ms | 669 ms | 246 KB |
+| Station detail | 25 ms | 26 ms | 57 KB |
+| Q&A | 215 ms | 234 ms | 2 KB |
+
+Against the targets: map viewport sub-second (worst 527 ms), nearby well under
+100 ms (27 ms), water-body lookup under 200 ms for every body except the Ganga,
+which holds 7.5% of all observations and answers in 654 ms. Start-up is
+immediate: the container connects and serves; it loads nothing.
+
+Phase 3 changes that moved these: server-side geometry simplification
+(national geometry 546 KB → 287 KB), the boundary byte cache (528 ms → 79 ms),
+server-side station clustering (280 ms → 23 ms), and removing duplicated reads
+from the water-body page (Godavari 1,305 ms → 257 ms).
+
+## P3.8 Deployment shape
+
+- `docker-compose.yml` is the staging stack: PostGIS, a one-shot `migrate`
+  job, a one-shot `jobs` profile for ingestion/geometry/imagery, and a
+  `backend` that only serves. `WATER_BOOTSTRAP_STATES` is empty by default:
+  **a container must not ingest 35 states at start-up**.
+- [docs/PRODUCTION_ARCHITECTURE.md](docs/PRODUCTION_ARCHITECTURE.md) maps that
+  onto ALB → ECS → RDS PostGIS with S3 for imagery, and says what is not
+  verified from inside a VPC.
+- The runtime image is 338 MB, runs as uid 1000, and carries no build
+  toolchain, no Node and no ML extras.
+
+## P3.9 Verification
+
+| Check | Result |
+|---|---|
+| Backend suite | 496 passed, 18 skipped |
+| PostGIS suite against a real PostGIS | 18 passed |
+| Ruff (lint + format) | clean |
+| `tsc --noEmit`, ESLint (max-warnings 0) | clean |
+| Frontend build | succeeds |
+| Docker build + run | succeeds; health 200 |
+| Migration chain on an empty database | base → head, six registered geometry columns |
+| Staging smoke test | passes, including restart persistence |
+| Security scan | no secrets, no f-string SQL, no eval/exec/subprocess, fixed outbound hosts |
+| Acceptance tests | 13 of 14 run and passing; test 14 is the suite itself |
+
+## P3.10 Three defects the verification itself found
+
+**The staging smoke test found a real bug.** On PostgreSQL, `/map/near` and the
+near-city queries read only the derived columns that `db sync-geometry` writes,
+so anything ingested since the last geometry job was invisible: a fresh stack
+answered "nothing near here" for water bodies it was already serving. They now
+fall back to the lat/lon written at ingest, with the indexed branch kept
+separate so the GIST index still does the work. Two regression tests.
+
+**The test suite destroyed the local dataset.** `conftest` set `DATABASE_URL`
+with `os.environ.setdefault`, so a shell that had sourced `.env` — where
+`DATABASE_URL` points at the local PostgreSQL — ran the whole suite against
+that server, and the session fixture's `drop_all` at teardown emptied it: 4.6
+million ingested observations, 4,911 stations and 403 matched geometries, gone,
+and the tables recreated by `create_all` came back without the PostGIS columns.
+The data was re-ingested from the portals. The defect is fixed at the root:
+`conftest` overwrites `DATABASE_URL` and the session fixture refuses to run
+against anything but its own temporary SQLite file;
+`scripts/check_test_isolation.sh` proves it by leaving a marker table in the
+PostgreSQL database, running the full suite pointed at that database, and
+failing if the marker is gone. The same incident is why the start-up probe now
+checks for the geometry columns instead of trusting the extension.
+
+**The performance work found a data-honesty bug.** Chasing a slow page showed
+that the three "latest value of every parameter" queries read only the few
+thousand most recent rows and deduplicated in Python. On a long river that
+window does not reach the last time a rarely-sampled parameter was measured,
+so the parameter vanished from the page and was then listed as *not
+measured*: the Teesta was hiding 20 of its 37 parameters, the Ganga 11 of 39,
+the Godavari 8 of 38 — and `compute_status` used the same capped read, so a
+status could be computed without the parameter that exceeds its limit. Each
+parameter's latest observation is now selected in SQL, over every row. Five
+regression tests build a history longer than the old caps; all five fail
+against the previous code.
+
+---
+
+# Phase 2 — V2 geospatial foundation
+
+## P2.1 Summary
+
+Phase 2 turns a seven-state prototype into a national, geospatially honest
+platform:
+
+- **All 35 CPCB state/UT codes** ingested from the live NWDP API — 211
+  resources, **582,192 observations, 4,000 stations, 2,595 water bodies**,
+  zero ingestion errors. Station counts cross-checked against the source
+  (Goa 64/64, Sikkim 12/12).
+- **No default standard.** Rivers are compared against the EP Rules 1986
+  bathing-water criteria (what CPCB uses for polluted river stretches);
+  everything else shows "Reference comparison unavailable" unless a
+  designated use is recorded or chosen. `POLLUTED_STRETCH` only from an
+  imported official classification (import path built; no data loadable).
+- **Four evidence layers** separated end to end: MEASURED,
+  REFERENCE_COMPARISON, SOURCE_CLASSIFICATION, DERIVED_STATUS; satellite
+  values are a fifth, `SATELLITE_OBSERVED`, uncalibrated proxy.
+- **Real geometry** from OpenStreetMap matched to stations (lines for rivers,
+  polygons for lakes), with provenance; **boundaries** from geoBoundaries;
+  **35 cities** as documented district groupings; a rebuilt **map** with a
+  layer catalogue, server clustering, state selection and the NRSC Bhuvan
+  water raster; **Sentinel-2** evidence for lakes with strict per-lake
+  checks; **Q&A** that understands cities, distances and stations.
+
+## P2.2 What was built, by requirement
+
+| Req | Delivered |
+|---|---|
+| 2A–2B coverage | National ingest; per-plan error isolation; `cli coverage`, `GET /water-coverage`, `docs/DATASET_COVERAGE.md`, coverage table in the UI |
+| 2C–2D identity | Position markers incl. MIDSTREAM/UPSTREAM/DOWNSTREAM kept as `position_descriptor`; canonical spellings; per-state keying for local features; drain→river and **cross-state river/canal linking** (Ganga: 4 state fragments → one 85-station river; Yamuna 2 → 1); leading-article fix; regression tests (Mithi, Yamuna, Ganga, Brahmaputra, Rani Talab, Amravati) |
+| 2E source verification | Bhuvan, OSM, geoBoundaries, Planetary Computer, EP 1986 PDF verified live; PRS report, CPCB DBU PDF, Bhuvan WFS, WRIS/WBIS documented as inaccessible |
+| 2F–2H geometry | `water_body_geometries` with provenance; OSM matching by name + station proximity; monitored reaches; `ambiguous` instead of guessing; station `relationship_type` + distance |
+| 2I river stretches | Model with `derivation`, official id, source, year; no stretch invented |
+| 2J PRS | `source_classifications` + validated CSV importer (`cli import-classifications`); no rows |
+| 2K–2N standards/status | `reference_catalog.py` + DB tables; explicit selection order; desirable levels; engine 2.0 with `NO_APPLICABLE_REFERENCE`; explanations only from stored facts |
+| 2O–2T map | Lines/polygons, water blue, status casing/outline, clusters, viewport + zoom + filters + limits, layer control (Hydrology / Monitoring / Status / Boundaries / Evidence) |
+| 2U–2W geography | State boundaries (select, hover, search, zoom, filter), district outlines, curated cities |
+| 2X detail | Geometry map with stations, docked panel on desktop, bottom sheet on phones |
+| 2Y–2AA imagery | `water_images`; Sentinel-2 L2A path; NDTI proxy clearly labelled, never beside lab values as comparable |
+| 2AB–2AD RAG | City/extent distances, "within N km", stations near X, strict high-concern, state listings, evidence layers per answer |
+| 2AE–2AH UX | "Latest available observation" / "Current condition: cannot be established"; sources panel by role; data quality with visible factors and rule |
+| 2AI–2AJ search/empty | Cities first; question-shaped queries hand off to Q&A; honest empty states |
+| 2AK benchmark | Below |
+| 2AL PostGIS | `docs/POSTGIS_MIGRATION.md` (plan, not executed) |
+
+## P2.3 Real-data outcomes
+
+| Layer | Result |
+|---|---|
+| Geometry — lakes, ponds, reservoirs (535) | **97 matched** real outlines (lakes 69, ponds 18, reservoirs 10); 314 no named OSM feature near their stations; 5 shapes not near stations; 1 ambiguous (refused); 118 Overpass errors, retryable |
+| Geometry — rivers, canals | 22 shapes (21 rivers, 1 canal). Merged river fragments dropped their partial shapes; the whole-river pass (`cli fetch-geometry --type river canal drain creek`) has not been re-run — several hours against public Overpass |
+| Satellite | 97 lake polygons attempted: **14 scenes accepted** (Loktak, Umiam, Sukhna, Bhopal Lower Lake, Himayat Sagar, Hussain Sagar, Veeranam, Ramappa, Dharoi, Dimna, Govindgarh, Yelahanka, Herohalli, Rachenahalli); 83 had no scene clear over the lake itself in the past year (monsoon cloud, cirrus, dry beds) and none was forced |
+| Boundaries | 36 states (34 linked to CPCB codes), 735 districts, all with a parent state; 35 cities positioned |
+| Standards | 6 standards, their thresholds seeded to the DB |
+| Classifications | 0 (source inaccessible) |
+
+## P2.4 Defects found by testing against real data (all fixed, with tests)
+
+1. Centroid merge rule split long rivers into state fragments → station-linking reconcile.
+2. Overpass server-side key regex caused timeouts/blocks → indexed keys + local name matching.
+3. `out tags geom` dropped relation members; no multipolygon lake could match → `out geom`.
+4. Platform qualifiers ("(Bihar)") and `re.escape` spaces broke name queries.
+5. "Sagar" stripped from proper names (Hussain Sagar) → two-reading name cores.
+6. District parent by centroid misplaced Kamrup Metropolitan → vertex vote.
+7. City answers returned HTTP 500 (ORM object in the trace) → JSON-safe trace; HTTP-level tests.
+8. "The River" parsed from "THE RIVER ASHWANI …"; common words resolving to bodies.
+9. `httpx` missing from runtime requirements; image crashed on start.
+10. Boundary cache path unwritable in the container → `WATER_CACHE_DIR`.
+11. "rivers in Goa" unanswered; state listings truncated by a pre-filter row limit.
+12. Reference tables empty after the first national ingest (seeding added after it started).
+13. Zero-width first map request; overlapping controls with the docked panel.
+
+## P2.5 Verification
+
+| Check | Result |
+|---|---|
+| Backend pytest | **415 passed** |
+| Ruff check + format | Pass |
+| TypeScript `tsc --noEmit` | Pass |
+| ESLint `--max-warnings 0` | Pass |
+| Vite production build | Pass |
+| Docker build | Pass (`oceanai-backend:v2-local`, local only) |
+| Container | Healthy, non-root (uid 1000); bootstrap from the live source; boundaries/cities import inside; all Phase 2 endpoints 200; SPA served |
+| Browser (desktop) | Map layers, geometry, clusters, state selection, Bhuvan WMS, search → city, search → Q&A, docked panel, detail page, Q&A evidence layers |
+| Browser (375 px) | Bottom sheet, focused feature kept visible above it |
+| Secret scan | No credentials in the 73 changed files; no `.env`, key or DB files tracked |
+
+## P2.6 Benchmark (10 runs, TestClient, median ms)
+
+Before = Phase 1 database (7 states, 177k observations); after = national
+(582k observations, 3.3× the data). Not like-for-like.
+
+| Route | Before | After |
+|---|---|---|
+| `/map/stations` whole India | 2,218 | 352 |
+| `/map/near` Delhi 25 km | 112 | 17 |
+| `/water-bodies/mithi-river` | 23 | 36 (adds geometry, quality, sources, imagery) |
+| `/map/water-bodies` whole India | 28 | 140 (2× the features) |
+| `/search?q=ganga` | 22 | 73 (adds cities) |
+| `POST /water/ask` (polluted rivers near Mumbai) | 60 | 152 (city extent search) |
+| `/water-overview` | 56 | 187 |
+| `/boundaries/states?zoom=4` | — | 52 (cached; 185 KB, 55 KB gzipped) |
+| `/map/geometries` Mumbai / India | — | 19 / 121 |
+| `/map/station-clusters` India z5 | — | 280 |
+| `/water-coverage` | — | 3 (cached; 887 uncached) |
+
+## P2.7 Deployment readiness
+
+**NOT READY for public deployment.** The build is sound and verified
+locally, but:
+
+1. Geometry and imagery are populated by long-running jobs against rate-
+   limited public services and are incomplete; a deployed container starting
+   from SQLite would have none of it. Production needs a persistent database
+   (PostgreSQL, ideally PostGIS) seeded from this run, not per-container
+   bootstrap.
+2. A national ingest takes ~12 minutes; `WATER_BOOTSTRAP_STATES` suits one or
+   two states, not all 35, on an ephemeral task.
+3. Outbound calls to Overpass, geoBoundaries and Planetary Computer have not
+   been verified from inside AWS (Fargate egress, NAT).
+4. The deployment would replace the public v1 demo, which requires an
+   explicit go-ahead.
+
+Ready for: local use, review, and a staging deployment against a persistent
+database.
+
+## P2.8 Recommended Phase 3
+
+1. Persistent PostgreSQL + PostGIS (plan in `docs/POSTGIS_MIGRATION.md`),
+   with Alembic; move spatial queries to SQL.
+2. Batch geometry matching (one Overpass query per region, local assignment)
+   or an OSM extract for India to remove the rate-limit bottleneck; finish
+   river geometry.
+3. Obtain the CPCB PRS table (RTI/official data request) and designated-use
+   records; import through the existing validated paths.
+4. Scheduled ingestion with change detection; status history population.
+5. IS 10500 for groundwater; coastal/marine criteria.
+6. Station-to-reach matching along river geometry (upstream/downstream order).
+7. Staging deployment behind HTTPS, then a reviewed cut-over from v1.
+
+---
+
+# Phase 1 record
+
+## 1. Executive summary
+
+OceanAI now answers "what is known about this Indian water body, when was it
+measured, against which standard, and where did the number come from?" It
+ingests **real CPCB surface-water data** from the National Water Data Portal
+(verified public API), resolves 1,190 monitoring stations into 765 water
+bodies across seven states, judges them against cited CPCB criteria, shows
+them on a full-screen India map, and answers questions from stored records
+with citations that fly the map to the evidence.
+
+The single most important finding shaped everything: **the newest CPCB data
+published anywhere is from 2021.** The platform therefore reports every water
+body's present status as *no recent data*, and separately shows what the last
+measurement found, always with its date.
+
+## 2. What changed
+
+A new water domain (`backend/app/water/`), 10 tables, a service layer, 20 API
+endpoints, 9 frontend pages, a grounded Q&A pipeline, a sync CLI, startup
+bootstrap for ephemeral containers, 109 tests, and five focused docs. Marine
+v1 code is untouched apart from shared shell navigation and the move of its
+map to `/app/ocean-map`.
+
+## 3. Existing features preserved
+
+All 205 original tests pass unmodified. SAR detection, two-stage refinement,
+YOLO (checkpoint-driven class resolution), risk engine, forecasting, marine
+RAG and its `no_evidence` gate, the marine agent workflow, reports, MLOps
+pages and the evidence ladder are unchanged and reachable.
+
+## 4. New features
+
+India water map; water-body, state, city (district), station, standards and
+data-source pages; dual status; "why this status?"; per-parameter cards with
+cited limits; gap-aware trend charts; unified search with official place
+renamings; true-circle and district-proximity spatial search; grounded water
+Q&A with map actions; ingestion CLI and bootstrap; data-quality reporting.
+
+## 5. Architecture
+
+```
+NWDP CKAN API → NWDPCPCBProvider → ingestion (validate, normalise, match,
+dedupe, reconcile, denormalise, log) → SQLite/Postgres → water_service →
+FastAPI /api/v1 → React (map, pages, Q&A)
+                                   ↘ water.rag (IDENTIFY→OBSERVE→RESEARCH→ANALYZE→REPORT)
+```
+
+## 6. Data model
+
+`data_sources`, `states`, `districts`, `water_bodies`, `river_stretches`,
+`monitoring_stations`, `water_quality_observations` (long format, unique on
+station+parameter+time), `water_evidence`, `ingestion_runs`,
+`water_body_status_history`. New enums: `WaterBodyType`, `WaterEvidenceType`,
+`WaterStatus`, `QualityFlag`. Lat/lon columns with composite indexes; PostGIS
+not implemented. See `docs/data-model.md`.
+
+## 7. Data sources
+
+**Integrated:** CPCB Surface Water Quality (Manual) via NWDP — 315 resources,
+public, no key, verified live. **Not integrated** (documented, no stubs):
+CPCB real-time dashboard, Bhuvan/NRSC, MPCB, CWC, Sentinel for inland water,
+data.gov.in. See `docs/data-sources.md`.
+
+## 8. APIs added
+
+`GET /water-bodies`, `/water-bodies/{slug}`, `/{slug}/parameters`,
+`/{slug}/trend`, `/{slug}/stations`, `/{slug}/sources`, `/stations`,
+`/stations/{id}`, `/map/water-bodies`, `/map/stations`, `/map/near`,
+`/states`, `/states/{slug}`, `/cities/{slug}`, `/search`, `/water-overview`,
+`/water-standards`, `/water-parameters`, `/water-quality-report`;
+`POST /water/ask`. No existing endpoint changed.
+
+## 9. Frontend routes
+
+Added `/app/india`, `/app/map` (now the water map), `/app/ai`,
+`/app/water/:slug`, `/app/state/:slug`, `/app/city/:slug`,
+`/app/stations/:stationId`, `/app/standards`, `/app/data-quality`. Changed:
+marine map moved from `/app/map` to `/app/ocean-map`.
+
+## 10. Map
+
+Full-bleed Leaflet map; per-viewport bbox loading with server-side caps;
+markers coloured by dated status with a legend saying so; unknown in grey;
+water-type and status filters; station layer; search with fly-to and panel;
+`?highlight`, `?bbox`, `?focus` deep links; bottom sheet on mobile.
+Not built: clustering, boundary and basin layers.
+
+## 11. Water quality
+
+43 canonical parameters with alias resolution against the published headers
+(including typos), exact unit normalisation only, censored-value and
+unparseable flags, missing tokens never converted to zero.
+
+## 12. Status engine
+
+Six bands, no score. Freshness gate (cadence-relative) → insufficient-data
+gate → national polluted-stretch criterion → severity from breaches. CPCB
+classes A–E with source and URL on every threshold; class C default;
+dissolved oxygen judged as a minimum. See `docs/water-status-engine.md`.
+
+## 13. Satellite / YOLO / SAR
+
+Preserved unchanged for the marine pipeline. **Not connected to water
+bodies:** no satellite, image or SAR evidence is attached to any inland water
+body. The `water_evidence` table and `SATELLITE_OBSERVED`/`IMAGE_DETECTED`
+types exist so it can be added without schema change. Nothing was fabricated
+to fill the gap.
+
+## 14. RAG changes
+
+Marine RAG unchanged. Corpus extended with summaries of the two CPCB criteria
+documents and a freshness methodology note (22 seed documents). New
+`water/rag.py` answers from database records rather than passages.
+
+## 15. Agent changes
+
+The water Q&A is a bounded five-stage pipeline with every tool call recorded
+in a trace; no planner, no loop, no language model on the value path. The
+marine agent workflow is unchanged.
+
+## 16. Evidence and provenance
+
+Every observation keeps `source_reference` (CKAN resource and row id),
+`observed_at`, `retrieved_at`, raw value and quality flag. Every Q&A citation
+carries date, source and reference and links to the map. Collection responses
+keep the existing provenance envelope.
+
+## 17. Testing performed
+
+Offline unit and integration tests; the live adapter exercised against the
+real portal; browser verification of map, detail, India, Q&A and citation
+flows on desktop and 375 px mobile; Docker build, startup bootstrap from the
+real source, and restart.
+
+## 18. Test results
+
+| Check | Result |
+|---|---|
+| Backend pytest | **314 passed** (205 original + 73 water domain + 36 water pipeline) |
+| Ruff check / format | Pass (repository-wide) |
+| TypeScript `tsc --noEmit` | Pass |
+| ESLint `--max-warnings 0` | Pass |
+| Vite production build | Pass |
+| Docker build | Pass — `oceanai-backend:water-v2`, 315 MB |
+| Container bootstrap | Maharashtra, 25,507 observations, 11 s, from the live source |
+| Container restart | Data retained; bootstrap correctly skipped |
+| Browser console | No errors (three `ERR_CONNECTION_REFUSED` occurred only while the server was deliberately stopped) |
+
+## 19. Performance (local, 177k observations, 10 runs)
+
+| Route | Median | p90 |
+|---|---|---|
+| `/health` | 3.2 ms | 4.1 ms |
+| `/search?q=ganga` | 12.6 ms | 18.8 ms |
+| `/map/water-bodies` whole India | 17.3 ms | 18.2 ms |
+| `/map/water-bodies` Mumbai bbox | 3.5 ms | 4.0 ms |
+| `/water-bodies/mithi-river` | 8.0 ms | 8.5 ms |
+| `/water-bodies/mithi-river/trend` | 3.4 ms | 4.4 ms |
+| `/map/near` Delhi 25 km | 32.9 ms | 35.4 ms |
+| `POST /water/ask` | 14.4 ms | 15.3 ms |
+| `/water-overview` | 12.0 ms | 14.4 ms |
+
+Known inefficiency: `summarise_body` issues per-row lookups for state and
+district, and the parameter-filter Q&A path reads latest parameters per body.
+Both are fine at seven states and should be batched before all 35 are loaded.
+
+## 20. Deployment
+
+**Not deployed.** The live ALB still serves v1. Docker is verified locally,
+and `WATER_BOOTSTRAP_STATES` lets an ephemeral Fargate task rebuild water data
+from the source on start. The NWDP call has not been verified from inside
+Fargate. Left for an explicit go-ahead because it replaces the public demo.
+
+## 21. Environment variables
+
+New: `WATER_BOOTSTRAP_STATES` (optional). Existing ones unchanged. The water
+source needs no credential.
+
+## 22. Known limitations
+
+Newest data 2021; seven of 35 states ingested; SQLite on ephemeral storage in
+production; no river-stretch derivation; no status-history population; no
+imagery; no clustering or boundary layers; Postgres untested; PostGIS absent.
+
+## 23. Data-source limitations
+
+Empty `River` column; placeholder 2026–2030 resources; SQL endpoint disabled;
+inconsistent district spellings; conductivity header/unit mismatch; CPCB
+criteria PDFs unreachable directly (expired certificate) — values verified
+from independent sources.
+
+## 24. Scientific limitations
+
+Monthly grab samples, not continuous monitoring. Status reflects one
+designated use (class C by default). Trend answers compare annual means and
+are not statistical tests. No satellite claim is made about any inland water
+body.
+
+## 25. Intentionally not implemented
+
+Fake real-time data; any stub provider for an unreachable source; a 0–100
+pollution score; LLM-generated values; user-reported issues; pollution-source
+attribution; authentication; new microservices.
+
+## 26. Self-directed improvements
+
+- Dual status (present vs dated) instead of an all-grey or misleading map.
+- Corpus-wide reconcile pass so a river is one record across states.
+- Station-based geography filters (rivers first seen in another state).
+- District proximity from a district's own stations, not an averaged point.
+- Official place-rename aliases (Bengaluru/Bangalore, Chennai/Madras, …).
+- Gap-breaking trend charts; "assessed as at the observation date" wording.
+- Groundwater and municipal-asset detection so neither is typed as surface water.
+- Ingestion startup bootstrap and a cadence-respecting sync CLI.
+- Water contract tests added to CI's scientific-integrity job.
+
+Bugs found and fixed by testing against real data: case-sensitive position
+markers leaking into names; naive/aware datetime mismatch breaking
+idempotency; CSS class collision with the marine map; present-tense data
+behind a historical heading; a trace step that claimed a filter it never
+applied; mobile control overlap.
+
+## 27. Files changed
+
+Backend: `app/water/{parameters,standards,freshness,status,matching,ingestion,rag,cli}.py`,
+`app/water/providers/{base,nwdp_cpcb,__init__}.py` + bundled catalogue,
+`app/models/{water,enums,__init__}.py`, `app/services/water_service.py`,
+`app/api/routes/water.py`, `app/main.py`, `app/core/config.py`,
+`app/rag/corpus.py`, `tests/test_water_{domain,pipeline}.py`.
+Frontend: `lib/waterTypes.ts`, `lib/api.ts`, `components/water.tsx`,
+`components/{Shell,ui}.tsx`, `App.tsx`, `main.tsx`, `styles/water.css`,
+pages `IndiaWaterMap`, `IndiaOverview`, `WaterBodyDetail`, `StatePage`,
+`CityPage`, `StationDetail`, `WaterStandards`, `DataSources`, `WaterAI`.
+Docs: `data-sources.md`, `data-model.md`, `water-status-engine.md`,
+`water-map-and-ai.md`, `limitations.md`, `deployment.md`, `README.md`,
+`.env.example`, `.github/workflows/ci.yml`.
+
+## 28. Database migration
+
+No migration tool is in use; `init_db()` creates new tables on start and
+leaves existing ones alone. An existing SQLite database from v1 gains the
+water tables automatically. For a clean water rebuild, delete the database
+file and re-ingest.
+
+## 29. Local run
+
+```bash
+pip install -r backend/requirements-dev.txt
+cd frontend && npm install && npm run build && cd ../backend
+python -m app.water.cli ingest --states MH DL KA
+uvicorn app.main:app --port 8000        # open /app/map
+```
+
+## 30. Production deployment
+
+Build and push a new immutable tag to `oceanai/backend`, register task
+definition revision 2 adding `WATER_BOOTSTRAP_STATES=MH,DL,KA` (and
+`CORS_ORIGINS` if a domain is added), update service `oceanai-api`, and watch
+`/api/v1/water-overview` until observations appear. Roll back by pointing the
+service at revision 1.
+
+## 31. Recommended next steps
+
+1. Deploy V2 (after go-ahead) and verify NWDP reachability from Fargate.
+2. Move production to RDS PostgreSQL; then add PostGIS via the documented path.
+3. Ingest the remaining 28 states and batch the per-row lookups first.
+4. Derive river stretches from station order along each river.
+5. Add marker clustering once feature density requires it.
+
+---
+
+# PHASE 5 — FEATURE COMPLETENESS AUDIT & END-TO-END LOCAL VERIFICATION
+
+Completed 2026-10-16. All 4,601,153 observations, 4,951 monitoring stations, 2,740 water bodies, 405 PostGIS geometries, and 17 satellite scenes restored and running in local Docker stack on `http://localhost:8000/app`.
+
+- **Test Suite**: 595 passed, 0 failed, 0 skipped (`python -m pytest backend/tests`).
+- **RAG Enhancement**: Added deterministic satellite evidence listing query handling with full provenance citations and map actions.
+- **Documentation**: Generated `docs/FEATURE_COMPLETENESS_MATRIX.md`, `docs/MODEL_INVENTORY.md`, `docs/DATA_COVERAGE.md`, and `docs/LOCAL_DEVELOPMENT.md`.
+
+---
+
+# PHASE 6 — MODEL RECOVERY, FEATURE COMPLETION & DEMO READINESS
+
+Completed 2026-10-16. All core model checkpoints, features, and interactive workflows verified end-to-end locally.
+
+## 1. YOLOv8 Checkpoint Recovery & Verification
+- **Artifact**: Recovered original trained `best.pt` checkpoint (52,040,018 bytes; trained 2026-04-22 from `ocean_ai.ipynb`).
+- **Architecture**: Ultralytics YOLOv8m (`nc: 4`, `depth_multiple: 0.67`, `width_multiple: 0.75`, 25.8M parameters, 78.7 GFLOPs).
+- **Target Classes**: `oil_spill` (0), `algae_bloom` (1), `plastic_waste` (2), `chemical_pollution` (3).
+- **Deployment**: Installed to `data/models/optical/best.pt` and mounted inside Docker container at `/app/data/models/optical/best.pt`.
+- **Inference Verification**: Real inference verified on test image `data/samples/synthetic_slick.png` producing authentic detections (`plastic_waste` confidence 0.159, bbox `[121.9, 138.7, 541.3, 542.6]`, geo-bbox `[72.595, 18.576, 72.923, 18.892]`).
+- **Regression Tests**: Added `TestRecoveredCheckpoint` in `backend/tests/test_vision.py` (34 passing vision tests).
+
+## 2. Epistemic Honesty in Simulated / Mock Mode
+- Preserved fallback `MockDetector` when checkpoint is missing or `DETECTOR_BACKEND=mock`.
+- System explicitly flags inferences with `is_simulated: true`, `detector: "mock-detector"`, and clear caveat text: *"SIMULATED: the mock detector is active. These are not real detections."*
+- Model registry endpoint `GET /api/v1/models/detectors` transparently exposes active detector and deployment status.
+
+## 3. SAR Detection Validation
+- Audited and verified all 4 physics-based rules in `backend/app/vision/sar_detector.py`:
+  1. High backscatter ocean -> `no_anomaly` (confidence 1.0)
+  2. Uniform low-wind calm (< 3 dB contrast, < 3 m/s wind) -> downgraded to `dark_formation` with low-wind caveat
+  3. Structured backscatter drop (> 3 dB contrast, > 3 m/s wind) -> `oil_like_signature` (confidence > 0.8)
+  4. Implausibly large extent (> 5,000 km²) -> downgraded to `dark_formation` with met-ocean caveat
+- Runtime execution: < 0.04 ms per cell.
+
+## 4. Forecasting Engine Validation
+- Audited `backend/app/forecasting/baseline.py` and evaluated across 14,311 BOD observations for Ganga River:
+  - Naive baseline MAE: 0.7769 mg/L
+  - Moving average MAE: 0.7642 mg/L (`beats_naive: True`)
+  - Holt damped linear MAE: 1.3460 mg/L (`beats_naive: False`, warning attached)
+  - Enforces `INSUFFICIENT_DATA` refusal when < 2 historical samples exist.
+
+## 5. Multi-Factor Risk Assessment Engine Validation
+- Audited 6-factor deterministic model in `backend/app/risk/engine.py`.
+- Dynamic weight renormalisation when factors (e.g. affected area, trend) are missing.
+- Transparent mathematical scoring (0-100) and plain-English narrative generation.
+
+## 6. Sentinel-2 Satellite Evidence
+- 17 Sentinel-2 L2A scenes verified in PostgreSQL `water_images`.
+- Validated acquisition timestamps, sensors (Sentinel-2 MSI), unitless NDTI turbidity proxies, and Planetary Computer visual previews.
+
+## 7. End-to-End User Workflows
+- All 10 user workflows tested and verified over live HTTP endpoints:
+  1. National Overview (`GET /api/v1/water-overview`)
+  2. Search for Ganga (`GET /api/v1/search?q=Ganga`)
+  3. Ganga Details & BOD Trend (`GET /api/v1/water-bodies/ganga-river`, `GET /api/v1/water-bodies/ganga-river/trend?parameter=bod`)
+  4. Mithi River Status (`GET /api/v1/water-bodies/mithi-river`)
+  5. Hussain Sagar Satellite Evidence (`GET /api/v1/water-bodies/hussain-sagar-lake`)
+  6. Search for Mumbai (`GET /api/v1/search?q=Mumbai`)
+  7. Water Intelligence RAG question (`POST /api/v1/water/ask` for status)
+  8. Unsupported pollutant query refusal (`POST /api/v1/water/ask` for mercury/PFAS)
+  9. Satellite evidence listing (`GET /api/v1/satellite/scenes` and RAG query)
+  10. Non-geometry water body graceful fallback
+

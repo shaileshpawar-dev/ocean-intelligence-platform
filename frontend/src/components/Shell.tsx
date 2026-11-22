@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   Bot,
   Boxes,
+  ClipboardCheck,
   Cpu,
   Database,
   FileText,
@@ -26,7 +27,11 @@ import {
   Menu,
   Network,
   RefreshCcw,
+  Satellite,
   Search,
+  Map,
+  Scale,
+  Sparkles,
   ShieldAlert,
   TrendingUp,
   Waves,
@@ -43,15 +48,28 @@ interface NavItem {
 
 const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
-    title: "Command Center",
-    items: [{ to: "/app/overview", label: "Overview", icon: LayoutDashboard }],
+    title: "India Water Intelligence",
+    items: [
+      { to: "/app/india", label: "India Overview", icon: LayoutDashboard },
+      { to: "/app/map", label: "Water Map", icon: Map },
+      { to: "/app/ai", label: "Ask about water", icon: Sparkles },
+      { to: "/app/standards", label: "Reference Standards", icon: Scale },
+      { to: "/app/data-quality", label: "Data Sources", icon: Database },
+    ],
   },
   {
-    title: "Monitoring",
+    title: "Marine Monitoring",
     items: [
+      // The two measured pages lead the group. Real Satellite Observations
+      // is live Sentinel-2 over Indian waters; Candidate Review is the 306
+      // Sentinel-1 benchmark patches. Everything below them is a simulated
+      // demonstration, and the order says so before the labels have to.
+      { to: "/app/real-observations", label: "Real Observations", icon: Satellite },
+      { to: "/app/candidate-review", label: "Candidate Review", icon: ClipboardCheck },
+      { to: "/app/overview", label: "Ocean Overview", icon: Waves },
       { to: "/app/live", label: "Live Monitoring", icon: Activity },
       { to: "/app/events", label: "Pollution Events", icon: AlertTriangle },
-      { to: "/app/map", label: "Ocean Map", icon: Globe2 },
+      { to: "/app/ocean-map", label: "Ocean Map", icon: Globe2 },
     ],
   },
   {
@@ -153,7 +171,14 @@ function SystemStatusPill() {
   );
 }
 
-export function Shell({ children }: { children: React.ReactNode }) {
+export function Shell({
+  children,
+  fullBleed = false,
+}: {
+  children: React.ReactNode;
+  /** Removes the content padding so a map can fill the viewport. */
+  fullBleed?: boolean;
+}) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
 
@@ -225,7 +250,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
             )}
           </div>
         </header>
-        <main className="content" id="main-content">
+        <main
+          className={`content${fullBleed ? " content-full" : ""}`}
+          id="main-content"
+        >
           {children}
         </main>
       </div>

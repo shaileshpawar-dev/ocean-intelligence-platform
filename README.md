@@ -1,14 +1,103 @@
-# OceanAI — Ocean Intelligence Platform
+# OceanAI — India Water Intelligence
 
-**Satellite-based marine pollution intelligence: SAR dark-formation detection, two-stage refinement, explainable risk scoring, backtested forecasting, grounded retrieval and an agentic reporting workflow — with an explicit provenance contract on every claim.**
+**What is actually known about India's rivers, lakes, ponds and coastal waters — when it was measured, what it showed, against which standard, and where every number came from.**
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB)](https://www.python.org/)
 [![React 18](https://img.shields.io/badge/react-18-61DAFB)](https://react.dev/)
 [![FastAPI](https://img.shields.io/badge/fastapi-0.115-009688)](https://fastapi.tiangolo.com/)
-[![Tests](https://img.shields.io/badge/tests-205%20passing-brightgreen)](#testing)
+[![Tests](https://img.shields.io/badge/tests-689%20passing-brightgreen)](#current-status)
+[![Data: CPCB](https://img.shields.io/badge/data-CPCB%20via%20NWDP-0369a1)](docs/data-sources.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-## 🌊 Live Demo
+> **Live demo status.** The public deployment below still runs **v1, the marine
+> pollution platform**. The India Water Intelligence version on this branch has
+> been built and verified locally (tests, browser, Docker) but **has not been
+> deployed** (AWS account credit exhaustion; running locally). See [Deployment](#deployment).
+
+## Current status
+
+Last verified 22 November 2026, after a clean restart (`docker compose down`
+then `up -d backend`) with every count checked against the running
+application and all 24 pages loaded with zero console errors.
+
+**Demo mode is off. There is no simulated data in the database.**
+
+**Tests: 845 passing, 25 skipped, 0 failing.**
+
+```bash
+cd backend && ../.venv/Scripts/python.exe -m pytest tests/ -q
+```
+
+The 25 skips are deliberate: 21 require optional heavy dependencies, and 4
+exercise the real PostgreSQL database, which `conftest.py` deliberately
+prevents the suite from reaching. That guard exists because the suite once
+destroyed the live database.
+
+### What is real, and what is not
+
+| | Status | Detail |
+|---|---|---|
+| **India water observations** | **Real** | 4,601,509 measurements, 2,740 water bodies, 4,951 stations, 35 states — CPCB and CWC via NWDP |
+| **India water, current** | **Real, live** | CPCB real-time analysers, 1,397 readings. The two NWDP feeds read "Sync paused": the server answers and a firewall refuses automated access (HTTP 403) |
+| **Sentinel-2 indices** | **Real, live** | 3,006 readings over 36 regions spanning 12 months. NDCI, NDTI, FDI over SCL-masked water |
+| **Pollution detections** | **Real** | 108 events derived from measured indices — 41 floating material, 35 algal bloom, 32 turbidity plume |
+| **Copernicus Marine** | **Real** | Surface currents drive the drift simulator; chlorophyll-a cross-checks this platform's own NDCI |
+| **Sea conditions** | **Real** | Open-Meteo wind, waves and SST for all 40 regions. INFERRED — a model's analysis, not a measurement |
+| **Vessel activity** | **Real** | Global Fishing Watch, 60,403 vessel-hours. Aggregate only — no identities |
+| **SAR benchmark** | **Real** | 306 Sentinel-1 patches, PANGAEA 980773 (CC BY 4.0), collocated with ERA5 wind |
+| **Live S1 screening** | **Real imagery, no detections** | 407 tiles screened, 0 oil candidates. Saturation fixed (100/100 → 22/100) but prepared tiles still average 34 units darker than training |
+| **Incident replay** | **Real, not detected** | MSC ELSA 3 (25 May 2025): 4 passes, 31 tiles, nothing flagged. Published with the reasons it is weak evidence |
+| **AI report summaries** | **Real, checked** | 6 narratives from `gemini-flash-lite-latest`, cached. Every figure verified against the report's computed values before storing |
+| **Full-scene SAR overlay** | **Synthetic** | One Ocean Map layer, labelled on the layer and in the legend |
+| **Vessel suspects** | **Fictional** | Deliberate: naming a real ship against a benchmark patch would be an accusation |
+
+Unevaluated things report `null` and render as "Not evaluated", never as zero.
+Drift currently reports **WARNING** (PSI 0.11), which is a genuine finding and
+has not been tuned away.
+
+### Expected counts
+
+After a restore these should be exact:
+
+| | |
+|---|---|
+| Pollution events | 108 (25 CRITICAL) |
+| SAR candidates | 306 |
+| Prediction logs | 407 |
+| Model versions | 5 (3 evaluated) |
+| Water observations | 4,601,509 |
+| Regions | 40 |
+| Sentinel-2 index readings | 3,006 (36 of 40 regions, 12 months) |
+| Reports / agent runs | 6 / 6, every one over a real detection |
+| Knowledge graph | 611 nodes / 253 edges, 0 unresolved citations |
+
+Cached external data lives in the container's `oipdata` volume and survives a
+restart: Sentinel-2 indices and thumbnails, Copernicus Marine currents and
+chlorophyll, Open-Meteo conditions, and GFW activity. The `scripts/fetch_*.py`
+commands refresh them against the live services; none of them is needed to
+run the demo.
+
+### Resetting the demo database
+
+`scripts/reset_demo.sh` restores the newest `backups/oip-after-*.dump` and
+prints those counts so a restore can be confirmed in under a minute.
+
+```bash
+scripts/reset_demo.sh                     # newest after-window dump
+scripts/reset_demo.sh backups/oip-after-window4a.dump
+FORCE=1 scripts/reset_demo.sh             # skip the confirmation prompt
+```
+
+It **drops and recreates the schema**, so it asks before doing anything.
+Restart the API afterwards — pooled connections point at a schema that no
+longer exists. It deliberately ignores `before-window` dumps, which are
+rollback points rather than known-good demo states.
+
+For a walkthrough of the application, see [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
+
+---
+
+## 🌊 Live Demo (v1)
 
 ### ▶ **[Open the OceanAI dashboard](http://oceanai-alb-746074560.ap-south-1.elb.amazonaws.com/app)**
 
@@ -31,6 +120,213 @@ Running on AWS ECS Fargate behind an Application Load Balancer in `ap-south-1`.
 > any conclusion from what the dashboard displays.
 
 ---
+
+
+---
+
+# Part 1 — India Water Intelligence
+
+## The problem
+
+India's water-quality data exists, but it is scattered across monitoring
+portals, spreadsheets and reports, keyed by station labels rather than by
+water body, and often years old without saying so. A dashboard that shows
+"Mithi River: polluted" is making a claim about today that its data may not
+support.
+
+## What this does
+
+It resolves CPCB monitoring records into **water bodies** across all of
+India, places them on a map with their **real shapes** where one can be
+matched, compares them only against a **standard that is shown to apply**,
+and keeps apart what was measured, what a standard says, what an official
+body classified, and what the platform derives.
+
+```mermaid
+flowchart LR
+    CPCB["CPCB surface water<br/>NWDP · 35 states · to 2021"] --> ING["Ingestion jobs<br/>validate · normalise · identity · reconcile"]
+    CWC["CWC surface water<br/>NWDP · 29 states · to 2025"] --> ING
+    OSM["OpenStreetMap extract<br/>(Geofabrik .osm.pbf)"] --> GEO["Geometry import<br/>offline name + proximity match"]
+    GB["geoBoundaries ADM1/ADM2"] --> BND["States · districts · cities"]
+    S2["Sentinel-2 L2A<br/>Planetary Computer"] --> SAT["Satellite evidence<br/>per-lake cloud/water checks"]
+    ING --> DB[("PostgreSQL 16 + PostGIS 3.4<br/>observations · geometry · boundaries")]
+    GEO --> DB
+    BND --> DB
+    SAT --> DB
+    DB --> ENG["Status engine<br/>4 evidence layers"] --> API["FastAPI /api/v1"]
+    DB --> QA["Water Q&A (no LLM)"] --> API
+    API --> MAP["India water map"]
+    API --> PAGES["Water body · state · city · station pages"]
+```
+
+The jobs on the left run on their own schedule. The application on the right
+**serves what they produced** — a fresh container connects to the database
+and answers; it never ingests, matches geometry or downloads scenes.
+
+### The honest centre of the product
+
+Three sources, three different answers to "when". CPCB's hourly analysers can
+describe 26 water bodies right now; the two manual programmes describe the
+other 2,714 as they were, with the date attached. Nothing is merged:
+
+| | Ganga River | Mithi River |
+|---|---|---|
+| **Current condition** | Supported by recent data | Cannot be established from this dataset |
+| **Newest source** | CPCB Real-Time, 26 Sep 2026 (hourly) | CPCB Manual, 02 Dec 2021 |
+| **Also measured by** | CWC to 22 May 2025, CPCB Manual to 30 Dec 2021 | — |
+| **Latest measured status** | High concern, *recent enough to describe it now* | High concern, *not a statement about today* |
+
+Two agencies publish on the same portal, and they disagree about *when*:
+CPCB's extracts mostly stop in 2021, the Central Water Commission's run to
+2025. Both are kept, neither overwrites the other, and every water body shows
+what is known and when:
+
+| | Brahmaputra River |
+|---|---|
+| **Current data availability** | *Cannot be established from this dataset* — newest observation 05 Jun 2025, 477 days old |
+| **Newest source** | CWC Surface Water Quality, 05 Jun 2025 |
+| **Also measured by** | CPCB Surface Water Quality, to 01 Jan 2025 |
+| **Latest measured status** | *Elevated* as measured, against the EP 1986 bathing-water criteria |
+
+The trend chart draws one line per agency and never joins them: the gap
+between CPCB's last sample and CWC's next one is not a trend.
+
+## Real data
+
+- **CPCB Real-Time Water Quality Monitoring** — automatic analysers under
+  the Namami Gange programme, published as open JSON, reporting **hourly**.
+  **40 stations in 6 states** on the Ganga and its tributaries: Uttarakhand,
+  Uttar Pradesh, Haryana, Bihar, Jharkhand and West Bengal. This is *not*
+  nationwide real-time coverage — it is 40 of 4,951 monitoring stations, and
+  26 of 2,740 water bodies. For those, and only those, the platform answers a
+  present-tense question.
+- **CPCB Surface Water Quality (Manual)** — all 35 state/UT codes, 582,192
+  observations, mostly to 2021.
+- **CWC Surface Water Quality (Manual)** — the Central Water Commission's own
+  network on the same portal, 29 states, **observations into 2025**, with the
+  `River` and `Tributary` columns populated (CPCB leaves them empty).
+- **OpenStreetMap**, from a Geofabrik regional extract read once offline:
+  42k named water lines and 31k named water areas, matched to water bodies by
+  name, type and station proximity, with OSM ids, licence and extract version.
+- **geoBoundaries** state and district boundaries; **35 cities** defined as
+  documented groupings of whole districts, with real polygon extents.
+- **Sentinel-2 L2A** scenes for matched lakes, kept only when the lake itself
+  is clear of cloud.
+
+Live counts: [DATASET_COVERAGE.md](docs/DATASET_COVERAGE.md).
+[Sources and what was not usable](docs/data-sources.md).
+
+## Status, not a score
+
+No 0–100 score, and **no default standard**. Rivers are compared against the
+EP Rules 1986 bathing-water criteria because that is what CPCB uses to
+identify polluted river stretches; other water bodies are compared only when
+a designated use is recorded or chosen, otherwise the page says *"Reference
+comparison unavailable"*. *Polluted stretch* appears only when an official
+CPCB classification is imported (none is loaded — the report is PDF-only).
+Answers and pages separate **MEASURED · REFERENCE_COMPARISON ·
+SOURCE_CLASSIFICATION · DERIVED_STATUS**, and satellite values are labelled
+*uncalibrated proxy*, never measurements.
+[Engine and standards](docs/water-status-engine.md).
+
+## The map
+
+`/app/map`: rivers as lines and lakes as polygons (water stays blue, status as
+a casing/outline), server-clustered stations, selectable state boundaries and
+district outlines, an optional NRSC Bhuvan water-body raster, city and state
+search, and questions handed to the Q&A. Everything is fetched per viewport.
+[Geospatial details](docs/water-geospatial.md).
+
+## Ask about water
+
+`/app/ai` — *"Show polluted rivers near Mumbai"*, *"Lakes near Bengaluru"*,
+*"Which rivers are within 20 km of Pune?"*, *"High-concern water bodies in
+Maharashtra"*, *"Monitoring stations near Chennai"*. Built from stored
+records with citations, dates and a trace; no language model produces any
+value. *"How much mercury is in Mithi River?"* → no evidence.
+
+## Pages
+
+| Route | Purpose |
+|---|---|
+| `/app/india` | Coverage, data currency, status distribution, sources |
+| `/app/map` | The India water map |
+| `/app/ai` | Ask about water |
+| `/app/water/:slug` | Availability vs latest measured status, reference and why, data quality, parameters, trend, stations and their relation to the shape, map, satellite evidence, sources |
+| `/app/state/:slug`, `/app/city/:slug` | State; curated city or district |
+| `/app/stations/:id` | Monitoring station |
+| `/app/standards` | Selection order and every threshold, with sources |
+| `/app/data-quality` | Providers, validation outcomes, dataset coverage |
+
+## Water API (new in V2)
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /water-bodies/{slug}?reference=A..E` | Detail, optionally against a chosen standard |
+| `GET /water-bodies/{slug}/geometry` | Geometry with provenance, or why there is none |
+| `GET /map/geometries?bbox=&zoom=` | Matched lines/polygons in view, zoom-simplified |
+| `GET /map/station-clusters?bbox=&zoom=` | Server-side station clusters |
+| `GET /map/layers` | Layer catalogue, sources, attributions, WMS |
+| `GET /boundaries/states` · `/boundaries/districts?state=` | Boundaries |
+| `GET /cities` · `/cities/{slug}` | Curated cities (district slugs still resolve) |
+| `GET /water-coverage` | What the database holds, per state |
+| `GET /search?q=` | Cities first; `ask_suggested` for question-shaped queries |
+
+Phase 1 endpoints (`/water-bodies`, `/stations`, `/map/water-bodies`,
+`/map/near`, `/states`, `/water/ask`, …) are unchanged in shape apart from
+added fields.
+
+## Run it locally
+
+SQLite is fine for development:
+
+```bash
+python -m venv .venv && source .venv/Scripts/activate
+pip install -r backend/requirements-dev.txt
+cd frontend && npm install && npm run build && cd ../backend
+python -m app.water.cli db upgrade
+python -m app.water.cli seed-standards
+python -m app.water.cli ingest --states MH DL      # public sources, no key
+uvicorn app.main:app --port 8000
+```
+
+For the production-like stack (PostgreSQL + PostGIS, jobs separate from the
+app), see [INGESTION.md](docs/INGESTION.md) for the full order and
+[PRODUCTION_ARCHITECTURE.md](docs/PRODUCTION_ARCHITECTURE.md) for the shape:
+
+```bash
+docker compose up -d db                 # PostGIS
+docker compose run --rm migrate         # schema to head
+docker compose run --rm jobs python -m app.water.cli ingest --all
+docker compose up -d backend            # serves; never ingests
+```
+
+Open <http://localhost:8000/app/map>. `cli --help` lists every job:
+`extract-osm`, `import-geometry`, `geometry-qa`, `fetch-imagery`,
+`import-boundaries`, `import-cities`, `reconcile`, `coverage`, `db …`.
+
+## Deployment
+
+**Not deployed.** The public demo above is V1 and was not changed. The
+staging stack runs locally; what remains before production is listed in
+[IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md).
+
+## Water limitations
+
+Even the newest source is months old, so "current condition" is still
+reported as unestablished; CPCB identity is parsed from station names;
+geometry covers the named water bodies OSM knows and refuses ambiguous
+matches; no official polluted-stretch classification is loaded (CPCB
+publishes it as PDF); the satellite value is an uncalibrated index, not
+turbidity; cities are documented district groupings.
+[Full list](docs/limitations.md#8-india-water-intelligence).
+
+---
+
+# Part 2 — Marine pollution intelligence (v1, preserved)
+
+The original platform below is unchanged and still available: the ocean map
+at `/app/ocean-map`, events, risk, forecasts, research and agents.
 
 ## Table of contents
 
@@ -56,7 +352,7 @@ The defining design constraint is **epistemic honesty**: the system distinguishe
 |---|---|
 | Backend | 64 Python modules, ~10,300 lines |
 | Frontend | 18 pages, 27 TypeScript/CSS source files |
-| Tests | 205, including a scientific-integrity contract suite |
+| Tests | 314 in the repository — 205 marine, 109 water — including scientific-integrity suites |
 | Corpus | 19 seed documents (14 real regulations, 5 methodology notes) |
 | Agents | 5-stage linear workflow over 8 bounded tools |
 
@@ -205,8 +501,8 @@ The screening grid uses cells of 10⁴–10⁵ km². That resolution is right fo
 The answer is to look closer, not to loosen the gate:
 
 ```
-Stage 1   38 cells, one observation each, whole ocean
-          → "Persian Gulf SW has anomalous dark structure"
+Stage 1   40 cells, one observation each, whole Indian EEZ
+          → "Gulf of Kutch W has anomalous dark structure"
           → signature: dark_formation          (the maximum claim at this resolution)
 
 Stage 2   subdivide 6×6 → 9,334 km² sub-cells, re-observe
@@ -357,7 +653,7 @@ cd frontend && npm install && npm run dev     # proxies /api to 127.0.0.1:8000
 | Evaluation | `ml/evaluation/evaluate_detector.py` is the **only** thing permitted to write metrics into the registry |
 | Drift detection | PSI over two windows, with an explicit insufficient-data state |
 | Monitoring | Measured request latency and volume — not synthetic numbers |
-| CI | Lint, format, secret scan, 205 tests, scientific-integrity contract, end-to-end smoke test, Docker build-and-boot |
+| CI | Lint, format, secret scan, 314 tests, scientific-integrity contract, end-to-end smoke test, Docker build-and-boot |
 
 The **scientific-integrity contract** runs as its own CI job because a regression there is a correctness bug, not a style issue:
 
@@ -408,7 +704,7 @@ The public endpoint is **HTTP only**. Enabling HTTPS requires a domain you own:
 
 **Frontend** — React 18 · TypeScript · Vite · TanStack Query · React Router · Recharts · Leaflet · lucide-react
 
-**Quality** — pytest (205) · ruff (lint + format) · mypy (advisory) · ESLint · `tsc --noEmit` · GitHub Actions
+**Quality** — pytest (314) · ruff (lint + format) · mypy (advisory) · ESLint · `tsc --noEmit` · GitHub Actions
 
 **Infrastructure** — Docker (multi-stage) · AWS ECS Fargate · ECR · ALB · CloudWatch · IAM
 
@@ -579,7 +875,7 @@ A fuller account, including the security incident inherited from the predecessor
 ## Testing
 
 ```bash
-cd backend && pytest                                        # 205 tests
+cd backend && pytest                                        # 314 tests
 ```
 
 ```bash
@@ -596,6 +892,10 @@ ruff check . && ruff format --check .
 
 | Document | Contents |
 |---|---|
+| [data-sources.md](docs/data-sources.md) | Water sources: what was verified, integrated, and not |
+| [data-model.md](docs/data-model.md) | Water-body model, identity resolution, geometry |
+| [water-status-engine.md](docs/water-status-engine.md) | Bands, standards, freshness, the two statuses |
+| [water-map-and-ai.md](docs/water-map-and-ai.md) | Map behaviour and the grounded water Q&A |
 | [architecture.md](docs/architecture.md) | Component design and data flow |
 | [ai-pipeline.md](docs/ai-pipeline.md) | SAR physics, detection logic, the two-stage rationale |
 | [forecasting.md](docs/forecasting.md) | Model progression, backtesting, scope boundary |
