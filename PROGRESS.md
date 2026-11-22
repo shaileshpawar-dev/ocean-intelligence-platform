@@ -2255,3 +2255,26 @@ Two real faults surfaced during the sweep, both now fixed:
 **Tests:** 11 new, 868 passed, 25 skipped, 0 failed.
 **Gotcha:** heredocs in Git Bash eat backslash-newline, so the Dockerfile
 `ENV` continuation had to go in with the Edit tool.
+
+## Item 6 — deck, dump, reset (22 Nov)
+
+- **`backups/oip-demo-final-v3.dump`** taken (108 MB) and `reset_demo.sh`
+  repointed at it. Restore run end to end: 108 events (25 CRITICAL), 306
+  candidates, 407 prediction logs, 3,006 index readings, 4,601,509 water
+  observations, 40 regions — all as expected, patch image still 200 after.
+- **`docs/DEMO_SCRIPT.md`** — "What is real" table regenerated for items
+  1–4; five stale passages corrected, including "666 simulated events" and
+  "the events in them are still simulated", neither of which has been true
+  since 21 Nov.
+- **Deck rebuilt** at `~/Downloads/OIP-Demo.pptx` — 23 slides, **geometry
+  issues down from 11 to 8**, and the three that were real (a 0.36 in
+  overlap where the last rows of the "What is real" slide ran into the
+  footnote) are gone. The remaining 8 are the same heuristic
+  "MAYBE OVERFLOW" estimates and a 0.08 in overlap that shipped in v2.
+  No secret-shaped strings. Candidate Review and Ocean Map screenshots
+  retaken against the real panels.
+- **Map legend** said "Full-Scene Inference / Scene Swath / Candidate
+  Tile" over what are now real screened tiles. Now "Screened Sentinel-1
+  tiles / Screened, not flagged / Flagged by the detector".
+
+**Tests:** 868 passed, 25 skipped, 0 failed.

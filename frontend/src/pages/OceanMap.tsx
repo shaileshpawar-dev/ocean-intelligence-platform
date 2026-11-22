@@ -622,10 +622,10 @@ export default function OceanMap() {
 
             {showScreenedTiles && (
               <div className="candidate-legend-block">
-                <p className="candidate-legend-title">Full-Scene Inference</p>
+                <p className="candidate-legend-title">Screened Sentinel-1 tiles</p>
                 <div className="candidate-legend-items">
-                  <span><i style={{ background: "#0284c7" }} /> Scene Swath</span>
-                  <span><i style={{ background: "#f59e0b" }} /> Candidate Tile</span>
+                  <span><i style={{ background: "#0284c7" }} /> Screened, not flagged</span>
+                  <span><i style={{ background: "#B91C1C" }} /> Flagged by the detector</span>
                 </div>
               </div>
             )}
