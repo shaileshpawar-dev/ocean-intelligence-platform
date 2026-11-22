@@ -57,6 +57,14 @@ class Settings(BaseSettings):
     water_object_dir: str = "data/objects"
     """Where the local object store keeps files when no bucket is set."""
 
+    sar_training_dir: str = "data/training/sar_oil_v2"
+    """The PANGAEA 980773 benchmark: patch images and the annotation table.
+
+    Read-only reference data, not something the app writes. Configurable for
+    the same reason as the two directories above -- the repo-root default
+    resolves to an unwritable ``/`` path inside the container, so the image
+    points this at the data volume where the patches are staged."""
+
     # Connection pool. Ignored on SQLite, which has no server to pool against.
     db_pool_size: int = 5
     """Connections kept open per process. Five per task against an RDS

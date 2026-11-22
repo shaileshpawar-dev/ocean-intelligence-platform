@@ -2231,3 +2231,27 @@ returned 500. Also had to `chown` the caches: files copied in with
 `docker cp` land root-owned, and the app runs as `oip`.
 
 **Tests:** 12 new, 857 passed.
+
+## Item 6 — full suite, clean restart, console sweep (22 Nov)
+
+Clean `docker compose down` / `up --build`; all 40 regions, 108 events,
+3,006 index readings and 4.6M water observations survived. Swept all 23
+app routes in a fresh browser tab: **zero console errors, zero non-2xx
+resource loads**.
+
+Two real faults surfaced during the sweep, both now fixed:
+
+- **The SAR patch image 404ed on every candidate.** `candidate_service`
+  anchored the benchmark directory on `REPO_ROOT`, which is `/` inside the
+  container — the fourth appearance of that trap. Added `SAR_TRAINING_DIR`,
+  staged the 881 PANGAEA patches in the data volume; 305 of 306 candidates
+  now serve a real image, and the one fixture row says so instead of
+  leaving an orphan caption.
+- **Four panels still said "simulated" over real data** — the optical
+  product captions, the fusion narrative and the page banner. Corrected;
+  the page-level and concordance notes are now `ProvenanceNote`, and only
+  the drift track and receptor screening keep `SimulatedBanner`.
+
+**Tests:** 11 new, 868 passed, 25 skipped, 0 failed.
+**Gotcha:** heredocs in Git Bash eat backslash-newline, so the Dockerfile
+`ENV` continuation had to go in with the Edit tool.

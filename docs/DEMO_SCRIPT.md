@@ -1,7 +1,7 @@
 # Demo script — 25 November 2026
 
 Ten to twelve minutes. Every number below was read off the running
-application on **21 November after a clean restart**. If a figure on screen
+application on **22 November after a clean restart**. If a figure on screen
 does not match, say so rather than talking over it — the platform's whole
 argument is that it reports what it has.
 
@@ -45,13 +45,24 @@ it is the first thing you will be asked:
 | SAR benchmark | PANGAEA 980773 (CC BY 4.0) | MEASURED | 306 patches |
 | Live SAR screening | Sentinel-1 GRD | DETECTED | 407 tiles, **0 oil detections** |
 | Incident replay | MSC ELSA 3, 25 May 2025 | DETECTED | **Not detected** on 4 passes |
+| Candidate optical panel | Sentinel-2 L2A via Copernicus | MEASURED | **Live** — real bands per candidate, ±5 days |
+| Vessel activity nearby | Global Fishing Watch | INFERRED | **Live** — aggregate, 30 km / ±7 days, no identities |
+| Screened SAR tiles on the map | Sentinel-1 GRD | DETECTED | **Real** — 100 tiles, 9 acquisitions, 0 flagged |
 | AI summaries | Gemini, number-checked | Not evidence | 6 cached narratives |
-| Full-scene SAR overlay | Demonstration | SIMULATED | One map layer, labelled |
-| Vessel suspects | Fictional, deliberately | SIMULATED | Labelled on the page |
+| Drift projection | Copernicus currents + a drift model | SIMULATED | One panel, labelled |
 
-**Demo mode is off. There is no simulated data in the database** — the two
-simulated items above are a map overlay and the suspect demo, both labelled
-where they appear.
+**Demo mode is off. There is no simulated data in the database.** One panel
+still shows a model's output rather than a measurement — the drift
+projection, which is what a drift model is for — and it is labelled where it
+appears.
+
+**If you are asked what changed last** — the three panels that showed
+generated data until 22 November. The Candidate Review optical chips are now
+six real Sentinel-2 bands fetched per candidate, and the 2 of 25 candidates
+with no cloud-free scene within ±5 days say so rather than showing a
+generated one. The suspect-vessel panel is gone, replaced by aggregate
+Global Fishing Watch activity that names nobody. The Ocean Map's full-scene
+overlay is now the 100 tiles actually screened.
 
 ---
 
@@ -123,9 +134,19 @@ now: no recent data…"*, 5 citations, a limitations note.
 **On screen:** 306 evaluated samples · 207 eligible · 202 awaiting review ·
 5 reviewed. Disposition: **136 + 70 + 0 + 1 + 99 = 306**.
 
-> "Everything else in the marine module is simulated and labelled as such.
-> This is not: 306 real Sentinel-1 patches from a peer-reviewed benchmark —
-> PANGAEA 980773, CC BY 4.0 — each collocated with real ERA5 wind."
+> "306 real Sentinel-1 patches from a peer-reviewed benchmark — PANGAEA
+> 980773, CC BY 4.0 — each collocated with real ERA5 wind. As of 22
+> November the optical panel beside each one is real too: six Sentinel-2
+> bands fetched from Copernicus for that candidate's own position and date,
+> within five days of the radar pass."
+
+**If a candidate's optical panel is empty, that is the point:**
+
+> "Two of the twenty-five I sampled had no cloud-free Sentinel-2 scene
+> within five days, and they say so. The generator that used to fill that
+> space is deleted, not switched off — a generated chip and a real one look
+> identical, which would make the panel worthless for the only thing it is
+> for."
 
 > "The triage funnel accounts for every sample exactly once: 136 under
 > favourable wind, 70 ambiguous because the sea was too calm to trust,
@@ -208,14 +229,15 @@ Scroll to **Vessel activity**.
 
 **If asked why no vessel names — this is a good answer, use it:**
 
-> "Deliberately absent. This platform has a table that marks a vessel as the
-> source suspect for a detection at up to 0.97 confidence, and its
-> detections are research benchmark patches — nobody spilled anything. A
-> real ship's identity in that row names an identifiable vessel as the
-> source of a spill that never happened, on a page built to be
-> screenshotted. The caveat underneath does not survive a crop. So the
-> suspect demo uses fictional vessels, and Global Fishing Watch answers the
-> question it can answer honestly: how busy is this water."
+> "Deliberately absent. This platform used to have a panel that named a
+> vessel as the source suspect for a detection at up to 0.97 confidence,
+> and its detections are research benchmark patches and statistical
+> anomalies — not confirmed spills. A ship's identity in that row names a
+> vessel as the source of something that was never established, on a page
+> built to be screenshotted, and the caveat underneath does not survive a
+> crop. So that panel is gone. In its place, Global Fishing Watch answers
+> the question it can answer honestly — how busy was this water — as hours
+> and flag states within 30 km, and no identity at all."
 
 ---
 
@@ -467,10 +489,11 @@ number moved the wrong way and I did not go looking for a window where it
 looked better.
 
 **Why no vessel names on the detections?**
-Naming a real ship as the source of a spill that did not happen is an
+Naming a ship as the source of something that was never established is an
 accusation, and the caveat underneath does not survive a screenshot crop. The
-suspect demo uses fictional vessels; Global Fishing Watch supplies the real
-answer to the question it can answer honestly — how busy is this water.
+suspect panel was removed rather than softened; Global Fishing Watch supplies
+the real answer to the question it can answer honestly — how busy was this
+water — aggregated by flag state, with no identity attached.
 
 **Why does drift say WARNING? Is something broken?**
 No. It compares two independent held-out benchmarks and found the confidence
@@ -509,13 +532,15 @@ object detector, but its test split was never committed, so its metrics are
 null too.
 
 **How much of this is simulated?**
-See the table at the top of this script. Real: 4.6M CPCB and CWC water
-observations with 19 water bodies current today, 253 Sentinel-2 index
-readings, Copernicus Marine chlorophyll and currents, Open-Meteo sea state,
-60,403 vessel-hours from Global Fishing Watch, and 306 benchmark Sentinel-1
-patches from PANGAEA 980773. Simulated: the 666 marine pollution events and
-the vessel suspects, both tagged and labelled on every page that shows them.
-Nothing is simulated without a label.
+See the table at the top of this script. There are **zero simulated rows in
+the database**. Real: 4.6M CPCB and CWC water observations with 19 water
+bodies current today, 3,006 Sentinel-2 index readings across 36 regions and
+12 months, 108 events derived from those readings, Copernicus Marine
+chlorophyll and currents, Open-Meteo sea state, 60,403 vessel-hours from
+Global Fishing Watch, and 306 benchmark Sentinel-1 patches from PANGAEA
+980773. One *panel* still shows a model's output rather than a measurement —
+the drift projection, which is what a drift model is for — and it is
+labelled. Nothing is simulated without a label.
 
 **The marine regions are Indian now — were they always?**
 No, and it is worth being straight about it. The marine module was built
@@ -523,10 +548,12 @@ first against globally distributed demo regions, and the India work came
 later and became the substantial part. They were re-cut to India's EEZ: 15
 regions, 40 cells, from the Gulf of Kutch to the Andamans, with the risk
 engine's coastal and protected-area factors now pointing at real Indian
-receptors. The *regions* are real geography; the *events* in them are still
-simulated, and every marine page says so. If anything that distinction
-matters more now than it did — "Gulf of Mannar" is far easier to mistake for
-a real incident than "Java Sea SE" ever was.
+receptors. The regions are real geography and the events in them are now
+derived from real Sentinel-2 readings — but they are **statistical
+anomalies, not confirmed incidents**, and every page that shows one says so.
+That wording matters more now than it did, not less: "Gulf of Mannar" with a
+CRITICAL badge is far easier to mistake for a real incident than "Java Sea
+SE" ever was, which is why the badge now carries its own definition.
 
 **Why can't I reach the SAR candidates from a region in the graph?**
 Because no foreign key connects them. `sar_candidates` has no FKs at all, so

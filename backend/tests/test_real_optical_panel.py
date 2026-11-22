@@ -169,3 +169,139 @@ class TestTheDocumentedRebuildCommandExists:
         assert "NoOpticalSceneError" in source
         assert "np.random" not in source
         assert "absent" in source
+
+
+class TestTheSARPatchImageIsReachable:
+    """The patch image is real. It has to actually be served.
+
+    ``REPO_ROOT`` is ``/`` inside the container, so a path built from it
+    pointed at a ``/data`` that does not exist there -- the fourth time that
+    trap has bitten. The page captioned a 256x256 VV patch and served a 404
+    for every candidate.
+    """
+
+    def test_the_directory_is_configurable_not_repo_anchored(self):
+        from app.core.config import Settings
+
+        assert "sar_training_dir" in Settings.model_fields
+
+    def test_an_absolute_setting_is_used_as_given(self, tmp_path, monkeypatch):
+        """Not joined under the repo root, which is what the image relies on.
+
+        The absolute path comes from ``tmp_path`` rather than a literal:
+        ``/app/...`` is not absolute on Windows, where this suite also runs,
+        so a hardcoded POSIX path would assert the opposite of the intent.
+        """
+        import importlib
+
+        from app.core.config import settings
+
+        target = tmp_path / "sar_oil_v2"
+        monkeypatch.setattr(settings, "sar_training_dir", str(target))
+        module = importlib.import_module("app.services.candidate_service")
+
+        assert module._training_dir() == target
+
+    def test_a_relative_setting_is_anchored_on_the_repo_root(self, monkeypatch):
+        """The development default, where the repo root is the real root."""
+        import importlib
+
+        from app.core.config import REPO_ROOT, settings
+
+        monkeypatch.setattr(
+            settings, "sar_training_dir", "data/training/sar_oil_v2"
+        )
+        module = importlib.import_module("app.services.candidate_service")
+
+        assert module._training_dir() == REPO_ROOT / "data/training/sar_oil_v2"
+
+    def test_the_image_env_var_is_set_in_the_runtime_stage(self):
+        """Set in the Dockerfile beside the other two for the same reason."""
+        from pathlib import Path
+
+        dockerfile = (
+            Path(__file__).resolve().parents[2]
+            / "docker"
+            / "Dockerfile.backend"
+        ).read_text(encoding="utf-8")
+
+        assert 'SAR_TRAINING_DIR="/app/data/training/sar_oil_v2"' in dockerfile
+
+    def test_a_missing_file_is_stated_rather_than_hidden(self):
+        """Hiding the image left its caption describing nothing."""
+        from pathlib import Path
+
+        page = (
+            Path(__file__).resolve().parents[2]
+            / "frontend"
+            / "src"
+            / "pages"
+            / "CandidateReview.tsx"
+        ).read_text(encoding="utf-8")
+
+        assert "patchImageMissing" in page
+        assert "Patch image not on disk" in page
+        assert 'style.display = "none"' not in page
+
+
+class TestNoPanelStillCallsRealDataSimulated:
+    """A stale 'simulated' label on real data is the same failure inverted.
+
+    The banner at the top of Candidate Review was corrected for items 1 and
+    2, but the four per-product captions under the optical viewer, and the
+    narrative the fusion engine writes, still said the pixels were synthetic.
+    They are measured Sentinel-2 L2A reflectance.
+    """
+
+    @staticmethod
+    def _page() -> str:
+        from pathlib import Path
+
+        return (
+            Path(__file__).resolve().parents[2]
+            / "frontend"
+            / "src"
+            / "pages"
+            / "CandidateReview.tsx"
+        ).read_text(encoding="utf-8")
+
+    def test_the_product_captions_no_longer_claim_simulation(self):
+        page = self._page()
+
+        assert "Simulated True-Colour RGB" not in page
+        assert "Simulated SWIR Composite" not in page
+        assert "Simulated Scene Classification" not in page
+        assert "Simulated NDCI Index" not in page
+        assert "measured Sentinel-2 L2A surface reflectance" in page
+
+    def test_the_page_banner_names_what_is_actually_modelled(self):
+        """Drift and shoreline contact; not optical, not vessels."""
+        page = self._page()
+
+        assert "Optical, AIS and drift panels are synthetic" not in page
+        assert "the drift and shoreline-contact panels are model output" in page
+
+    def test_the_page_banner_is_not_headed_simulated_data(self):
+        """``SimulatedBanner`` prints that heading, and a crop keeps only it.
+
+        The page-level note and the concordance note describe measured data
+        with a caveat, so they are ``ProvenanceNote``. The two that remain
+        ``SimulatedBanner`` are genuinely model output: the particle drift
+        track and the demonstration receptor screening.
+        """
+        page = self._page()
+        banners = page.count("<SimulatedBanner")
+
+        assert banners == 2, f"expected drift and impact only, found {banners}"
+        assert "<ProvenanceNote>Research replay over a frozen historical" in page
+        assert "<ProvenanceNote>Rule-based concordance" in page
+
+    def test_the_fusion_narrative_does_not_call_the_pixels_synthetic(self):
+        import inspect
+
+        from app.vision import multi_sensor
+
+        source = inspect.getsource(multi_sensor)
+
+        assert "These pixels are synthetic" not in source
+        assert "Simulated Sentinel-2 optical product" not in source

@@ -253,16 +253,16 @@ class MultiSensorIntegrator:
                 opt_consistency = EvidenceConsistency.SUPPORTING
                 opt_signature = PollutionSignature.OIL_LIKE_SIGNATURE.value
                 opt_desc = (
-                    "Simulated Sentinel-2 optical product shows an illustrative surface reflectance contrast with "
-                    f"elevated SWIR ratio ({swir_ratio:.2f}) and low chlorophyll-a (NDCI <= 0.0). "
-                    "These pixels are synthetic, not measured reflectance."
+                    "Sentinel-2 surface reflectance shows a contrast with elevated SWIR ratio "
+                    f"({swir_ratio:.2f}) and low chlorophyll-a (NDCI <= 0.0). Consistent with a "
+                    "surface film; on its own it does not identify what the film is."
                 )
             else:
                 optical_status = "algal_bloom_excluded"
                 opt_consistency = EvidenceConsistency.SUPPORTING
                 opt_signature = "clean_water_algae_ruled_out"
                 opt_desc = (
-                    f"Simulated Sentinel-2 optical product shows clear water ({water_frac * 100:.1f}% clear) with negative "
+                    f"Sentinel-2 surface reflectance shows clear water ({water_frac * 100:.1f}% clear) with negative "
                     f"NDCI ({mean_ndci if mean_ndci is not None else 0.0:.3f}); this does not support an algal bloom."
                 )
 

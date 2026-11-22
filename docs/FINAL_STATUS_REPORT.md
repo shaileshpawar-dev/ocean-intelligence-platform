@@ -1,6 +1,6 @@
 # OceanAI — Final status report
 
-**22 November 2026 · tag `demo-final-v3` · 857 tests passing**
+**22 November 2026 · tag `demo-final-v3` · 868 tests passing**
 
 Every figure below was read from the running application or the database on
 22 November 2026, after a clean restart. Nothing is quoted from memory.
@@ -287,6 +287,26 @@ generous on purpose: a tighter one invites reading proximity as causation.
 across 9 real acquisitions, red where flagged (none are). Every layer on the
 map is now real, and its simulated-data banner is gone.
 
+**The SAR patch image was never being served.** Found during the final
+console sweep: `candidate_service` built the benchmark path from the repo
+root, which is `/` inside the container, so every candidate's 256x256 VV
+patch returned 404 and the page hid the image while keeping its caption. The
+directory is now a setting (`SAR_TRAINING_DIR`), the 881 PANGAEA patches are
+staged in the data volume, and **305 of 306 candidates serve their real
+image** -- the 306th is a test fixture named `missing_nonexistent_patch_9999`
+and now says so in place of the caption. This is the fourth time the
+repo-root path trap has appeared; the three other call sites were fixed the
+same way.
+
+**Four panels still said "simulated" over real data.** The four optical
+product captions, the fusion engine's narrative, and the page-level banner
+all still described the Sentinel-2 pixels as synthetic after they had been
+made real. A stale caveat is the same failure as a stale claim, inverted:
+both describe data that is not what is on screen. The page banner and the
+concordance note are now `ProvenanceNote`; the two that remain
+`SimulatedBanner` -- the particle drift track and the demonstration receptor
+screening -- are genuinely model output.
+
 **Severity now carries its meaning** wherever it appears, as text and not
 only as a tooltip: *"Risk score = potential impact if confirmed (exposure,
 proximity, sea state). Not a confirmed incident."* CRITICAL beside a
@@ -379,7 +399,7 @@ python scripts/rebuild_candidate_optical.py --limit 25
 ## 12. Test suite and tag
 
 ```
-857 passed, 25 skipped, 0 failed
+868 passed, 25 skipped, 0 failed
 ```
 
 Frontend type-check clean. 24 pages, 0 console errors, clean restart

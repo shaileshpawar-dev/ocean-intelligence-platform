@@ -16,7 +16,7 @@ from typing import Any
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
-from app.core.config import REPO_ROOT
+from app.core.config import REPO_ROOT, settings
 from app.core.logging import get_logger
 from app.models.base import utcnow
 from app.models.sar_candidate import SARCandidate, SARCandidateReview, SARCandidateOpticalEvidence
@@ -27,7 +27,20 @@ logger = get_logger(__name__)
 # directory. The backend is normally launched from ``backend/``, while the
 # datasets live at the repository root.
 DATA_ROOT = REPO_ROOT / "data"
-DATA_DIR = DATA_ROOT / "training" / "sar_oil_v2"
+
+
+def _training_dir() -> Path:
+    """The benchmark directory, anchored on the configured setting.
+
+    ``REPO_ROOT`` is ``/`` inside the container, so the plain repo-root path
+    pointed at a ``/data`` that does not exist there -- which is why the SAR
+    patch image 404ed on every candidate while the page still captioned it.
+    """
+    configured = Path(settings.sar_training_dir)
+    return configured if configured.is_absolute() else REPO_ROOT / configured
+
+
+DATA_DIR = _training_dir()
 IMAGES_DIR = DATA_DIR / "images"
 TAB_PATH = DATA_DIR / "pangaea_980773_annotations.tab"
 CACHE_PATH = DATA_ROOT / "cache" / "era5_wind_cache.json"

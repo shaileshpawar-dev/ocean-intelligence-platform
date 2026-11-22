@@ -5,7 +5,7 @@
  * CNN V2.2 experimental model, ERA5 environmental reanalysis context, and human audit history.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -124,6 +124,14 @@ function CandidateDetailDrawer({
 
   const [activeOpticalProduct, setActiveOpticalProduct] = useState<"rgb" | "false_color" | "scl" | "ndci">("rgb");
   const [showScenePicker, setShowScenePicker] = useState<boolean>(false);
+  // The patch image is a file on disk. If it is not there, say so rather than
+  // hiding the image and leaving its caption describing nothing.
+  const [patchImageMissing, setPatchImageMissing] = useState<boolean>(false);
+
+  // One candidate's missing file must not suppress the next candidate's image.
+  useEffect(() => {
+    setPatchImageMissing(false);
+  }, [candidateId]);
 
   const { data: fusionData, isLoading: fusionLoading } = useQuery({
     queryKey: ["candidate-fusion", candidateId],
@@ -234,16 +242,18 @@ function CandidateDetailDrawer({
                 <span className="sar-image-tag">Historical Sentinel-1 SAR Research Patch</span>
                 <span className="mono">{data.image_name}</span>
               </div>
-              <img
-                src={api.sarCandidateImageUrl(data.candidate_id)}
-                alt={`SAR radar patch for candidate ${data.candidate_id}`}
-                className="sar-patch-img"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = "none";
-                }}
-              />
+              {!patchImageMissing && (
+                <img
+                  src={api.sarCandidateImageUrl(data.candidate_id)}
+                  alt={`SAR radar patch for candidate ${data.candidate_id}`}
+                  className="sar-patch-img"
+                  onError={() => setPatchImageMissing(true)}
+                />
+              )}
               <p className="sar-image-caption">
-                256x256 pixel patch · VV polarization backscatter amplitude · frozen research sample, not a live acquisition
+                {patchImageMissing
+                  ? `Patch image not on disk for ${data.image_name}. Nothing is shown in its place.`
+                  : "256x256 pixel patch · VV polarization backscatter amplitude · frozen research sample, not a live acquisition"}
               </p>
             </div>
 
@@ -481,10 +491,10 @@ function CandidateDetailDrawer({
                         className="optical-preview-img"
                       />
                       <div className="optical-img-caption">
-                        {activeOpticalProduct === "rgb" && "Simulated True-Colour RGB (B04, B03, B02) · not measured reflectance"}
-                        {activeOpticalProduct === "false_color" && "Simulated SWIR Composite (B11, B08, B04) · illustrative contrast only"}
-                        {activeOpticalProduct === "scl" && "Simulated Scene Classification (SCL 20m) · illustrative mask"}
-                        {activeOpticalProduct === "ndci" && "Simulated NDCI Index (B05-B04)/(B05+B04) · not a chlorophyll measurement"}
+                        {activeOpticalProduct === "rgb" && "True-colour RGB (B04, B03, B02) · measured Sentinel-2 L2A surface reflectance"}
+                        {activeOpticalProduct === "false_color" && "SWIR composite (B11, B08, B04) · measured Sentinel-2 L2A surface reflectance"}
+                        {activeOpticalProduct === "scl" && "Scene classification (SCL 20m) · Copernicus’ own per-pixel mask"}
+                        {activeOpticalProduct === "ndci" && "NDCI (B05-B04)/(B05+B04) · computed on measured reflectance; an algal indicator, not a chlorophyll measurement"}
                       </div>
                     </div>
 
@@ -586,7 +596,7 @@ function CandidateDetailDrawer({
 
             {fusionData && (
               <div className="fusion-assessment-box">
-                <SimulatedBanner detail="Rule-based concordance over the measured optical indices above. The rule score is not a calibrated probability and does not establish that oil is present." />
+                <ProvenanceNote>Rule-based concordance over the measured SAR and Sentinel-2 indices above. The rule score is not a calibrated probability and does not establish that oil is present.</ProvenanceNote>
                 <div className="fusion-summary-card">
                   <div className="fusion-summary-text">
                     <p className="text-xs font-semibold mb-1">Physical Evidence Synthesis</p>
@@ -1127,7 +1137,7 @@ export default function CandidateReview() {
         }
       />
 
-      <SimulatedBanner detail="Research replay: this is a frozen historical SAR audit set. Optical, AIS and drift panels are synthetic demonstrations. Model scores are uncalibrated and do not identify a confirmed pollution incident." />
+      <ProvenanceNote>Research replay over a frozen historical SAR audit set. The patches, the optical panel (Sentinel-2 L2A) and the vessel panel (Global Fishing Watch) are all measured; the drift and shoreline-contact panels are model output over real forcing and are labelled where they appear. Model scores are uncalibrated and do not identify a confirmed pollution incident.</ProvenanceNote>
 
       {/* Workflow & Triage Pipeline (Overlapping Funnel Metrics) */}
       <div className="kpi-group">
