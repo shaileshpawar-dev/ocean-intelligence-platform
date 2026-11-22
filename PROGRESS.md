@@ -37,8 +37,8 @@ entries at the end of this file.
 | 5 | Fix Sentinel-1 saturation | **mostly fixed** — 78/100 tiles now vary; 0 oil candidates, so no oil events created |
 | 6 | Data Sources page | **done** |
 | 7 | Gemini retry | **done** |
-| 8 | Texts and claims | not started |
-| 9 | Freeze | not started |
+| 8 | Texts and claims | **done** |
+| 9 | Freeze | **done** |
 | 10 | Final status report | not started |
 
 **Cleared.** Demo mode is off, the seeded rows are deleted, and every banner
@@ -2122,3 +2122,38 @@ including the two that are honest about limits: live S1 screening with
 **0 oil detections**, and the incident replay as **REAL · NOT DETECTED**.
 
 Deck rebuilt: 21 slides, 0 geometry issues, no stale figures.
+
+## OV-E — Freeze
+
+**Done, 22 Nov.**
+
+- **Clean restart passes** (`docker compose down` then `up -d backend`,
+  no `-v`). All **24 routes serve 200**; all **24 pages load with zero
+  console errors**, walked individually in a fresh tab.
+- **845 tests passing**, 25 skipped. Frontend type-check clean.
+- **README** status, real/simulated table and expected counts rewritten.
+- **DEMO_SCRIPT.md** — "what is real" table regenerated; **nine likely
+  questions** now including *How are events decided?*, *Is that plastic?*,
+  *Why 0 oil detections?*, *Did you test it against a real spill?*,
+  *Is it complete?*, *Why does a source say Sync paused?*, *Is the LLM
+  making things up?*, *Why do forecasts not beat naive?*
+- **`backups/oip-demo-final-v2.dump`** created; `reset_demo.sh` repointed
+  and its expected counts updated.
+- **Deck rebuilt** at `~/Downloads/OIP-Demo.pptx` — **23 slides**, 0
+  geometry issues, **no secret-shaped strings**, screenshots retaken. Two
+  new slides: the real detections, and the incident replay that found
+  nothing.
+
+### Expected counts (oip-demo-final-v2)
+
+| | |
+|---|---|
+| Pollution events | 108 (25 CRITICAL) — all from measured Sentinel-2 |
+| Sentinel-2 index readings | 3,006 (36 of 40 regions, 12 months) |
+| SAR candidates | 306 (PANGAEA benchmark) |
+| Prediction logs | 407 |
+| Water observations | 4,601,509 |
+| Regions | 40 |
+| Reports / agent runs | 6 / 6 |
+| Knowledge graph | 611 nodes / 253 edges, 0 unresolved |
+| Simulated rows | **0** |

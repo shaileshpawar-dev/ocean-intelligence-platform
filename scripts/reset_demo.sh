@@ -7,7 +7,7 @@
 # back in under a minute.
 #
 # Usage:
-#   scripts/reset_demo.sh                     # backups/oip-demo-final.dump
+#   scripts/reset_demo.sh                     # backups/oip-demo-final-v2.dump
 #   scripts/reset_demo.sh path/to/file.dump   # a specific dump
 #   FORCE=1 scripts/reset_demo.sh             # skip the confirmation prompt
 #
@@ -30,7 +30,7 @@ cd "$REPO_ROOT"
 # after-window dump" was fine while windows were the unit of work, but it
 # silently follows whatever ran last -- and the dump that should come back
 # mid-demo is a specific known-good state, not the most recent one.
-FINAL_DUMP="backups/oip-demo-final.dump"
+FINAL_DUMP="backups/oip-demo-final-v2.dump"
 
 if [ $# -ge 1 ]; then
   DUMP="$1"
@@ -123,10 +123,11 @@ SQL
   awk -F'|' '{ printf "  %-28s %s\n", $1, $2 }'
 
 echo
-echo "Expected (oip-demo-final, frozen 21 Nov 2026):"
-echo "  666 events, 81 CRITICAL, 306 candidates, 337 prediction logs,"
+echo "Expected (oip-demo-final-v2, frozen 22 Nov 2026 - real data only):"
+echo "  108 events, 25 CRITICAL, 306 candidates, 407 prediction logs,"
 echo "  5 model versions (3 evaluated), 4,601,509 water obs, 40 regions,"
-echo "  253 Sentinel-2 index readings, 8 reports, 8 agent runs."
+echo "  3,006 Sentinel-2 index readings, 6 reports, 6 agent runs."
+echo "  No simulated rows: DEMO_MODE is off."
 echo
 echo "The cached external data (Sentinel-2, Copernicus Marine, Open-Meteo,"
 echo "GFW) lives in the oipdata volume, not in this dump, and is untouched."

@@ -34,15 +34,24 @@ it is the first thing you will be asked:
 
 | Layer | Source | Evidence | Status |
 |---|---|---|---|
-| India water quality | CPCB real-time analysers | OBSERVED | **Live** — 19 of 2,740 water bodies have a reading from the last 2 days |
-| India water quality (historic) | CPCB / CWC via NWDP | OBSERVED | 2.7M readings to 2025; the two NWDP feeds are **down** (expired certificate) and say so |
-| Water-quality indices | Sentinel-2 L2A via Copernicus | OBSERVED | **Live** — 253 readings, 35 of 40 regions, newest 20 Nov |
-| Chlorophyll cross-check | Copernicus Marine ocean colour | OBSERVED | **Live** — all 35 regions |
+| India water quality | CPCB real-time analysers | OBSERVED | **Live** — 1,397 readings |
+| India water (historic) | CPCB / CWC via NWDP | OBSERVED | 4.6M readings; both feeds **Sync paused** (firewall refuses automated access, HTTP 403) |
+| Water-quality indices | Sentinel-2 L2A via Copernicus | OBSERVED | **Live** — 3,006 readings, 36 regions, 12 months |
+| Pollution detections | Derived from those indices | DETECTED | **108 real events** — 41 floating material, 35 algal bloom, 32 turbidity |
+| Chlorophyll cross-check | Copernicus Marine ocean colour | OBSERVED | **Live** — all regions |
 | Sea conditions | Open-Meteo | INFERRED | **Live** — all 40 regions |
-| Surface currents | Copernicus Marine physics | INFERRED | **Live** — all 40 regions, drives drift |
-| Vessel activity | Global Fishing Watch | INFERRED | **Live** — 60,403 vessel-hours |
-| SAR benchmark candidates | PANGAEA 980773 (CC BY 4.0) | MEASURED | 306 patches, real |
-| Pollution events, vessel suspects | Demonstration data | SIMULATED | Labelled on every page |
+| Surface currents | Copernicus Marine physics | INFERRED | **Live** — drives drift |
+| Vessel activity | Global Fishing Watch | INFERRED | **Live** — 60,403 vessel-hours, aggregate |
+| SAR benchmark | PANGAEA 980773 (CC BY 4.0) | MEASURED | 306 patches |
+| Live SAR screening | Sentinel-1 GRD | DETECTED | 407 tiles, **0 oil detections** |
+| Incident replay | MSC ELSA 3, 25 May 2025 | DETECTED | **Not detected** on 4 passes |
+| AI summaries | Gemini, number-checked | Not evidence | 6 cached narratives |
+| Full-scene SAR overlay | Demonstration | SIMULATED | One map layer, labelled |
+| Vessel suspects | Fictional, deliberately | SIMULATED | Labelled on the page |
+
+**Demo mode is off. There is no simulated data in the database** — the two
+simulated items above are a map overlay and the suspect demo, both labelled
+where they appear.
 
 ---
 
@@ -380,59 +389,88 @@ If time collapses, do these three and nothing else.
 
 # Likely questions
 
-**Is that plastic?** *(The FDI column. Expect this one.)*
+**How are events decided?** *(Ask this of yourself before they do.)*
+Two criteria, both required. The reading must sit in the **top 1% of that
+region's own last twelve months** — not the platform's, the region's, because
+NDTI's 99th percentile runs from 0.142 in quiet cells to 0.313 off the
+Krishna–Godavari delta and a single cut-off would flag river mouths every day
+of the year. And it must clear an **absolute floor**: chlorophyll above 0.08,
+turbidity above zero. A region needs 40 clear readings before it gets a
+baseline at all, and below that it raises nothing rather than borrowing a
+threshold from different water. Full method in `docs/anomaly-method.md`.
+
+**Is that plastic?** *(The FDI column.)*
 No, and the platform will not say it is. The Floating Debris Index responds
-to anything floating that is brighter in the near-infrared than the water
-around it. Biermann's 2020 paper, which defines the index, separates floating
-material into plastics, seaweed, sea-snot, foam, timber and spume — and needs
-further spectral analysis to tell them apart. At ten metres a positive pixel
-is roughly a tennis court of *something*. Sargassum, foam lines and sun glint
-all raise it. So it is labelled "possible floating material", and there is no
-threshold anywhere in the code above which it gets called plastic.
+to anything floating that is brighter in the near-infrared than the water.
+Biermann et al. (2020), which defines the index, **publishes no threshold at
+all** — I checked the paper; the word does not appear in it. They classify
+with a Naïve Bayes model over an FDI/NDVI feature space trained on nine
+plastic pixels. So FDI detections are the one signature with **no absolute
+floor**, and every one of them says "relative anomaly only" and names that
+reason. Inventing a number and attributing it to that paper would have been
+worse than having none.
 
-**How much of this is actually real?**
-Point at the table at the top of this script. The India water data, the
-Sentinel-2 indices, the chlorophyll, the sea state, the currents, the vessel
-activity and the 306 benchmark SAR patches are real. The pollution events and
-the vessel suspects are simulated and labelled SIMULATED on every page that
-shows them. The honest summary is that the *measurement* layers are real and
-the *incident* layer is a demonstration.
+**Why 0 oil detections?**
+Because none were found, and that is the honest answer. 407 Sentinel-1 tiles
+screened; every one came back `no_anomaly`. Two things to say about it. The
+saturation bug is fixed — the model used to return confidence 1.000 on every
+single tile, and now returns 0.784–1.000 with ordinary water scoring 0.05 for
+oil. But prepared tiles still average 34 units darker than the training
+patches, so the model's measured accuracy does not transfer, and 22 tiles in
+100 still saturate. A zero from a detector in that state is weak evidence,
+which is why the incident replay matters more.
 
-**Did your detector find any oil in the real Sentinel-1 imagery?**
-It found nothing, and the more interesting part is that the result does not
-count. Thirty tiles from three recent scenes — one acquired that morning —
-went through the trained classifier and came back `no_anomaly` every time, at
-confidence 1.000 on every single tile. That is not certainty, it is a
-saturated softmax. On its own training patches the same model spreads from
-0.005 to 0.83. A flat 1.000 means the input is unlike anything it was fitted
-on: it was trained on pre-stretched quicklook JPEGs and these are calibrated
-backscatter. So the pipeline works end to end and the model needs retraining
-on this product before its output means anything. The script says so itself
-at the end of every run.
+**Did you test it against a real spill?**
+Yes, and it did not find it. MSC ELSA 3 sank off Kochi on 25 May 2025 with
+367 tonnes of fuel oil; position and cargo are from the Kerala SDMA's own
+situation report. Four Sentinel-1 passes covered the site in the following
+three weeks — 31 tiles, nothing flagged. That negative is on the Real
+Observations page with the reasons it is weak: the first pass was three days
+later into a 9.3 m/s wind, which roughens the sea enough to suppress a
+slick's contrast, dispersant had been applied, and oil weathers within days.
+It does not establish that nothing was there. **A detector that always
+answered "no" would have scored identically on open water — this is the test
+that could have told them apart, and it is published either way.**
 
-**Why do two of the Indian water feeds say Unavailable?**
-Because they are. Both NWDP endpoints sit behind a firewall appliance
-presenting its factory certificate, which has expired. That is recorded
-through the real ingestion pipeline with the exact error and the last
-successful sync, not hand-edited. The third CPCB feed — the real-time
-analysers — works, and is where the live readings come from. Worth adding:
-it was *also* reported as down until yesterday, and that turned out to be a
-missing root certificate on this Windows machine rather than anything wrong
-at CPCB. One host's trust gap had been recorded as a national outage.
+**Is it complete?**
+No. The honest list: the SAR model needs retraining on calibrated
+backscatter before its scores mean anything on live imagery; there is no
+marine-debris classifier; protected-area proximity uses 28 curated centroids
+rather than WDPA boundaries; the legal corpus is a seed set; nothing refreshes
+without someone running a fetch job. All of that is on the closing slide and
+in the final status report.
 
-**Why does Gemini not write the report summaries?**
-Google retired the model mid-build: the one we had integrated now answers 404
-"no longer available to new users", and every current replacement answered
-503 or timed out across a dozen attempts. The layer is built, tested and
-cached — and the fallback is the thing worth showing, because the report
-renders in full from computed values with nothing fabricated. There is also a
-check that would discard any AI summary containing a number not present in
-the evidence it was given.
+**Why does a source say "Sync paused"?**
+Because the server answered and refused. The two NWDP water feeds sit behind
+a firewall that returns 403 to automated clients. That is not an outage, and
+calling it one would send somebody looking for a network fault that does not
+exist — so the card is amber, says what happened, shows the 582,192 and
+4,017,920 records still held, and puts the raw error behind a toggle. The
+certificate problem underneath it *was* fixed: pinning that host's leaf
+certificate got TLS working, which is how the 403 became visible.
+
+**Is the LLM making things up?**
+It cannot put a number on the page that the platform did not compute. Every
+figure in a generated summary is checked against the report's own values
+before it is stored, and a summary that fails is **discarded, not flagged** —
+a paragraph whose numbers disagree with the table beside it is worse than no
+paragraph. The model writes prose over figures the deterministic engines
+produced; it never produces a figure. The card on Data Sources says "Not
+evidence" for that reason.
+
+**Why do forecasts not beat naive?**
+They don't, in any of 40 regions, on a full year of real measurements. That
+is the honest result for a damped-trend model on sparse satellite series, and
+every chart says so in its own words. Worth adding: it used to be 1 of 38,
+and re-cutting the regions to India's EEZ lost the one region that won. The
+number moved the wrong way and I did not go looking for a window where it
+looked better.
 
 **Why no vessel names on the detections?**
-See section 2c. Short version: naming a real ship as the suspect for a spill
-that did not happen is an accusation, and the caveat underneath does not
-survive a screenshot crop.
+Naming a real ship as the source of a spill that did not happen is an
+accusation, and the caveat underneath does not survive a screenshot crop. The
+suspect demo uses fictional vessels; Global Fishing Watch supplies the real
+answer to the question it can answer honestly — how busy is this water.
 
 **Why does drift say WARNING? Is something broken?**
 No. It compares two independent held-out benchmarks and found the confidence

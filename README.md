@@ -16,11 +16,13 @@
 
 ## Current status
 
-Last verified 21 November 2026, after a clean restart (`docker compose down`
+Last verified 22 November 2026, after a clean restart (`docker compose down`
 then `up -d backend`) with every count checked against the running
 application and all 24 pages loaded with zero console errors.
 
-**Tests: 767 passing, 25 skipped, 0 failing.**
+**Demo mode is off. There is no simulated data in the database.**
+
+**Tests: 845 passing, 25 skipped, 0 failing.**
 
 ```bash
 cd backend && ../.venv/Scripts/python.exe -m pytest tests/ -q
@@ -35,22 +37,19 @@ destroyed the live database.
 
 | | Status | Detail |
 |---|---|---|
-| **India water observations** | **Real** | 4,601,509 measurements, 2,740 water bodies, 4,951 stations, 35 states, 613 districts — CPCB and CWC via NWDP |
-| **India water, current** | **Real, live** | CPCB real-time analysers: 19 of 2,740 water bodies have a reading from the last 2 days. The two NWDP feeds are down behind an expired certificate and report that, with the error and last sync date |
-| **Sentinel-2 water indices** | **Real, live** | 253 readings over 35 of 40 regions, newest acquired 20 Nov 2026. NDCI, NDTI and FDI over SCL-masked water, with the scene thumbnail each was computed from |
-| **Chlorophyll cross-check** | **Real** | Copernicus Marine ocean colour beside our own NDCI for all 35 regions; neither adjusted to match the other |
-| **Sea conditions** | **Real** | Open-Meteo wind, waves and SST for all 40 regions. INFERRED — a weather model's analysis, not a measurement |
-| **Surface currents** | **Real** | Copernicus Marine physics for all 40 regions; drives the drift simulator, replacing a hardcoded 0.22 m/s placeholder |
-| **Vessel activity** | **Real** | Global Fishing Watch: 60,403 vessel-hours, 7,920 vessels, 25 of 40 regions. Aggregate only — no identities |
-| **SAR candidates** | **Real** | 306 Sentinel-1 patches, PANGAEA 980773 (CC BY 4.0), collocated with ECMWF ERA5 wind |
-| **SAR model metrics** | **Real** | 3 evaluated models; v2.2 precision 0.677 / recall 0.880 / F1 0.765 on a 100-sample leakage-free split |
-| **Live Sentinel-1 screening** | **Real imagery, unusable output** | 30 tiles from 3 recent scenes went through the v2.2 detector. Every tile returned confidence 1.000 — a saturated softmax, not certainty. The model was fitted on pre-stretched quicklooks and does not transfer to calibrated backscatter |
-| **Inference latency & drift** | **Real measurements** | 337 genuine inferences; the timestamps placing them in drift windows are assigned, and every row and panel says so |
-| **Knowledge graph** | **Real** | 4,131 nodes / 4,459 edges from foreign keys only; 32 citation edges resolved from JSON and drawn separately, 0 unresolved |
-| **Marine pollution events** | **Simulated** | All 666, tagged `SIMULATED` by the API; every page in that module states it |
-| **Marine regions** | **Real geography** | 15 regions / 40 cells across India's EEZ — Arabian Sea, Gujarat gulfs, Konkan, Malabar, Coromandel, Bay of Bengal, Krishna-Godavari, Andaman & Nicobar, Lakshadweep |
-| **Vessels / AIS suspects** | **Simulated** | 6 fictional vessels. Real identities are deliberately not used: the detections are benchmark patches, and naming a real ship as the source of one would be an accusation |
-| **LLM narrative** | **Built, provider down** | Gemini layer with a number-grounding check that discards any summary containing a figure not in its evidence. Google retired the integrated model mid-build; the deterministic fallback renders every report in full |
+| **India water observations** | **Real** | 4,601,509 measurements, 2,740 water bodies, 4,951 stations, 35 states — CPCB and CWC via NWDP |
+| **India water, current** | **Real, live** | CPCB real-time analysers, 1,397 readings. The two NWDP feeds read "Sync paused": the server answers and a firewall refuses automated access (HTTP 403) |
+| **Sentinel-2 indices** | **Real, live** | 3,006 readings over 36 regions spanning 12 months. NDCI, NDTI, FDI over SCL-masked water |
+| **Pollution detections** | **Real** | 108 events derived from measured indices — 41 floating material, 35 algal bloom, 32 turbidity plume |
+| **Copernicus Marine** | **Real** | Surface currents drive the drift simulator; chlorophyll-a cross-checks this platform's own NDCI |
+| **Sea conditions** | **Real** | Open-Meteo wind, waves and SST for all 40 regions. INFERRED — a model's analysis, not a measurement |
+| **Vessel activity** | **Real** | Global Fishing Watch, 60,403 vessel-hours. Aggregate only — no identities |
+| **SAR benchmark** | **Real** | 306 Sentinel-1 patches, PANGAEA 980773 (CC BY 4.0), collocated with ERA5 wind |
+| **Live S1 screening** | **Real imagery, no detections** | 407 tiles screened, 0 oil candidates. Saturation fixed (100/100 → 22/100) but prepared tiles still average 34 units darker than training |
+| **Incident replay** | **Real, not detected** | MSC ELSA 3 (25 May 2025): 4 passes, 31 tiles, nothing flagged. Published with the reasons it is weak evidence |
+| **AI report summaries** | **Real, checked** | 6 narratives from `gemini-flash-lite-latest`, cached. Every figure verified against the report's computed values before storing |
+| **Full-scene SAR overlay** | **Synthetic** | One Ocean Map layer, labelled on the layer and in the legend |
+| **Vessel suspects** | **Fictional** | Deliberate: naming a real ship against a benchmark patch would be an accusation |
 
 Unevaluated things report `null` and render as "Not evaluated", never as zero.
 Drift currently reports **WARNING** (PSI 0.11), which is a genuine finding and
@@ -62,15 +61,15 @@ After a restore these should be exact:
 
 | | |
 |---|---|
-| Pollution events | 666 (81 CRITICAL) |
+| Pollution events | 108 (25 CRITICAL) |
 | SAR candidates | 306 |
-| Prediction logs | 337 |
+| Prediction logs | 407 |
 | Model versions | 5 (3 evaluated) |
 | Water observations | 4,601,509 |
 | Regions | 40 |
-| Sentinel-2 index readings | 253 (35 of 40 regions) |
-| Reports / agent runs | 8 / 8, every one attached to an event |
-| Knowledge graph | 4,131 nodes / 4,459 edges, 0 unresolved citations |
+| Sentinel-2 index readings | 3,006 (36 of 40 regions, 12 months) |
+| Reports / agent runs | 6 / 6, every one over a real detection |
+| Knowledge graph | 611 nodes / 253 edges, 0 unresolved citations |
 
 Cached external data lives in the container's `oipdata` volume and survives a
 restart: Sentinel-2 indices and thumbnails, Copernicus Marine currents and
