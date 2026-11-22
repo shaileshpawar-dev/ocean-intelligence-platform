@@ -35,8 +35,8 @@ entries at the end of this file.
 | 3 | Swap simulated data for real; demo mode off | **done** |
 | 4 | Ocean Map on real layers | **done** |
 | 5 | Fix Sentinel-1 saturation | **mostly fixed** — 78/100 tiles now vary; 0 oil candidates, so no oil events created |
-| 6 | Data Sources page | 6a done (pinned); 6b–d pending |
-| 7 | Gemini retry | model found; narratives pending |
+| 6 | Data Sources page | **done** |
+| 7 | Gemini retry | **done** |
 | 8 | Texts and claims | not started |
 | 9 | Freeze | not started |
 | 10 | Final status report | not started |
@@ -2062,3 +2062,39 @@ backscatter — backscatter is a radar quantity and an optical cell has none,
 so putting a number there would be inventing one.
 
 **Tests:** 831 passed. Map verified in-browser, zero console errors.
+
+## OV-C — Data Sources: all nine providers, derived status
+
+**Done.** Six external services now have cards alongside the three Indian
+water providers, every status computed from what that source last actually
+produced — rows in a table, files in a cache, a timestamp on a response.
+Nothing is configured.
+
+| Provider | Status | Records | Evidence |
+|---|---|---|---|
+| Sentinel-2 L2A | Live | 3,006 readings | OBSERVED |
+| Sentinel-1 GRD | Live | 100 tiles screened | DETECTED |
+| Copernicus Marine | Live | 81 cached products | INFERRED / OBSERVED |
+| Open-Meteo | Live | 40 regions | INFERRED |
+| Global Fishing Watch | Live | 47 cached regions | INFERRED |
+| Google Gemini | Live | 6 narratives | **Not evidence** |
+| CPCB real-time | Live | 1,397 | OBSERVED |
+| CPCB / CWC manual | Sync paused | 582,192 / 4,017,920 | OBSERVED |
+
+Each card states **what it feeds**, its cadence, last sync, record count and
+attribution. Raw errors stay behind the Technical details toggle.
+
+**The health CLI now uses the same four words as the page.** It said `DOWN`
+where the page said `Sync paused`, which leaves a reader unsure which to
+believe; a 403 is now `PAUSED` in both.
+
+**Gemini narratives regenerated** for the six real reports — they were lost
+when the simulated events were deleted and the reports rebuilt. All six
+passed the number check.
+
+**Gotcha:** the Gemini card deliberately reads *"Not evidence: prose over
+computed values"* in the evidence column. It is a data source on this page
+only in the sense that it produces text; letting it sit under OBSERVED
+alongside Sentinel-2 would be the whole problem in miniature.
+
+**Tests:** 14 new, 845 passed.

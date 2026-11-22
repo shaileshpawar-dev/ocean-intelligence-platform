@@ -657,6 +657,9 @@ export interface WaterOverview {
      *  See water_service.source_status. */
     status?: DataSourceStatus;
   }[];
+  /** Every external service the platform reads, with state derived from
+   *  what each one last actually produced. */
+  external_providers?: ExternalProvider[];
   last_ingestion: {
     run_id: string;
     source: string;
@@ -834,4 +837,24 @@ export interface DataSourceStatus {
   records_held: number;
   /** The raw error, for the Technical details toggle only. */
   technical_detail: string | null;
+}
+
+/** An external data service, as the Data Sources page shows it.
+ *
+ *  Distinct from the Indian water providers above, which have database rows
+ *  and an ingestion history. These are derived on each request from what the
+ *  source last produced: rows in a table, files in a cache, a timestamp on a
+ *  cached response. Nothing about them is configured. */
+export interface ExternalProvider {
+  key: string;
+  name: string;
+  organisation: string;
+  /** What this source actually feeds, in one sentence. */
+  what_it_feeds: string;
+  expected_cadence: string;
+  attribution: string;
+  url: string | null;
+  evidence_level: string | null;
+  status: DataSourceStatus;
+  last_success_at: string | null;
 }

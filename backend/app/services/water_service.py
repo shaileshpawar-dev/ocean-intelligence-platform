@@ -43,6 +43,7 @@ from app.models.water import (
     WaterQualityObservation,
 )
 from app.models.water_geo import SourceClassification
+from app.services.provider_status import external_providers
 from app.water.freshness import CADENCE_DAYS, MIN_NO_RECENT_DAYS, Cadence
 from app.water.matching import PLACE_ALIASES, haversine_km, normalise_name
 from app.water.parameters import BY_KEY
@@ -2338,6 +2339,11 @@ def overview(db: Session) -> dict:
             }
             for s in sources
         ],
+        # Every external source this platform reads, not just the three
+        # Indian water providers. A page headed "where the platform's
+        # numbers come from" that omits six of nine is not answering its
+        # own question.
+        "external_providers": external_providers(db),
         "last_ingestion": (
             {
                 "run_id": last_run.run_id,

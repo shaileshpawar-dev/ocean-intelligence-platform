@@ -81,7 +81,76 @@ export default function DataSources() {
         actions={<Database size={16} className="text-muted" />}
       />
 
-      <SectionCard title="Providers">
+      {data.external_providers && data.external_providers.length > 0 && (
+        <SectionCard
+          title="External data services"
+          description="Satellite, ocean and weather sources. Status is derived from what each one last actually produced, not configured."
+        >
+          {data.external_providers.map((provider) => (
+            <div className="provider-card" key={provider.key}>
+              <div className="provider-head">
+                <div>
+                  <strong>{provider.name}</strong>
+                  <p className="muted-note">{provider.organisation}</p>
+                </div>
+                <span
+                  className={`wstatus wstatus-${provider.status.tone} wstatus-sm`}
+                  title={provider.status.detail}
+                >
+                  <Radio size={11} aria-hidden />
+                  {provider.status.label}
+                </span>
+              </div>
+
+              <p className="muted-note">{provider.what_it_feeds}</p>
+
+              <dl className="source-facts">
+                <div>
+                  <dt>Expected cadence</dt>
+                  <dd>{provider.expected_cadence}</dd>
+                </div>
+                <div>
+                  <dt>Last successful sync</dt>
+                  <dd>{formatDay(provider.last_success_at)}</dd>
+                </div>
+                <div>
+                  <dt>Records held</dt>
+                  <dd>{provider.status.records_held.toLocaleString()}</dd>
+                </div>
+                <div>
+                  <dt>Evidence level</dt>
+                  <dd>{provider.evidence_level ?? "—"}</dd>
+                </div>
+              </dl>
+
+              {provider.status.state !== "live" && (
+                <p className="provider-note">
+                  <AlertTriangle size={12} aria-hidden /> {provider.status.detail}
+                </p>
+              )}
+
+              <p className="muted-note">
+                {provider.url ? (
+                  <a href={provider.url} target="_blank" rel="noreferrer noopener">
+                    {provider.attribution}
+                  </a>
+                ) : (
+                  provider.attribution
+                )}
+              </p>
+
+              {provider.status.technical_detail && (
+                <details className="provider-technical">
+                  <summary>Technical details</summary>
+                  <code>{provider.status.technical_detail}</code>
+                </details>
+              )}
+            </div>
+          ))}
+        </SectionCard>
+      )}
+
+      <SectionCard title="India water providers">
         {data.sources.map((source) => (
           <div className="provider-card" key={source.key}>
             <div className="provider-head">

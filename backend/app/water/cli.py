@@ -488,14 +488,23 @@ def _archive_evidence(limit: int | None) -> int:
 def _health() -> int:
     from app.water.providers import all_providers
 
-    labels = {True: "OK  ", False: "DOWN", None: "UNKN"}
     worst = 0
     for provider in all_providers():
         ok, detail = provider.health()
-        # Unknown is not success. It exits non-zero so a probe that was never
-        # written cannot pass for a healthy feed in CI or a pre-demo check.
-        worst = max(worst, {True: 0, None: 1, False: 2}[ok])
-        print(f"{provider.info.key:14} {labels[ok]} {detail}")
+        # The same four states the Data Sources page uses, so the two cannot
+        # disagree about the same feed. A server that answers and refuses is
+        # not down: reporting it as DOWN here while the page says "Sync
+        # paused" would leave a reader unsure which to believe.
+        if ok is None:
+            label, rank = "UNKN  ", 1
+        elif ok:
+            label, rank = "LIVE  ", 0
+        elif "403" in detail or "forbidden" in detail.lower():
+            label, rank = "PAUSED", 1
+        else:
+            label, rank = "DOWN  ", 2
+        worst = max(worst, rank)
+        print(f"{provider.info.key:14} {label} {detail}")
     return 0 if worst == 0 else 1
 
 
