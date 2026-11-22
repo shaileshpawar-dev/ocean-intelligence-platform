@@ -1105,7 +1105,7 @@ export default function CandidateReview() {
     <>
       <PageHeader
         title="SAR Candidate Review Dashboard"
-        subtitle="Research replay of a frozen Sentinel-1 SAR audit set, collocated with ERA5 wind context and analyst decision history. Scores are uncalibrated rankings, not validated probabilities."
+        subtitle="Research replay of a frozen Sentinel-1 SAR audit set, collocated with ERA5 wind and analyst decision history. Scores are uncalibrated rankings, not validated probabilities. Drift now runs on Copernicus Marine currents and the vessel panel's real counterpart is Global Fishing Watch activity on Ocean Overview."
         actions={
           <div className="header-tags">
             <span className="env-pill">Research Replay</span>

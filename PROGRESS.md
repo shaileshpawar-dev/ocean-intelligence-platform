@@ -2098,3 +2098,27 @@ only in the sense that it produces text; letting it sit under OBSERVED
 alongside Sentinel-2 would be the whole problem in miniature.
 
 **Tests:** 14 new, 845 passed.
+
+## OV-D — Texts and claims
+
+**Done.** Subtitles re-read against what each page now holds:
+
+- **Ocean Overview** — was "Real-time environmental monitoring, AI analysis
+  and ML operations", which described nothing. Now names the measured
+  Sentinel-2 detections, live sea state and vessel traffic.
+- **Candidate Review** — keeps "frozen benchmark" and "uncalibrated
+  rankings", and now adds that drift runs on **Copernicus Marine currents**
+  and points at the real GFW vessel activity on Ocean Overview.
+
+**Deck "What I would do next" rewritten — nothing already done.** All four
+previous items have shipped, so the new list is what the work produced:
+retrain the SAR model on calibrated backscatter (citing the 34-unit
+brightness gap and 22/100 saturation), MARIDA (because FDI has no published
+absolute threshold), WDPA boundaries, a real legal corpus, automated alerts,
+and scheduled cloud ingestion.
+
+**"What is real" slide regenerated from the live database** — 13 rows now,
+including the two that are honest about limits: live S1 screening with
+**0 oil detections**, and the incident replay as **REAL · NOT DETECTED**.
+
+Deck rebuilt: 21 slides, 0 geometry issues, no stale figures.

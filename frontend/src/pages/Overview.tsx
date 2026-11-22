@@ -108,7 +108,7 @@ export default function Overview() {
     <>
       <PageHeader
         title="Ocean Intelligence Command Center"
-        subtitle="Real-time environmental monitoring, AI analysis and ML operations."
+        subtitle="Measured Sentinel-2 detections over India's EEZ, live sea state and vessel traffic, and the models behind them."
         actions={
           health.data ? (
             <div className="header-status">
